@@ -18,7 +18,7 @@ jobs:
 
       - name: Install LuaUnit
         run: |
-          curl -sL https://raw.githubusercontent.com/bluebird75/luaunit/master/luaunit.lua -o /usr/local/share/lua/5.1/luaunit.lua
+          curl -sL https://raw.githubusercontent.com/bluebird75/luaunit/master/luaunit.lua -o luaunit.lua
           sudo mkdir -p /usr/local/share/lua/5.1
           sudo mv luaunit.lua /usr/local/share/lua/5.1/luaunit.lua
 

@@ -15,7 +15,7 @@
 --   lib.decodeField(field, readBits)          — decode field from bit stream
 
 local mods = rom.mods
-envy = mods['SGG_Modding-ENVY'].auto()
+local envy = mods['SGG_Modding-ENVY'].auto()
 
 ---@diagnostic disable: lowercase-global
 rom = rom
