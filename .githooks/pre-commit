@@ -3,8 +3,8 @@ echo "Running Luacheck before commit..."
 luacheck src
 RESULT=$?
 if [ $RESULT -ne 0 ]; then
-    echo "??? Luacheck failed! Please fix errors before committing."
+    echo "[FAIL] Luacheck failed! Please fix errors before committing."
     exit 1
 fi
-echo "??? Luacheck passed!"
+echo "[SUCCESS] Luacheck passed!"
 exit 0
