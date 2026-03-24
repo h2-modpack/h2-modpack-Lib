@@ -204,6 +204,7 @@ function public.validateSchema(schema, label)
             if not ft then
                 public.warn(prefix .. ": unknown type '" .. tostring(field.type) .. "'")
             elseif ft.validate then
+                field._imguiId = "##" .. tostring(field.configKey)
                 ft.validate(field, prefix)
             end
         end
@@ -344,7 +345,7 @@ FieldTypes.dropdown = {
         if width then imgui.PushItemWidth(width) end
         local changed = false
         local newVal = current
-        if imgui.BeginCombo("##field", preview) then
+        if imgui.BeginCombo(field._imguiId, preview) then
             for i, v in ipairs(field.values) do
                 if imgui.Selectable(v, i == currentIdx) then
                     if i ~= currentIdx then
