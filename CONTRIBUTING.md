@@ -15,7 +15,8 @@ local lib = rom.mods['adamant-Modpack_Lib']
 | Function | Purpose |
 |---|---|
 | `lib.isEnabled(modConfig)` | True if module + master toggle are both on |
-| `lib.warn(msg)` | Debug-guarded print (requires Core's DebugMode) |
+| `lib.warn(msg)` | Framework diagnostic print, gated on `lib.config.DebugMode`. For framework-detected problems (schema errors, unknown types, skipped modules). Never call this from module code. |
+| `lib.log(name, enabled, msg)` | Module trace print, gated on the caller-supplied `enabled` flag. Pass `config.DebugMode` for the flag. For intentional author traces — execution flow, values, decisions. |
 | `lib.createBackupSystem()` | Returns `backup, revert` for isolated state save/restore |
 | `lib.standaloneUI(def, config, apply, revert)` | Returns menu-bar callback for standalone mode |
 | `lib.readPath(tbl, key)` | Read from table using string or path key |
@@ -60,7 +61,7 @@ public.definition.options = {
 }
 ```
 
-`configKey` can be a string (`"Mode"`) or a table path (`{"Parent", "Child"}`) for nested config. Hash bits are auto-calculated from `#values` when `field.bits` is omitted.
+**`configKey` must be a flat string** — never a table. Table-path keys are only valid in `def.stateSchema` (special modules). The configKey must also exist in `config.lua` with the correct default value.
 
 ### Special modules
 
@@ -115,4 +116,27 @@ Copy the relevant template as `src/main.lua` in a new mod repo and fill in the m
 
 ## Standalone mode
 
-Every module works without Core installed. Boolean modules get a menu-bar toggle via `lib.standaloneUI()`. Special modules render their own ImGui window. When Core is installed, standalone UI is automatically suppressed.
+Every module works without Core installed. Boolean modules get a menu-bar toggle via `lib.standaloneUI()` — this renders an Enabled checkbox, a DebugMode checkbox, and any inline options. Special modules render their own ImGui window. When Core is installed, standalone UI is automatically suppressed.
+
+## Debug system
+
+Two distinct functions, two distinct purposes:
+
+| Function | Purpose | Gated by |
+|---|---|---|
+| `lib.warn(msg)` | Framework-detected problems — schema errors, unknown types, skipped modules. Called by lib/core internally. | `lib.config.DebugMode` (Framework Debug in Core's Dev tab) |
+| `lib.log(name, enabled, msg)` | Module author traces — execution flow, values, decisions. Called from module hooks. | Caller-supplied boolean (pass `config.DebugMode`) |
+
+Console output is visually distinct:
+```
+[adamant] schema validation failed: missing configKey    -- lib.warn
+[MyMod] applying first hammer: BaseStaffAspect           -- lib.log
+```
+
+Module authors should never call `lib.warn` directly. Use `lib.log` for all intentional diagnostic output:
+
+```lua
+lib.log("MyMod", config.DebugMode, "hook fired: value=" .. tostring(val))
+```
+
+Core's Dev tab controls both flags. Without Core, each module's standalone UI exposes its own DebugMode checkbox.

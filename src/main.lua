@@ -9,6 +9,8 @@
 --   rom.gui.add_to_menu_bar(cb)  -- caller registers in own plugin context
 --   staging, snapshot, sync = lib.createSpecialState(config, schema)
 --   lib.isEnabled(modConfig) — true if module AND master toggle are both on
+--   lib.warn(msg) — framework diagnostic, gated on lib.config.DebugMode
+--   lib.log(name, enabled, msg) — module trace, gated on caller's config.DebugMode
 --   lib.FieldTypes — central registry of field types (checkbox, dropdown, radio)
 --   lib.drawField(imgui, field, value, width) — render a field widget
 
@@ -18,6 +20,10 @@ mods['SGG_Modding-ENVY'].auto()
 ---@diagnostic disable: lowercase-global
 rom = rom
 _PLUGIN = _PLUGIN
+
+local chalk = mods['SGG_Modding-Chalk']
+local libConfig = chalk.auto('config.lua')
+public.config = libConfig
 
 -- Forward declaration — populated at bottom of file
 local FieldTypes = {}
@@ -38,9 +44,20 @@ end
 --- Silent in production. Works with or without Core installed.
 --- @param msg string  The warning message
 function public.warn(msg)
-    local core = mods['adamant-Modpack_Core']
-    if core and core.config and core.config.DebugMode then
+    if libConfig.DebugMode then
         print("[adamant] " .. msg)
+    end
+end
+
+--- Print a module-level diagnostic trace when the module's own DebugMode is enabled.
+--- Call this for intentional author traces — execution flow, values, decisions.
+--- Distinct from lib.warn, which is for framework-detected problems.
+--- @param name string    Module identifier shown as the console prefix
+--- @param enabled boolean  Pass config.DebugMode directly
+--- @param msg string     The trace message
+function public.log(name, enabled, msg)
+    if enabled then
+        print("[" .. name .. "] " .. msg)
     end
 end
 
@@ -112,6 +129,15 @@ function public.standaloneUI(def, modConfig, apply, revert)
                 imgui.SetTooltip(def.tooltip)
             end
 
+            -- Debug mode toggle
+            local dbgVal, dbgChg = imgui.Checkbox("Debug Mode", modConfig.DebugMode == true)
+            if dbgChg then
+                modConfig.DebugMode = dbgVal
+            end
+            if imgui.IsItemHovered() then
+                imgui.SetTooltip("Print diagnostic warnings to the console for this module.")
+            end
+
             -- Inline options (when module is enabled)
             if modConfig.Enabled and def.options then
                 imgui.Separator()
@@ -141,6 +167,7 @@ end
 --- @return any value, table|nil parentTbl, string|nil leafKey
 function public.readPath(tbl, key)
     if type(key) == "table" then
+        if #key == 0 then return nil, nil, nil end
         for i = 1, #key - 1 do
             tbl = tbl[key[i]]
             if not tbl then return nil, nil, nil end
@@ -179,7 +206,12 @@ end
 --- @return any newValue, boolean changed
 function public.drawField(imgui, field, value, width)
     local ft = FieldTypes[field.type]
-    if ft then return ft.draw(imgui, field, value, width) end
+    if ft then
+        if not field._imguiId then
+            field._imguiId = "##" .. tostring(field.configKey)
+        end
+        return ft.draw(imgui, field, value, width)
+    end
     public.warn("drawField: unknown type '" .. tostring(field.type) .. "'")
     return value, false
 end
@@ -301,7 +333,11 @@ end
 -- To add a new type: add one entry here. All consumers dispatch automatically.
 
 FieldTypes.checkbox = {
-    validate  = function(_, _) end,
+    validate = function(field, prefix)
+        if field.default ~= nil and type(field.default) ~= "boolean" then
+            public.warn(prefix .. ": checkbox default must be boolean, got " .. type(field.default))
+        end
+    end,
     toHash    = function(_, value) return value and "1" or "0" end,
     fromHash  = function(_, str)   return str == "1" end,
     toStaging = function(val) return val == true end,
@@ -403,3 +439,17 @@ FieldTypes.radio = {
 }
 
 public.FieldTypes = FieldTypes
+
+-- Standalone framework debug toggle — hidden when Core is installed.
+---@diagnostic disable-next-line: redundant-parameter
+rom.gui.add_to_menu_bar(function()
+    if mods['adamant-Modpack_Core'] then return end
+    if rom.ImGui.BeginMenu("adamant") then
+        local val, chg = rom.ImGui.Checkbox("Framework Debug", libConfig.DebugMode == true)
+        if chg then libConfig.DebugMode = val end
+        if rom.ImGui.IsItemHovered() then
+            rom.ImGui.SetTooltip("Print framework diagnostic warnings to the console (schema errors, discovery issues).")
+        end
+        rom.ImGui.EndMenu()
+    end
+end)
