@@ -448,7 +448,7 @@ rom.gui.add_to_menu_bar(function()
         local val, chg = rom.ImGui.Checkbox("Framework Debug", libConfig.DebugMode == true)
         if chg then libConfig.DebugMode = val end
         if rom.ImGui.IsItemHovered() then
-            rom.ImGui.SetTooltip("Print framework diagnostic warnings to the console (schema errors, discovery issues).")
+            rom.ImGui.SetTooltip("Print framework diagnostic warnings to the console (schema errors, discovery issues)")
         end
         rom.ImGui.EndMenu()
     end
