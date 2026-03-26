@@ -8,7 +8,9 @@
 --   local cb = lib.standaloneUI(def, config, apply, revert)  -- returns callback
 --   rom.gui.add_to_menu_bar(cb)  -- caller registers in own plugin context
 --   staging, snapshot, sync = lib.createSpecialState(config, schema)
---   lib.isEnabled(modConfig) — true if module AND master toggle are both on
+--   lib.isEnabled(modConfig, packId) — true if module AND coordinator's ModEnabled are both on
+--   lib.isCoordinated(packId) — true if a coordinator has registered for this packId
+--   lib.registerCoordinator(packId, config) — called by Framework.init
 --   lib.warn(packId, enabled, msg) — framework diagnostic, gated on caller's enabled flag
 --   lib.log(name, enabled, msg) — module trace, gated on caller's config.DebugMode
 --   lib.FieldTypes — central registry of field types (checkbox, dropdown, radio)
@@ -28,15 +30,37 @@ public.config = libConfig
 -- Forward declaration — populated at bottom of file
 local FieldTypes = {}
 
+-- Registry of active coordinators: packId -> config
+-- Written by lib.registerCoordinator (called from Framework.init).
+-- Read by isEnabled, isCoordinated, standaloneUI, and the lib debug menu.
+local _coordinators = {}
+
+--- Register a coordinator's config under its packId.
+--- Called by Framework.init on behalf of the coordinator.
+--- @param packId string  The pack identifier (e.g. "h2-modpack")
+--- @param config table   The coordinator's Chalk config (needs .ModEnabled)
+function public.registerCoordinator(packId, config)
+    _coordinators[packId] = config
+end
+
+--- Return true if a coordinator has registered for this packId.
+--- Modules use this to decide whether to self-apply SetupRunData.
+--- @param packId string
+--- @return boolean
+function public.isCoordinated(packId)
+    return _coordinators[packId] ~= nil
+end
+
 --- Check if a module should be active.
 --- Returns true only if the module's own Enabled flag is true AND
---- the master toggle (ModEnabled) is true when Core is installed.
---- When Core is not installed, only the module's own flag is checked.
+--- the coordinator's ModEnabled is true (when a coordinator is registered).
+--- When no coordinator is registered, only the module's own flag is checked.
 --- @param modConfig table  The module's chalk config (needs .Enabled)
+--- @param packId string    The pack identifier from definition.modpack
 --- @return boolean
-function public.isEnabled(modConfig)
-    local core = mods['adamant-Modpack_Core']
-    if core and not core.config.ModEnabled then return false end
+function public.isEnabled(modConfig, packId)
+    local coord = packId and _coordinators[packId]
+    if coord and not coord.ModEnabled then return false end
     return modConfig.Enabled == true
 end
 
@@ -110,7 +134,7 @@ end
 
 --- Build a menu-bar callback for a boolean mod.
 --- Returns a function — the caller must register it via rom.gui.add_to_menu_bar().
---- Skips rendering when adamant-Modpack_Core is installed.
+--- Skips rendering when modpack coordinator is installed.
 --- @param def table         public.definition (needs .name, .tooltip, .dataMutation)
 --- @param modConfig table   the mod's chalk config (needs .Enabled)
 --- @param apply function    called to apply game mutations
@@ -126,8 +150,8 @@ function public.standaloneUI(def, modConfig, apply, revert)
     end
 
     return function()
-        if mods['adamant-Modpack_Core'] then return end
-        if rom.ImGui.BeginMenu("adamant") then
+        if def.modpack and _coordinators[def.modpack] then return end
+        if rom.ImGui.BeginMenu(def.name) then
             local imgui = rom.ImGui
             local val, chg = imgui.Checkbox(def.name, modConfig.Enabled)
             if chg then
@@ -453,8 +477,8 @@ public.FieldTypes = FieldTypes
 -- Standalone framework debug toggle — hidden when Core is installed.
 ---@diagnostic disable-next-line: redundant-parameter
 rom.gui.add_to_menu_bar(function()
-    if mods['adamant-Modpack_Core'] then return end
-    if rom.ImGui.BeginMenu("adamant") then
+    if next(_coordinators) ~= nil then return end
+    if rom.ImGui.BeginMenu("adamant-lib") then
         local val, chg = rom.ImGui.Checkbox("Lib Debug", libConfig.DebugMode == true)
         if chg then libConfig.DebugMode = val end
         if rom.ImGui.IsItemHovered() then
