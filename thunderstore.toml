@@ -4,10 +4,10 @@ schemaVersion = "0.0.1"
 
 [package]
 namespace = "adamant"
-name = "Modpack_Lib"
+name = "ModpackLib"
 versionNumber = "1.0.0"
-description = "Shared utilities for adamant H2 modpack standalone mods."
-websiteUrl = "https://github.com/h2-modpack/h2-modpack-Lib"
+description = "Shared utilities for adamant modpack standalone mods."
+websiteUrl = "https://github.com/h2-modpack/ModpackLib"
 containsNsfwContent = false
 
 [package.dependencies]
