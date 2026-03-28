@@ -378,7 +378,11 @@ FieldTypes.checkbox = {
     toStaging = function(val) return val == true end,
     draw = function(imgui, field, value)
         if value == nil then value = field.default end
-        return imgui.Checkbox(field.label or field.configKey, value or false)
+        local newVal, changed = imgui.Checkbox(field.label or field.configKey, value or false)
+        if imgui.IsItemHovered() and (field.tooltip or "") ~= "" then
+            imgui.SetTooltip(field.tooltip)
+        end
+        return newVal, changed
     end,
 }
 
@@ -412,6 +416,9 @@ FieldTypes.dropdown = {
         end
         local preview = field.values[currentIdx] or ""
         imgui.Text(field.label or field.configKey)
+        if imgui.IsItemHovered() and (field.tooltip or "") ~= "" then
+            imgui.SetTooltip(field.tooltip)
+        end
         imgui.SameLine()
         if width then imgui.PushItemWidth(width) end
         local changed = false
@@ -457,6 +464,9 @@ FieldTypes.radio = {
     draw = function(imgui, field, value)
         local current = value or field.default or ""
         imgui.Text(field.label or field.configKey)
+        if imgui.IsItemHovered() and (field.tooltip or "") ~= "" then
+            imgui.SetTooltip(field.tooltip)
+        end
         local newVal = current
         local changed = false
         for _, v in ipairs(field.values) do
