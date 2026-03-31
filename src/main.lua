@@ -260,6 +260,13 @@ local function SpecialFieldKey(configKey)
     return tostring(configKey)
 end
 
+local function ChoiceDisplay(field, value)
+    if field.displayValues and field.displayValues[value] ~= nil then
+        return tostring(field.displayValues[value])
+    end
+    return tostring(value)
+end
+
 -- =============================================================================
 -- FIELD TYPE DISPATCHERS
 -- =============================================================================
@@ -606,6 +613,9 @@ FieldTypes.dropdown = {
                 end
             end
         end
+        if field.displayValues ~= nil and type(field.displayValues) ~= "table" then
+            libWarn("%s: dropdown displayValues must be a table", prefix)
+        end
     end,
     toHash   = function(_, value) return tostring(value) end,
     fromHash = function(field, str)
@@ -621,7 +631,8 @@ FieldTypes.dropdown = {
         for i, v in ipairs(field.values) do
             if v == current then currentIdx = i; break end
         end
-        local preview = field.values[currentIdx] or ""
+        local previewValue = field.values[currentIdx] or ""
+        local preview = ChoiceDisplay(field, previewValue)
         imgui.Text(field.label or field.configKey)
         if imgui.IsItemHovered() and (field.tooltip or "") ~= "" then
             imgui.SetTooltip(field.tooltip)
@@ -632,7 +643,7 @@ FieldTypes.dropdown = {
         local newVal = current
         if imgui.BeginCombo(field._imguiId, preview) then
             for i, v in ipairs(field.values) do
-                if imgui.Selectable(v, i == currentIdx) then
+                if imgui.Selectable(ChoiceDisplay(field, v), i == currentIdx) then
                     if i ~= currentIdx then
                         newVal = v
                         changed = true
@@ -659,6 +670,9 @@ FieldTypes.radio = {
                 end
             end
         end
+        if field.displayValues ~= nil and type(field.displayValues) ~= "table" then
+            libWarn("%s: radio displayValues must be a table", prefix)
+        end
     end,
     toHash   = function(_, value) return tostring(value) end,
     fromHash = function(field, str)
@@ -677,7 +691,7 @@ FieldTypes.radio = {
         local newVal = current
         local changed = false
         for _, v in ipairs(field.values) do
-            if imgui.RadioButton(v, current == v) then
+            if imgui.RadioButton(ChoiceDisplay(field, v), current == v) then
                 if v ~= current then
                     newVal = v
                     changed = true

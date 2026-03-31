@@ -83,6 +83,15 @@ function TestDropdown:testValidateWarnsPipeInValue()
     lu.assertTrue(warned)
 end
 
+function TestDropdown:testValidateWarnsBadDisplayValues()
+    local field = { type = "dropdown", configKey = "X", values = { "A" }, displayValues = "bad" }
+    CaptureWarnings()
+    lib.FieldTypes.dropdown.validate(field, "test")
+    local warned = #Warnings > 0
+    RestoreWarnings()
+    lu.assertTrue(warned)
+end
+
 -- =============================================================================
 -- RADIO
 -- =============================================================================
@@ -122,6 +131,75 @@ function TestRadio:testValidateWarnsPipeInValue()
     local warned = #Warnings > 0
     RestoreWarnings()
     lu.assertTrue(warned)
+end
+
+function TestRadio:testValidateWarnsBadDisplayValues()
+    local field = { type = "radio", configKey = "X", values = { "A" }, displayValues = "bad" }
+    CaptureWarnings()
+    lib.FieldTypes.radio.validate(field, "test")
+    local warned = #Warnings > 0
+    RestoreWarnings()
+    lu.assertTrue(warned)
+end
+
+TestChoiceDisplay = {}
+
+function TestChoiceDisplay:testDropdownUsesDisplayValuesForPreviewAndOptions()
+    local field = {
+        type = "dropdown",
+        configKey = "Mode",
+        values = { "", "ZeusUpgrade" },
+        displayValues = { [""] = "None", ZeusUpgrade = "Zeus" },
+        _imguiId = "##Mode",
+    }
+    local seen = {}
+    local imgui = {
+        Text = function() end,
+        IsItemHovered = function() return false end,
+        SameLine = function() end,
+        PushItemWidth = function() end,
+        PopItemWidth = function() end,
+        BeginCombo = function(_, preview)
+            seen.preview = preview
+            return true
+        end,
+        Selectable = function(label)
+            table.insert(seen, label)
+            return false
+        end,
+        EndCombo = function() end,
+    }
+
+    lib.FieldTypes.dropdown.draw(imgui, field, "ZeusUpgrade")
+
+    lu.assertEquals(seen.preview, "Zeus")
+    lu.assertEquals(seen[1], "None")
+    lu.assertEquals(seen[2], "Zeus")
+end
+
+function TestChoiceDisplay:testRadioUsesDisplayValuesForLabels()
+    local field = {
+        type = "radio",
+        configKey = "Mode",
+        values = { "", "ZeusUpgrade" },
+        displayValues = { [""] = "None", ZeusUpgrade = "Zeus" },
+    }
+    local seen = {}
+    local imgui = {
+        Text = function() end,
+        IsItemHovered = function() return false end,
+        RadioButton = function(label)
+            table.insert(seen, label)
+            return false
+        end,
+        SameLine = function() end,
+        NewLine = function() end,
+    }
+
+    lib.FieldTypes.radio.draw(imgui, field, "ZeusUpgrade")
+
+    lu.assertEquals(seen[1], "None")
+    lu.assertEquals(seen[2], "Zeus")
 end
 
 -- =============================================================================
