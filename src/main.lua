@@ -96,6 +96,35 @@ function public.log(name, enabled, fmt, ...)
     print("[" .. name .. "] " .. (select('#', ...) > 0 and string.format(fmt, ...) or fmt))
 end
 
+--- Return true when expensive special-state validation checks should run.
+--- This is intentionally separate from ordinary DebugMode logging so modules
+--- can keep logs on without paying for per-frame schema snapshot/compare work.
+--- Global lib-owned toggle: when enabled, all special modules validate.
+--- @param modConfig table|nil
+--- @return boolean
+function public.isSpecialStateValidationEnabled(modConfig)
+    return libConfig.DebugStateValidation == true
+end
+
+--- Render the expensive special-state validation toggle.
+--- Intended for framework dev tooling and standalone debugging.
+--- @param imgui table
+--- @param modConfig table|nil
+--- @param label string|nil
+--- @return boolean value, boolean changed
+function public.drawSpecialStateValidationToggle(imgui, modConfig, label)
+    local value, changed = imgui.Checkbox(label or "State Validation", libConfig.DebugStateValidation == true)
+    if changed then
+        libConfig.DebugStateValidation = value
+    end
+    if imgui.IsItemHovered() then
+        imgui.SetTooltip(
+            "Run expensive schema snapshot/compare checks for all special modules to detect direct config writes in UI."
+        )
+    end
+    return value, changed
+end
+
 --- Create an isolated backup/restore pair.
 --- Each mod gets its own state — no collision between mods.
 --- backup() accepts variadic keys: backup(tbl, "k1", "k2", ...)
@@ -821,6 +850,11 @@ rom.gui.add_to_menu_bar(function()
         if chg then libConfig.DebugMode = val end
         if rom.ImGui.IsItemHovered() then
             rom.ImGui.SetTooltip("Print lib-internal diagnostic warnings (schema errors, unknown field types)")
+        end
+        local validationVal, validationChg = rom.ImGui.Checkbox("State Validation", libConfig.DebugStateValidation == true)
+        if validationChg then libConfig.DebugStateValidation = validationVal end
+        if rom.ImGui.IsItemHovered() then
+            rom.ImGui.SetTooltip("Run expensive schema snapshot/compare checks for all special modules.")
         end
         rom.ImGui.EndMenu()
     end
