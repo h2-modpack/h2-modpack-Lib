@@ -102,17 +102,16 @@ end
 --- Global lib-owned toggle: when enabled, all special modules validate.
 --- @param modConfig table|nil
 --- @return boolean
-function public.isSpecialStateValidationEnabled(modConfig)
+function public.isSpecialStateValidationEnabled()
     return libConfig.DebugStateValidation == true
 end
 
 --- Render the expensive special-state validation toggle.
 --- Intended for framework dev tooling and standalone debugging.
 --- @param imgui table
---- @param modConfig table|nil
 --- @param label string|nil
 --- @return boolean value, boolean changed
-function public.drawSpecialStateValidationToggle(imgui, modConfig, label)
+function public.drawSpecialStateValidationToggle(imgui, label)
     local value, changed = imgui.Checkbox(label or "State Validation", libConfig.DebugStateValidation == true)
     if changed then
         libConfig.DebugStateValidation = value
