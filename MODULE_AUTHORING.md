@@ -14,6 +14,50 @@ public.definition = {
 public.store = lib.createStore(config, public.definition)
 ```
 
+## Module File Conventions
+
+Use this split consistently:
+- `config`, `chalk`, and `reload` stay local to `main.lua`
+- `public.store = lib.createStore(config, public.definition)` is the boundary where raw Chalk config stops
+- `store = public.store` may be shared across module files
+- `modutil` and `lib` may be shared across module files
+- imported files should read persisted state through `store.read(...)` and write through `store.write(...)`, not raw config
+- `internal` is for module-local helpers, registration tables, and cached data, not dependency forwarding
+
+Example:
+
+```lua
+local chalk = rom.mods["SGG_Modding-Chalk"]
+local reload = rom.mods["SGG_Modding-ReLoad"]
+local config = chalk.auto("config.lua")
+
+public.store = lib.createStore(config, public.definition)
+store = public.store
+```
+
+## Required State Access Rules
+
+These are contract rules, not style preferences:
+- keep raw Chalk config local to `main.lua`
+- after `public.store = lib.createStore(config, public.definition)`, module code should use `store.read(...)` and `store.write(...)`
+- do not share raw config across imported module files
+
+Avoid:
+
+```lua
+if config.Strict then
+    -- ...
+end
+```
+
+Use:
+
+```lua
+if store.read("Strict") then
+    -- ...
+end
+```
+
 Recommended bootstrap:
 
 ```lua
