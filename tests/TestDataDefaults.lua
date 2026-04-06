@@ -105,6 +105,22 @@ function TestDataDefaults:testLookupUsesConfigKeyNotAlias()
     lu.assertEquals(store.uiState.get("MyAlias"), 9)
 end
 
+-- Nested configKey table is traversed correctly in dataDefaults
+function TestDataDefaults:testNestedConfigKeyTraversesDataDefaults()
+    local definition = {
+        storage = {
+            { type = "bool", alias = "GodModeEnabled", configKey = { "GodMode", "Enabled" } },
+            { type = "int",  alias = "FixedValue",     configKey = { "GodMode", "FixedValue" }, min = 0, max = 10 },
+        },
+    }
+    local store = makeStore(definition, {}, {
+        GodMode = { Enabled = true, FixedValue = 3 },
+    })
+
+    lu.assertTrue(store.uiState.get("GodModeEnabled"))
+    lu.assertEquals(store.uiState.get("FixedValue"), 3)
+end
+
 -- createStore called twice on same definition (reload) does not double-apply dataDefaults
 function TestDataDefaults:testIdempotentOnSecondCreateStoreCall()
     local node = { type = "int", alias = "MyCount", configKey = "MyCount", min = 0, max = 10 }

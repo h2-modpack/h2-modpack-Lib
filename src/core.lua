@@ -752,7 +752,7 @@ function public.createStore(modConfig, definition, dataDefaults)
             if node.default == nil then
                 local key = node.configKey or node.alias
                 if key ~= nil then
-                    node.default = dataDefaults[key]
+                    node.default = public.readPath(dataDefaults, key)
                 end
             end
         end
