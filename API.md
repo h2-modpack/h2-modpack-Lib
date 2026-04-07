@@ -7,6 +7,7 @@ This is the supported Lib surface after the storage/UI hard cut.
 Modules now declare:
 - `definition.storage`
 - `definition.ui`
+- optional `definition.customTypes`
 
 There is no compatibility layer for:
 - `definition.options`
@@ -17,9 +18,13 @@ UI owns widgets and layout.
 
 ## Store
 
-### `lib.createStore(config, definition?)`
+### `lib.createStore(config, definition?, dataDefaults?)`
 
 Creates the module-owned store facade around persisted config.
+
+`dataDefaults` is the static table returned by `import("config.lua")`.
+When provided, Lib uses it to seed storage-node defaults for nodes that do not
+declare an explicit `default`.
 
 Normal access:
 - `store.read(keyOrAlias)`
@@ -125,7 +130,7 @@ Uses storage-type `equals(...)` when provided, otherwise deep structural equalit
 
 ## UI Helpers
 
-### `lib.validateUi(ui, label, storage)`
+### `lib.validateUi(ui, label, storage, customTypes?)`
 
 Validates a UI declaration table against storage.
 
@@ -138,8 +143,9 @@ Validation covers:
 - alias existence
 - widget/storage type compatibility
 - `visibleIf` alias validity
+- module-local custom widget/layout contracts when `customTypes` is provided
 
-### `lib.prepareUiNode(node, label?, storage)`
+### `lib.prepareUiNode(node, label?, storage, customTypes?)`
 
 Validates and prepares one UI node in isolation.
 
@@ -151,24 +157,30 @@ The `storage` argument may be:
 
 Store creation is not required before calling this helper.
 
+### `lib.prepareUiNodes(nodes, label?, storage, customTypes?)`
+
+Validates and prepares an ordered UI node list.
+
 ### `lib.isUiNodeVisible(node, values)`
 
 Evaluates `visibleIf` against the current alias-value table.
 
-### `lib.drawUiNode(imgui, node, uiState, width?)`
+### `lib.drawUiNode(imgui, node, uiState, width?, customTypes?)`
 
 Draws one prepared UI node against alias-backed `uiState`.
 
 Supports:
 - scalar widgets through `binds`
 - `steppedRange` through `binds.min` / `binds.max`
+- `packedCheckboxList` through packed child alias expansion
 - layout recursion through `children`
+- module-local custom widget/layout registries through `customTypes`
 
-### `lib.drawUiTree(imgui, nodes, uiState, width?)`
+### `lib.drawUiTree(imgui, nodes, uiState, width?, customTypes?)`
 
 Draws an ordered UI node list.
 
-### `lib.collectQuickUiNodes(nodes)`
+### `lib.collectQuickUiNodes(nodes, out?, customTypes?)`
 
 Returns all widget nodes marked `quick = true`, recursing through layout `children`.
 
@@ -193,6 +205,33 @@ Behavior:
 - return `nil` to render all quick candidates
 - return a string, array of strings, or `{ [quickId] = true }` set
 - only matching quick candidates are rendered
+
+## Module-Local Custom Types
+
+Modules may optionally declare:
+
+```lua
+definition.customTypes = {
+    widgets = {
+        myWidget = {
+            binds = { value = { storageType = "int" } },
+            validate = function(node, prefix) ... end,
+            draw = function(imgui, node, bound, width) ... end,
+        },
+    },
+    layouts = {
+        myLayout = {
+            validate = function(node, prefix) ... end,
+            render = function(imgui, node) ... end,
+        },
+    },
+}
+```
+
+Rules:
+- custom widget and layout type names may not collide with built-in names
+- custom widgets must declare `binds`
+- all UI helpers that accept `customTypes` merge them with built-ins for validation and draw
 
 ## Managed UI State
 
@@ -316,6 +355,7 @@ Built-ins:
 - `radio`
 - `stepper`
 - `steppedRange`
+- `packedCheckboxList`
 
 ### `lib.LayoutTypes`
 

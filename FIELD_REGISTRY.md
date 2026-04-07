@@ -96,7 +96,7 @@ Widget types own rendering and interaction only.
 
 Required methods:
 - `validate(node, prefix)`
-- `draw(imgui, node, value, width?)`
+- `draw(imgui, node, bound, width?)`
 
 Built-ins:
 - `checkbox`
@@ -104,12 +104,24 @@ Built-ins:
 - `radio`
 - `stepper`
 - `steppedRange`
+- `packedCheckboxList`
 
 Widgets bind by alias:
 
 ```lua
 { type = "checkbox", binds = { value = "Enabled" }, label = "Enabled" }
 ```
+
+Each declared bind becomes a bound entry passed into `draw(...)`:
+
+- `bound.<name>.get()`
+- `bound.<name>.set(value)`
+
+For widgets bound to a packed root, Lib may also expose:
+
+- `bound.<name>.children`
+
+which is how `packedCheckboxList` receives packed child rows.
 
 ### `steppedRange`
 
@@ -215,6 +227,11 @@ Lib hard-validates registry contracts through:
 - expects int storage
 - supports `step`, `fastStep`, `controlOffset`, and `valueWidth`
 
+### `packedCheckboxList`
+- expects a packed root bind
+- renders checkbox rows for the packed child aliases under that root
+- useful when a module wants a generic packed-flag checklist without hand-writing the child loop
+
 ### `separator`
 - layout only
 - no binding
@@ -235,6 +252,28 @@ Do not:
 - put persistence rules in widgets
 - put widget bindings in storage
 - use old field helpers or old schema contracts
+
+## Module-Local Extensions
+
+Modules may extend the built-in registries with:
+
+- `definition.customTypes.widgets`
+- `definition.customTypes.layouts`
+
+Rules:
+- custom widget names may not collide with built-in widget or layout names
+- custom layout names may not collide with built-in widget or layout names
+- custom widgets must declare `binds`
+- custom widgets must implement `validate(...)` and `draw(...)`
+- custom layouts must implement `validate(...)` and `render(...)`
+
+Custom types are merged into the registry surface for:
+- `lib.validateUi(...)`
+- `lib.prepareUiNode(...)`
+- `lib.prepareUiNodes(...)`
+- `lib.drawUiNode(...)`
+- `lib.drawUiTree(...)`
+- `lib.collectQuickUiNodes(...)`
 
 ## Minimal Example
 

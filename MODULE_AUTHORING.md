@@ -7,17 +7,20 @@ This guide covers the supported module contract after the storage/UI redesign.
 Every module exposes:
 
 ```lua
+local dataDefaults = import("config.lua")
+
 public.definition = {
     modpack = PACK_ID,
 }
 
-public.store = lib.createStore(config, public.definition)
+public.store = lib.createStore(config, public.definition, dataDefaults)
 store = public.store
 ```
 
 Every module now declares:
 - `definition.storage`
 - `definition.ui` when it wants Lib-managed rendering
+- optional `definition.customTypes` for module-local reusable widgets/layouts
 
 There is no supported use of:
 - `definition.options`
@@ -27,7 +30,7 @@ There is no supported use of:
 
 These are contract rules:
 - keep raw Chalk config local to `main.lua`
-- after `public.store = lib.createStore(config, public.definition)`, other module files should use `store.read(...)` and `store.write(...)`
+- after `public.store = lib.createStore(config, public.definition, dataDefaults)`, other module files should use `store.read(...)` and `store.write(...)`
 - special UI should use `store.uiState`
 
 Avoid:
@@ -71,6 +74,9 @@ public.definition = {
         { type = "separator", label = "Naming" },
         { type = "dropdown", binds = { value = "Label" }, label = "Label", values = { "", "A", "B" } },
     },
+    selectQuickUi = function(store, uiState, quickNodes)
+        return nil
+    end,
 }
 ```
 
@@ -79,6 +85,9 @@ Rules:
 - storage aliases should be stable after release
 - root aliases default to `configKey` when omitted
 - widgets bind by alias
+- `quick = true` marks quick candidates
+- `quickId` is optional but recommended when runtime quick filtering is used
+- `selectQuickUi(...)` runs at Quick Setup render time and may filter which quick candidates are shown
 
 Standalone helper:
 
@@ -176,6 +185,7 @@ Examples:
 { type = "checkbox", binds = { value = "EnabledFlag" }, label = "Enabled" }
 { type = "stepper", binds = { value = "Count" }, label = "Count", min = 1, max = 9, step = 1 }
 { type = "dropdown", binds = { value = "Mode" }, label = "Mode", values = { "Vanilla", "Chaos" } }
+{ type = "packedCheckboxList", binds = { value = "PackedFlags" } }
 ```
 
 ### Layout nodes
@@ -193,6 +203,34 @@ Examples:
     },
 }
 ```
+
+### Module-local custom widgets and layouts
+
+Modules may declare `definition.customTypes` when they want reusable UI pieces that should not be promoted into Lib:
+
+```lua
+public.definition.customTypes = {
+    widgets = {
+        myWidget = {
+            binds = { value = { storageType = "int" } },
+            validate = function(node, prefix) end,
+            draw = function(imgui, node, bound, width) end,
+        },
+    },
+    layouts = {
+        myLayout = {
+            validate = function(node, prefix) end,
+            render = function(imgui, node) return true end,
+        },
+    },
+}
+```
+
+These custom types can be used by:
+- hosted regular-module UI
+- standalone Lib helpers
+- Framework rendering
+- special-module calls to `lib.drawUiNode(...)` / `lib.drawUiTree(...)`
 
 ### `steppedRange`
 
@@ -228,6 +266,32 @@ Multiple allowed values:
 ```lua
 { type = "stepper", binds = { value = "Count" }, label = "Count", visibleIf = { alias = "Mode", anyOf = { "Forced", "Chaos" } } }
 ```
+
+### Quick UI filtering
+
+Any widget node may opt into Quick Setup by setting:
+
+```lua
+quick = true
+```
+
+Quick candidate ids are:
+- `node.quickId` when explicitly provided
+- otherwise derived from `node.binds`
+
+Modules may optionally filter which quick nodes are shown at runtime:
+
+```lua
+public.definition.selectQuickUi = function(store, uiState, quickNodes)
+    return { "value=Strict" }
+end
+```
+
+Return:
+- `nil` to show all quick candidates
+- one quick id string
+- an array of quick id strings
+- or a `{ [quickId] = true }` set
 
 ## Managed UI State
 
