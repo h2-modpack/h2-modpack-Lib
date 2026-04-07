@@ -231,6 +231,60 @@ function TestUiNodes:testCollectQuickUiNodesRecursesThroughLayoutChildren()
     lu.assertEquals(quick[2].binds and quick[2].binds.value, "Count")
 end
 
+function TestUiNodes:testCollectQuickUiNodesSupportsCustomTypes()
+    local nodes = {
+        {
+            type = "fancyGroup",
+            children = {
+                { type = "fancyToggle", binds = { value = "Enabled" }, label = "Enabled", quick = true },
+            },
+        },
+    }
+    local customTypes = {
+        widgets = {
+            fancyToggle = {
+                binds = { value = { storageType = "bool" } },
+                validate = function() end,
+                draw = function() end,
+            },
+        },
+        layouts = {
+            fancyGroup = {
+                validate = function() end,
+                render = function() return true end,
+            },
+        },
+    }
+
+    local quick = lib.collectQuickUiNodes(nodes, nil, customTypes)
+
+    lu.assertEquals(#quick, 1)
+    lu.assertEquals(quick[1].type, "fancyToggle")
+end
+
+function TestUiNodes:testGetQuickUiNodeIdFallsBackToBinds()
+    local node = {
+        type = "checkbox",
+        binds = { value = "Enabled" },
+        label = "Enabled",
+        quick = true,
+    }
+
+    lu.assertEquals(lib.getQuickUiNodeId(node), "value=Enabled")
+end
+
+function TestUiNodes:testGetQuickUiNodeIdPrefersExplicitQuickId()
+    local node = {
+        type = "checkbox",
+        binds = { value = "Enabled" },
+        label = "Enabled",
+        quick = true,
+        quickId = "CurrentAspect",
+    }
+
+    lu.assertEquals(lib.getQuickUiNodeId(node), "CurrentAspect")
+end
+
 function TestUiNodes:testDrawUiNodeReturnsChangedWhenLayoutChildChanges()
     local definition = {
         storage = {

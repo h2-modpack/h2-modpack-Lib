@@ -230,6 +230,9 @@ StorageTypes.packedInt = {
         if node.default ~= nil and type(node.default) ~= "number" then
             libWarn("%s: packedInt default must be number, got %s", prefix, type(node.default))
         end
+        if node.width ~= nil and (type(node.width) ~= "number" or node.width < 1 or node.width > 32) then
+            libWarn("%s: packedInt width must be a positive number no greater than 32", prefix)
+        end
         if type(node.bits) ~= "table" or #node.bits == 0 then
             libWarn("%s: packedInt bits must be a non-empty list", prefix)
             return
@@ -290,6 +293,27 @@ StorageTypes.packedInt = {
     end,
     fromHash = function(node, str)
         return NormalizeInteger(node, tonumber(str))
+    end,
+    packWidth = function(node)
+        if type(node.width) == "number" and node.width >= 1 and node.width <= 32 then
+            return math.floor(node.width)
+        end
+        if type(node.bits) ~= "table" then
+            return nil
+        end
+        local maxUsedBit = 0
+        for _, bitNode in ipairs(node.bits) do
+            if type(bitNode.offset) == "number" and type(bitNode.width) == "number" then
+                local used = math.floor(bitNode.offset) + math.floor(bitNode.width)
+                if used > maxUsedBit then
+                    maxUsedBit = used
+                end
+            end
+        end
+        if maxUsedBit > 0 and maxUsedBit <= 32 then
+            return maxUsedBit
+        end
+        return nil
     end,
 }
 
@@ -887,6 +911,30 @@ local function ValidateVisibleIf(prefix, node, storageNodes)
     end
 end
 
+local function DeriveQuickUiNodeId(node)
+    if type(node) ~= "table" then
+        return nil
+    end
+    if type(node.quickId) == "string" and node.quickId ~= "" then
+        return node.quickId
+    end
+    if type(node.binds) ~= "table" then
+        return nil
+    end
+
+    local parts = {}
+    for bindName, alias in pairs(node.binds) do
+        if type(alias) == "string" and alias ~= "" then
+            table.insert(parts, tostring(bindName) .. "=" .. alias)
+        end
+    end
+    if #parts == 0 then
+        return nil
+    end
+    table.sort(parts)
+    return table.concat(parts, "|")
+end
+
 local function ValidateUiNode(node, prefix, storageNodes, widgetTypes, layoutTypes)
     widgetTypes = widgetTypes or WidgetTypes
     layoutTypes = layoutTypes or LayoutTypes
@@ -912,6 +960,9 @@ local function ValidateUiNode(node, prefix, storageNodes, widgetTypes, layoutTyp
 
     if widgetType then
         widgetType.validate(node, prefix)
+        if node.quickId ~= nil and (type(node.quickId) ~= "string" or node.quickId == "") then
+            libWarn("%s: quickId must be a non-empty string", prefix)
+        end
         -- Generic: validate every bind declared by the widget type
         local idParts = {}
         for bindName, bindSpec in pairs(widgetType.binds) do
@@ -920,6 +971,7 @@ local function ValidateUiNode(node, prefix, storageNodes, widgetTypes, layoutTyp
         end
         table.sort(idParts)
         node._imguiId = "##" .. table.concat(idParts, "__")
+        node._quickId = DeriveQuickUiNodeId(node)
     else
         layoutType.validate(node, prefix)
         if node.children ~= nil then
@@ -1099,22 +1151,28 @@ function public.drawUiTree(imgui, nodes, uiState, width, customTypes)
     return changed
 end
 
-function public.collectQuickUiNodes(nodes, out)
+function public.collectQuickUiNodes(nodes, out, customTypes)
     out = out or {}
     if type(nodes) ~= "table" then
         return out
     end
+    local widgetTypes, layoutTypes = MergeCustomTypes(customTypes)
     for _, node in ipairs(nodes) do
         if type(node) == "table" then
-            if WidgetTypes[node.type] and node.quick == true then
+            if widgetTypes[node.type] and node.quick == true then
+                node._quickId = node._quickId or DeriveQuickUiNodeId(node)
                 table.insert(out, node)
             end
-            if LayoutTypes[node.type] and type(node.children) == "table" then
-                public.collectQuickUiNodes(node.children, out)
+            if layoutTypes[node.type] and type(node.children) == "table" then
+                public.collectQuickUiNodes(node.children, out, customTypes)
             end
         end
     end
     return out
+end
+
+function public.getQuickUiNodeId(node)
+    return DeriveQuickUiNodeId(node)
 end
 
 public.StorageTypes = StorageTypes

@@ -172,6 +172,28 @@ Draws an ordered UI node list.
 
 Returns all widget nodes marked `quick = true`, recursing through layout `children`.
 
+Quick candidate ids:
+- use `node.quickId` when provided
+- otherwise derive from `node.binds`
+
+### `lib.getQuickUiNodeId(node)`
+
+Returns the stable quick candidate id used by quick-selection callbacks.
+
+Modules may optionally define:
+
+```lua
+definition.selectQuickUi = function(store, uiState, quickNodes)
+    return { "value=SomeAlias" }
+end
+```
+
+Behavior:
+- callback runs at Quick Setup render time
+- return `nil` to render all quick candidates
+- return a string, array of strings, or `{ [quickId] = true }` set
+- only matching quick candidates are rendered
+
 ## Managed UI State
 
 `store.uiState` stages by alias, not by field/config key.

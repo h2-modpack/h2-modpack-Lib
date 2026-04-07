@@ -81,7 +81,14 @@ Rules:
 - packed child defaults are encoded into the root default when the root default is omitted
 - only the root persists and hashes directly
 
-By default each storage root hashes as its own key. Framework supports optional `hashGroups` for coordinators that want to compress multiple independent roots into a single base62 token — see the coordinator guide. This is an optimization; modules do not need to declare `hashGroups` for hashing to work correctly.
+By default each storage root hashes as its own key. Framework supports optional `hashGroups` for coordinators that want to compress multiple independent small roots into a single base62 token — see the coordinator guide. This is an optimization; modules do not need to declare `hashGroups` for hashing to work correctly.
+
+`hashGroups` may include:
+- root `bool`
+- root `int`
+- root `packedInt` with a derivable width
+
+`hashGroups` may not include packed child aliases from inside a `packedInt`.
 
 ## Widget Types
 
