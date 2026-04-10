@@ -606,16 +606,16 @@ Rules:
 - layouts with `handlesChildren = true` should return `open, changed`
 - layouts with `handlesChildren = true` should call `drawChild(child, runtimeGeometry?, runtimeLayout?)` themselves and report child changes through `changed`
 
-Today, `slots` is a validation surface. Custom widget `draw(...)` logic still reads `node.geometry` itself when it wants custom placement.
+Custom widgets may stay fully imperative, but widgets that declare `slots` and `defaultGeometry` can call `lib.drawWidgetSlots(...)` from inside `draw(...)` to reuse Lib-managed slot ordering and geometry merging.
 
-`summary(...)` is not a render hook. Lib only calls it through `lib.getWidgetSummary(...)`, which dispatches through the same merged widget registry used for built-in and custom widgets.
+`summary(...)` is not a render hook. Prepared nodes retain their resolved widget type, and `lib.getWidgetSummary(...)` is the public wrapper that calls that prepared widget capability for both built-in and custom widgets.
+It requires a prepared node from `lib.prepareUiNode(...)` or `lib.prepareWidgetNode(...)`.
 
 `lib.getWidgetSummary(...)` returns a fixed outer table:
 - `type`: widget type name
 - `data`: widget-specific summary payload
 
 `data` is intentionally widget-specific rather than normalized across all widgets.
-Custom widgets that want Lib-managed slot placement may call `lib.drawWidgetSlots(...)` from inside `draw(...)`.
 
 Custom types are merged into the registry surface for:
 - `lib.validateUi(...)`

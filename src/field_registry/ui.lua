@@ -203,6 +203,8 @@ local function ValidateUiNode(node, prefix, storageNodes, widgetTypes, layoutTyp
     end
 
     if widgetType then
+        node._widgetType = widgetType
+        node._layoutType = nil
         widgetType.validate(node, prefix)
         ValidateWidgetGeometry(node, prefix, widgetType)
         if node.quickId ~= nil and (type(node.quickId) ~= "string" or node.quickId == "") then
@@ -214,6 +216,8 @@ local function ValidateUiNode(node, prefix, storageNodes, widgetTypes, layoutTyp
         EnsureNodeImguiId(node, prefix, widgetType)
         node._quickId = DeriveQuickUiNodeId(node)
     else
+        node._layoutType = layoutType
+        node._widgetType = nil
         layoutType.validate(node, prefix)
         if node.children ~= nil then
             if type(node.children) ~= "table" then
@@ -399,6 +403,7 @@ function public.drawUiTree(imgui, nodes, uiState, width, customTypes)
 end
 
 function public.getWidgetSummary(node, uiState, runtimeGeometry, customTypes)
+    local _ = customTypes
     if type(node) ~= "table" then
         return nil
     end
@@ -406,10 +411,10 @@ function public.getWidgetSummary(node, uiState, runtimeGeometry, customTypes)
         return nil
     end
 
-    local widgetTypes = select(1, MergeCustomTypes(customTypes))
-    local widgetType = widgetTypes[node.type]
+    local widgetType = node._widgetType
     if not widgetType then
-        libWarn("getWidgetSummary: unknown node type '%s'", tostring(node.type))
+        libWarn("getWidgetSummary: node '%s' is not prepared; call lib.prepareUiNode(...) or lib.prepareWidgetNode(...) first",
+            tostring(node.type))
         return nil
     end
     if type(widgetType.summary) ~= "function" then

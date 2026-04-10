@@ -343,7 +343,7 @@ function TestUiNodes:testConfirmButtonArmsAndConfirmsWithNodeLocalState()
     local changedArm = lib.drawUiNode(imgui, definition.ui[1], store.uiState)
     local changedConfirm = lib.drawUiNode(imgui, definition.ui[1], store.uiState)
 
-    lu.assertTrue(changedArm)
+    lu.assertFalse(changedArm)
     lu.assertTrue(changedConfirm)
     lu.assertTrue(store.uiState.get("Triggered"))
     lu.assertStrContains(imgui._state.buttonLabels[1], "Reset")

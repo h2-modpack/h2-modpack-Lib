@@ -306,6 +306,23 @@ Examples:
         { type = "checkbox", binds = { value = "EnabledFlag" }, label = "Enabled" },
     },
 }
+
+{
+    type = "panel",
+    columns = {
+        { name = "label", start = 0, width = 220 },
+        { name = "control", start = 240, width = 180 },
+    },
+    children = {
+        { type = "text", text = "Mode" },
+        {
+            type = "dropdown",
+            binds = { value = "Mode" },
+            values = { "Vanilla", "Chaos" },
+            panel = { column = "control", line = 1, slots = { "control" } },
+        },
+    },
+}
 ```
 
 ### Module-local custom widgets and layouts
@@ -339,8 +356,9 @@ These custom types can be used by:
 - Framework rendering
 - special-module calls to `lib.drawUiNode(...)` / `lib.drawUiTree(...)`
 
-Today, `slots` is a validation surface. Custom widget `draw(...)` logic still reads `node.geometry` itself when it wants custom placement.
+Custom widget `draw(...)` may stay fully imperative, or it may call `lib.drawWidgetSlots(...)` to let Lib manage slot ordering and geometry merging.
 `dynamicSlots(...)` is the optional escape hatch for declaration-time-dependent slot names like `option:N`.
+`summary(...)` is the optional query-time companion to `draw(...)`. Prepared nodes retain their resolved widget type, and `lib.getWidgetSummary(...)` is the public wrapper that calls that capability. Like draw helpers, it expects a prepared node.
 Custom layout `render(...)` always receives `drawChild` and optional `runtimeLayout`.
 Simple layouts can ignore it and return just `open`.
 Layouts that want to own child placement should declare `handlesChildren = true`, return `open, changed`, and call `drawChild(child, runtimeGeometry?, runtimeLayout?)` themselves.

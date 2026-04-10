@@ -452,7 +452,7 @@ WidgetTypes.confirmButton = {
                         state.expiresAt = (state.now or os.clock()) + node._timeoutSeconds
                         node._confirmButtonState = state
                         ShowPreparedTooltip(imgui, node)
-                        return true
+                        return false
                     end
                     ShowPreparedTooltip(imgui, node)
                     return false

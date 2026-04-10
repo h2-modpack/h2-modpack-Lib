@@ -358,7 +358,11 @@ Rules:
 - custom widgets may optionally declare `dynamicSlots(node, slotName) -> ok, err` for declaration-time-dependent slot names
 - all UI helpers that accept `customTypes` merge them with built-ins for validation and draw
 
-Today, `slots` is a validation surface. Custom widget `draw(...)` logic still reads `node.geometry` itself when it wants custom placement.
+Custom widget `draw(...)` may either:
+- ignore slots entirely and render imperatively
+- or call `lib.drawWidgetSlots(...)` to let Lib handle slot ordering, default geometry, node geometry, and runtime geometry overrides
+
+When a custom widget uses `lib.drawWidgetSlots(...)`, `slots` and `defaultGeometry` become the normal placement surface rather than validation-only metadata.
 
 Custom layout `render(...)` contract:
 - `render(imgui, node, drawChild, runtimeLayout?)` always receives `drawChild`
@@ -580,7 +584,7 @@ Widget definitions may also declare optional flat capability functions such as:
 - `summary(node, bound, runtimeGeometry, uiState)`
 
 `summary(...)` is an optional query capability for widgets. Lib does not call it during normal draw.
-It is dispatched through `lib.getWidgetSummary(...)` and works for both built-in and custom widgets.
+Prepared nodes retain their resolved widget type, and `lib.getWidgetSummary(...)` is the public wrapper that calls that prepared widget capability for both built-in and custom widgets.
 
 ### `lib.WidgetHelpers`
 
@@ -593,13 +597,15 @@ Current status:
 
 ### `lib.getWidgetSummary(node, uiState, runtimeGeometry, customTypes)`
 
-Queries a widget's optional `summary(...)` capability through the merged widget registry.
+Queries a widget's optional `summary(...)` capability through the node's prepared widget type.
 
 Behavior:
+- requires a prepared node from `lib.prepareUiNode(...)` or `lib.prepareWidgetNode(...)`
 - returns `nil` when the node is not a widget, is hidden by `visibleIf`, or the widget type does not define `summary`
+- warns when called on an unprepared node
 - passes the same bound surface widgets receive in `draw(...)`
 - applies prepared runtime geometry before calling `summary(...)`
-- works for both built-in widgets and `definition.customTypes.widgets`
+- works for both built-in widgets and `definition.customTypes.widgets` after preparation
 - returns a fixed outer table when summary data exists:
   - `type`: widget type name
   - `data`: widget-specific summary payload
