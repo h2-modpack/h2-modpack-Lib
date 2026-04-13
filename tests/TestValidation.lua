@@ -1099,6 +1099,27 @@ function TestUiValidation:testPanelChildColumnMustExist()
     assertWarningContains("panel.column references unknown column 'right'")
 end
 
+function TestUiValidation:testPanelIdMustBeNonEmptyString()
+    lib.validateUi({
+        {
+            type = "panel",
+            id = false,
+            columns = {
+                { name = "left", start = 0, width = 100 },
+            },
+            children = {
+                {
+                    type = "text",
+                    text = "A",
+                    panel = { column = "left", line = 1 },
+                },
+            },
+        },
+    }, "PanelIdValidation", {})
+
+    assertWarningContains("panel id must be a non-empty string")
+end
+
 function TestUiValidation:testHorizontalTabsRequiresIdAndChildTabLabels()
     lib.validateUi({
         {
@@ -1113,6 +1134,26 @@ function TestUiValidation:testHorizontalTabsRequiresIdAndChildTabLabels()
     assertWarningContains("horizontalTabs id must be a non-empty string")
     assertWarningContains("horizontalTabs child tabLabel must be a non-empty string")
     assertWarningContains("horizontalTabs child tabId must be a non-empty string")
+end
+
+function TestUiValidation:testVerticalTabsActiveTabBindMustBeString()
+    local storage = {
+        { type = "int", alias = "ActiveTab", lifetime = "transient", default = 1, min = 1, max = 3 },
+    }
+    lib.validateStorage(storage, "VerticalTabsActiveTab")
+
+    lib.validateUi({
+        {
+            type = "verticalTabs",
+            id = "Tabs",
+            binds = { activeTab = "ActiveTab" },
+            children = {
+                { type = "text", text = "A", tabLabel = "First", tabId = "first" },
+            },
+        },
+    }, "VerticalTabsActiveTab", storage)
+
+    assertWarningContains("bound alias 'ActiveTab' is int, expected string (binds.activeTab)")
 end
 
 function TestUiValidation:testHorizontalTabsChildTabLabelColorMustBeColorTable()

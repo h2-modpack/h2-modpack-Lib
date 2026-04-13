@@ -12,9 +12,9 @@ local EnsurePreparedStorage = registry.EnsurePreparedStorage
 local DrawLayoutNode = registry.DrawLayoutNode
 local nextAnonymousImguiId = 0
 
-local function BuildBoundEntries(node, widgetType, uiState)
+local function BuildBoundEntries(node, bindOwnerType, uiState)
     local bound = { _changed = false }
-    for bindName in pairs(widgetType.binds) do
+    for bindName in pairs(bindOwnerType.binds) do
         local alias = node.binds and node.binds[bindName]
         if alias then
             local a = alias
@@ -46,7 +46,7 @@ local function BuildBoundEntries(node, widgetType, uiState)
     end
     node._boundCache = bound
     node._boundCacheUiState = uiState
-    node._boundCacheWidgetType = widgetType
+    node._boundCacheBindOwnerType = bindOwnerType
     return bound
 end
 
@@ -248,6 +248,11 @@ local function ValidateUiNode(node, prefix, storageNodes, widgetTypes, layoutTyp
         node._layoutType = layoutType
         node._widgetType = nil
         layoutType.validate(node, prefix)
+        if type(layoutType.binds) == "table" then
+            for bindName, bindSpec in pairs(layoutType.binds) do
+                AssertUiBind(prefix, node, storageNodes, bindName, bindSpec)
+            end
+        end
         if node.children ~= nil then
             if type(node.children) ~= "table" then
                 libWarn("%s: children must be a table", prefix)
@@ -376,7 +381,7 @@ function public.drawUiNode(imgui, node, uiState, width, customTypes)
     if node.indent then imgui.Indent() end
 
     local bound = node._boundCache
-    if bound == nil or node._boundCacheUiState ~= uiState or node._boundCacheWidgetType ~= widgetType then
+    if bound == nil or node._boundCacheUiState ~= uiState or node._boundCacheBindOwnerType ~= widgetType then
         bound = BuildBoundEntries(node, widgetType, uiState)
     end
     bound._changed = false

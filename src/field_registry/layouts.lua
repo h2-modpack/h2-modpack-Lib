@@ -151,21 +151,35 @@ end
 
 LayoutTypes.horizontalTabs = {
     handlesChildren = true,
+    binds = {
+        activeTab = { storageType = "string", optional = true },
+    },
     validate = function(node, prefix)
         if type(node.id) ~= "string" or node.id == "" then
             libWarn("%s: horizontalTabs id must be a non-empty string", prefix)
         end
         ValidateTabbedChildren(node, prefix, "horizontalTabs")
     end,
-    render = function(imgui, node, drawChild)
+    render = function(imgui, node, drawChild, _, bound)
         local changed = false
         if not imgui.BeginTabBar or not imgui.BeginTabItem or not imgui.EndTabItem or not imgui.EndTabBar then
             libWarn("drawUiNode: horizontalTabs requires BeginTabBar/BeginTabItem/EndTabItem/EndTabBar support")
             return true, false
         end
 
+        local children = type(node.children) == "table" and node.children or {}
+        local requestedKey = bound and bound.activeTab and bound.activeTab.get and bound.activeTab:get() or nil
+        local activeChild, activeIndex = FindTabbedChildByKey(children, requestedKey or node._activeTabKey)
+        node._activeTabKey = GetTabbedChildKey(activeChild, activeIndex)
+        if bound and bound.activeTab and bound.activeTab.get and bound.activeTab.set then
+            local currentBound = bound.activeTab:get()
+            if currentBound ~= node._activeTabKey then
+                bound.activeTab:set(node._activeTabKey)
+            end
+        end
+
         if imgui.BeginTabBar(node.id) then
-            for _, child in ipairs(node.children or {}) do
+            for index, child in ipairs(children) do
                 local tabItemLabel = GetHorizontalTabItemLabel(child)
                 local opened = false
                 if tabItemLabel ~= nil then
@@ -174,6 +188,13 @@ LayoutTypes.horizontalTabs = {
                     end)
                 end
                 if opened then
+                    node._activeTabKey = GetTabbedChildKey(child, index)
+                    if bound and bound.activeTab and bound.activeTab.get and bound.activeTab.set then
+                        local currentBound = bound.activeTab:get()
+                        if currentBound ~= node._activeTabKey then
+                            bound.activeTab:set(node._activeTabKey)
+                        end
+                    end
                     if drawChild(child) then
                         changed = true
                     end
@@ -189,6 +210,9 @@ LayoutTypes.horizontalTabs = {
 
 LayoutTypes.verticalTabs = {
     handlesChildren = true,
+    binds = {
+        activeTab = { storageType = "string", optional = true },
+    },
     validate = function(node, prefix)
         if type(node.id) ~= "string" or node.id == "" then
             libWarn("%s: verticalTabs id must be a non-empty string", prefix)
@@ -198,7 +222,7 @@ LayoutTypes.verticalTabs = {
         end
         ValidateTabbedChildren(node, prefix, "verticalTabs")
     end,
-    render = function(imgui, node, drawChild)
+    render = function(imgui, node, drawChild, _, bound)
         if not imgui.BeginChild or not imgui.EndChild or not imgui.Selectable or not imgui.SameLine then
             libWarn("drawUiNode: verticalTabs requires BeginChild/EndChild/Selectable/SameLine support")
             return true, false
@@ -209,8 +233,15 @@ LayoutTypes.verticalTabs = {
             return true, false
         end
 
-        local activeChild, activeIndex = FindTabbedChildByKey(children, node._activeTabKey)
+        local requestedKey = bound and bound.activeTab and bound.activeTab.get and bound.activeTab:get() or nil
+        local activeChild, activeIndex = FindTabbedChildByKey(children, requestedKey or node._activeTabKey)
         node._activeTabKey = GetTabbedChildKey(activeChild, activeIndex)
+        if bound and bound.activeTab and bound.activeTab.get and bound.activeTab.set then
+            local currentBound = bound.activeTab:get()
+            if currentBound ~= node._activeTabKey then
+                bound.activeTab:set(node._activeTabKey)
+            end
+        end
 
         local changed = false
         local sidebarWidth = node.sidebarWidth or 180
@@ -222,6 +253,12 @@ LayoutTypes.verticalTabs = {
             end)
             if selected then
                 node._activeTabKey = childKey
+                if bound and bound.activeTab and bound.activeTab.get and bound.activeTab.set then
+                    local currentBound = bound.activeTab:get()
+                    if currentBound ~= node._activeTabKey then
+                        bound.activeTab:set(node._activeTabKey)
+                    end
+                end
             end
         end
         imgui.EndChild()
@@ -462,6 +499,9 @@ end
 LayoutTypes.panel = {
     handlesChildren = true,
     validate = function(node, prefix)
+        if node.id ~= nil and (type(node.id) ~= "string" or node.id == "") then
+            libWarn("%s: panel id must be a non-empty string", prefix)
+        end
         if type(node.columns) ~= "table" or #node.columns == 0 then
             libWarn("%s: panel columns must be a non-empty list", prefix)
         else
@@ -480,6 +520,11 @@ LayoutTypes.panel = {
         end
     end,
     render = function(imgui, node, drawChild, uiState)
+        local hasPanelId = type(node.id) == "string" and node.id ~= ""
+        if hasPanelId then
+            imgui.PushID(node.id)
+        end
+
         local rowStart = GetCursorPosXSafe(imgui)
         local entries = BuildPanelEntries(node)
         local orderedPositions = GetOrderedPanelEntries(node, entries)
@@ -552,6 +597,10 @@ LayoutTypes.panel = {
             imgui.SetCursorPosY(finalRowMaxY)
         end
 
+        if hasPanelId then
+            imgui.PopID()
+        end
+
         return true, changed
     end,
 }
@@ -561,15 +610,23 @@ local function DrawLayoutNode(imgui, node, drawChild, layoutTypes, uiState)
     if not layoutType then
         return false, false
     end
+    local bound = nil
+    if type(layoutType.binds) == "table" then
+        bound = node._boundCache
+        if bound == nil or node._boundCacheUiState ~= uiState or node._boundCacheBindOwnerType ~= layoutType then
+            bound = shared.fieldRegistry.BuildBoundEntries(node, layoutType, uiState)
+        end
+        bound._changed = false
+    end
     -- Layout render contract:
     --   open = render(imgui, node, drawChild)
     --   or, when layoutType.handlesChildren == true:
     --   open, changed = render(imgui, node, drawChild)
     -- Layouts with handlesChildren = true fully own child rendering and must
     -- report any child-driven change via the second return value.
-    local open, layoutChanged = layoutType.render(imgui, node, drawChild, uiState)
+    local open, layoutChanged = layoutType.render(imgui, node, drawChild, uiState, bound)
     if layoutType.handlesChildren == true then
-        return true, layoutChanged == true
+        return true, (bound and bound._changed or false) or layoutChanged == true
     end
     local changed = false
     if open and type(node.children) == "table" then
@@ -577,7 +634,7 @@ local function DrawLayoutNode(imgui, node, drawChild, layoutTypes, uiState)
             if drawChild(child) then changed = true end
         end
     end
-    return true, changed
+    return true, (bound and bound._changed or false) or changed
 end
 
 registry.DrawLayoutNode = DrawLayoutNode

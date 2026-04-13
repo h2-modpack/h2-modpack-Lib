@@ -81,8 +81,8 @@ local function makeBasicImgui()
             table.insert(state.pushItemWidths, b or a)
         end,
         PopItemWidth = function() end,
-        PushID = function(_, value)
-            table.insert(state.pushIds, value)
+        PushID = function(a, b)
+            table.insert(state.pushIds, b ~= nil and b or a)
         end,
         PopID = function() end,
         Indent = function() end,
@@ -974,6 +974,97 @@ function TestUiNodes:testPanelLayoutCanPlaceChildrenIntoColumnsAndLines()
     end
     lu.assertTrue(saw0)
     lu.assertTrue(saw120)
+end
+
+function TestUiNodes:testPanelLayoutOptionalIdPushesScope()
+    local definition = {
+        storage = {
+            { type = "string", alias = "ModeA", configKey = "ModeA", default = "A" },
+        },
+        ui = {
+            {
+                type = "panel",
+                id = "ScopedPanel",
+                columns = {
+                    { name = "left", start = 0, width = 100 },
+                },
+                children = {
+                    {
+                        type = "dropdown",
+                        binds = { value = "ModeA" },
+                        values = { "A", "B" },
+                        panel = { column = "left", line = 1 },
+                    },
+                },
+            },
+        },
+    }
+    local store = makeStore(definition, {
+        ModeA = "A",
+    })
+    local imgui = makeBasicImgui()
+
+    local changed = lib.drawUiNode(imgui, definition.ui[1], store.uiState)
+
+    lu.assertFalse(changed)
+    local sawScopedPanel = false
+    for _, id in ipairs(imgui._state.pushIds) do
+        if id == "ScopedPanel" then
+            sawScopedPanel = true
+            break
+        end
+    end
+    lu.assertTrue(sawScopedPanel)
+end
+
+function TestUiNodes:testHorizontalTabsTracksActiveTabKey()
+    local definition = {
+        ui = {
+            {
+                type = "horizontalTabs",
+                id = "Tabs",
+                children = {
+                    { type = "text", text = "A", tabLabel = "First", tabId = "first" },
+                    { type = "text", text = "B", tabLabel = "Second", tabId = "second" },
+                },
+            },
+        },
+    }
+    lib.prepareUiNode(definition.ui[1], "HorizontalTabsTracking", {}, nil)
+    local imgui = makeBasicImgui()
+    imgui._state.beginTabItemResponses = { false, true }
+
+    local changed = lib.drawUiNode(imgui, definition.ui[1], nil)
+
+    lu.assertFalse(changed)
+    lu.assertEquals(definition.ui[1]._activeTabKey, "second")
+end
+
+function TestUiNodes:testVerticalTabsCanBindActiveTab()
+    local definition = {
+        storage = {
+            { type = "string", alias = "ActiveTab", lifetime = "transient", default = "second", maxLen = 32 },
+        },
+        ui = {
+            {
+                type = "verticalTabs",
+                id = "Tabs",
+                binds = { activeTab = "ActiveTab" },
+                children = {
+                    { type = "text", text = "A", tabLabel = "First", tabId = "first" },
+                    { type = "text", text = "B", tabLabel = "Second", tabId = "second" },
+                },
+            },
+        },
+    }
+    local store = makeStore(definition, {})
+    local imgui = makeBasicImgui()
+
+    local changed = lib.drawUiNode(imgui, definition.ui[1], store.uiState)
+
+    lu.assertFalse(changed)
+    lu.assertEquals(definition.ui[1]._activeTabKey, "second")
+    lu.assertEquals(store.uiState.get("ActiveTab"), "second")
 end
 
 function TestUiNodes:testCustomLayoutCanDelegateChildRenderingThroughDrawChild()

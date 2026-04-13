@@ -370,3 +370,47 @@ function TestUiState:testRunDerivedTextSkipsRecomputeWhenSignatureIsStable()
     lu.assertEquals(uiState.view.SummaryText, "Mode: checked")
     lu.assertEquals(computeCalls, 2)
 end
+
+function TestUiState:testGetCachedPreparedNodeReusesStableEntry()
+    local buildCalls = 0
+    local cacheEntry, node, rebuilt = lib.getCachedPreparedNode(nil, "alpha", function()
+        buildCalls = buildCalls + 1
+        return { id = buildCalls }
+    end)
+
+    lu.assertTrue(rebuilt)
+    lu.assertEquals(buildCalls, 1)
+    lu.assertEquals(node.id, 1)
+
+    local reusedCache, reusedNode, reused = lib.getCachedPreparedNode(cacheEntry, "alpha", function()
+        buildCalls = buildCalls + 1
+        return { id = buildCalls }
+    end)
+
+    lu.assertFalse(reused)
+    lu.assertEquals(buildCalls, 1)
+    lu.assertEquals(reusedCache, cacheEntry)
+    lu.assertEquals(reusedNode, node)
+end
+
+function TestUiState:testGetCachedPreparedNodeCanReusePreviousStateOnRebuild()
+    local cacheEntry = nil
+
+    cacheEntry = select(1, lib.getCachedPreparedNode(cacheEntry, "alpha", function()
+        return { _activeTabKey = "Olympians" }
+    end))
+
+    local nextCache, nextNode, rebuilt, previousNode = lib.getCachedPreparedNode(cacheEntry, "beta", function()
+        return {}
+    end, {
+        reuseState = function(node, oldNode)
+            node._activeTabKey = oldNode._activeTabKey
+        end,
+    })
+
+    lu.assertTrue(rebuilt)
+    lu.assertEquals(previousNode, cacheEntry.node)
+    lu.assertEquals(nextNode._activeTabKey, "Olympians")
+    lu.assertEquals(nextCache.node, nextNode)
+    lu.assertEquals(nextCache.signature, "beta")
+end

@@ -375,6 +375,35 @@ function public.runDerivedText(uiState, entries, cache)
     return changed
 end
 
+function public.getCachedPreparedNode(cacheEntry, signature, buildFn, opts)
+    if type(buildFn) ~= "function" then
+        if shared.libWarn then
+            shared.libWarn("getCachedPreparedNode: buildFn must be a function")
+        end
+        return nil, nil, false, nil
+    end
+
+    local cached = type(cacheEntry) == "table" and cacheEntry or nil
+    local previousNode = cached and cached.node or nil
+    if cached and previousNode ~= nil and cached.signature == signature then
+        return cached, previousNode, false, previousNode
+    end
+
+    local node = buildFn(previousNode)
+    if node == nil then
+        return nil, nil, true, previousNode
+    end
+
+    if previousNode ~= nil and type(opts) == "table" and type(opts.reuseState) == "function" then
+        opts.reuseState(node, previousNode)
+    end
+
+    return {
+        signature = signature,
+        node = node,
+    }, node, true, previousNode
+end
+
 function public.auditAndResyncUiState(name, uiState)
     if not uiState or type(uiState.collectConfigMismatches) ~= "function" or type(uiState.reloadFromConfig) ~= "function" then
         return {}
