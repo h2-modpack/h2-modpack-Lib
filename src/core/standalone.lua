@@ -1,7 +1,5 @@
 local internal = AdamantModpackLib_Internal
-local shared = internal.shared
-
-local libWarn = shared.logging.warn
+local libWarn = internal.logging.warn
 local coordinator = public.coordinator
 
 --- Creates a standalone menu renderer for a regular coordinated-capable module.
@@ -29,7 +27,7 @@ function coordinator.standaloneUI(def, store)
     end
 
     return function()
-        if def.modpack and shared.coordinators[def.modpack] then return end
+        if def.modpack and internal.coordinators[def.modpack] then return end
         if rom.ImGui.BeginMenu(def.name) then
             local imgui = rom.ImGui
             local enabled = store.read("Enabled") == true

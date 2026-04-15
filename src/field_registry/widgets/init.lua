@@ -1,12 +1,11 @@
 local internal = AdamantModpackLib_Internal
-local shared = internal.shared
-local registry = shared.fieldRegistry
+local ui = internal.ui
 
-local SetCursorPosSafe = registry.SetCursorPosSafe
-local GetStyleMetricX = registry.GetStyleMetricX
-local CalcTextWidth = registry.CalcTextWidth
-local EstimateStructuredRowAdvanceY = registry.EstimateStructuredRowAdvanceY
-local DrawStructuredAt = registry.DrawStructuredAt
+local SetCursorPosSafe = ui.SetCursorPosSafe
+local GetStyleMetricX = ui.GetStyleMetricX
+local CalcTextWidth = ui.CalcTextWidth
+local EstimateStructuredRowAdvanceY = ui.EstimateStructuredRowAdvanceY
+local DrawStructuredAt = ui.DrawStructuredAt
 
 local function EstimateToggleWidth(imgui, label)
     local frameHeight = type(imgui.GetFrameHeight) == "function" and imgui.GetFrameHeight() or nil
@@ -108,8 +107,8 @@ local function DrawOrderedEntries(imgui, entries, startX, startY, fallbackHeight
     return math.max(maxRight - startX, 0), math.max(maxBottom - startY, 0), changed
 end
 
-registry.EstimateToggleWidth = EstimateToggleWidth
-registry.DrawOrderedEntries = DrawOrderedEntries
+ui.EstimateToggleWidth = EstimateToggleWidth
+ui.DrawOrderedEntries = DrawOrderedEntries
 
 import 'field_registry/widgets/choice_helpers.lua'
 

@@ -1,20 +1,30 @@
 local internal = AdamantModpackLib_Internal
-local shared = internal.shared
-local StorageTypes = shared.StorageTypes
-local WidgetTypes = shared.WidgetTypes
-local libWarn = shared.logging.warnIf
-local registry = shared.fieldRegistry
+local StorageTypes = public.registry.storage
+local WidgetTypes = public.registry.widgets
+local libWarn = internal.logging.warnIf
+local ui = internal.ui
+local widgets = internal.widgets
 
-local NormalizeInteger = registry.NormalizeInteger
-local PrepareWidgetText = registry.PrepareWidgetText
-local CalcTextWidth = registry.CalcTextWidth
-local EstimateButtonWidth = registry.EstimateButtonWidth
-local EstimateStructuredRowAdvanceY = registry.EstimateStructuredRowAdvanceY
-local DrawOrderedEntries = registry.DrawOrderedEntries
-local ShowPreparedTooltip = registry.ShowPreparedTooltip
+local NormalizeInteger = ui.NormalizeInteger
+local PrepareWidgetText = widgets.PrepareWidgetText
+local CalcTextWidth = ui.CalcTextWidth
+local EstimateButtonWidth = ui.EstimateButtonWidth
+local EstimateStructuredRowAdvanceY = ui.EstimateStructuredRowAdvanceY
+local DrawOrderedEntries = ui.DrawOrderedEntries
+local ShowPreparedTooltip = ui.ShowPreparedTooltip
 
-local choiceHelpers = registry.choiceHelpers
+local choiceHelpers = widgets.choiceHelpers
 local ValidateValueColorsTable = choiceHelpers.ValidateValueColorsTable
+
+local function CompareEntries(left, right)
+    if left.line ~= right.line then
+        return left.line < right.line
+    end
+    if type(left.start) == "number" and type(right.start) == "number" and left.start ~= right.start then
+        return left.start < right.start
+    end
+    return left.index < right.index
+end
 
 local function PrepareStepperDrawContext(node, boundValue, limits)
     local ctx = node._stepperCtx or {}
@@ -187,15 +197,7 @@ local function BuildOrderedStepperEntries(node, options)
         })
     end
 
-    table.sort(entries, function(left, right)
-        if left.line ~= right.line then
-            return left.line < right.line
-        end
-        if type(left.start) == "number" and type(right.start) == "number" and left.start ~= right.start then
-            return left.start < right.start
-        end
-        return left.index < right.index
-    end)
+    table.sort(entries, CompareEntries)
 
     return entries
 end
@@ -308,15 +310,7 @@ WidgetTypes.steppedRange = {
         for index, entry in ipairs(entries) do
             entry.index = index
         end
-        table.sort(entries, function(left, right)
-            if left.line ~= right.line then
-                return left.line < right.line
-            end
-            if type(left.start) == "number" and type(right.start) == "number" and left.start ~= right.start then
-                return left.start < right.start
-            end
-            return left.index < right.index
-        end)
+        table.sort(entries, CompareEntries)
         return DrawOrderedEntries(
             imgui,
             entries,

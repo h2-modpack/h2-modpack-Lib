@@ -1,15 +1,15 @@
 local internal = AdamantModpackLib_Internal
-local shared = internal.shared
-local WidgetTypes = shared.WidgetTypes
-local libWarn = shared.logging.warnIf
-local registry = shared.fieldRegistry
+local WidgetTypes = public.registry.widgets
+local libWarn = internal.logging.warnIf
+local ui = internal.ui
+local widgets = internal.widgets
 
-local PrepareWidgetText = registry.PrepareWidgetText
-local GetStyleMetricX = registry.GetStyleMetricX
-local CalcTextWidth = registry.CalcTextWidth
-local EstimateStructuredRowAdvanceY = registry.EstimateStructuredRowAdvanceY
-local DrawStructuredAt = registry.DrawStructuredAt
-local ShowPreparedTooltip = registry.ShowPreparedTooltip
+local PrepareWidgetText = widgets.PrepareWidgetText
+local GetStyleMetricX = ui.GetStyleMetricX
+local CalcTextWidth = ui.CalcTextWidth
+local EstimateStructuredRowAdvanceY = ui.EstimateStructuredRowAdvanceY
+local DrawStructuredAt = ui.DrawStructuredAt
+local ShowPreparedTooltip = ui.ShowPreparedTooltip
 
 WidgetTypes.inputText = {
     binds = { value = { storageType = "string" } },

@@ -429,7 +429,7 @@ function TestUiValidation:testCustomWidgetIsAccepted()
 end
 
 function TestUiValidation:testMergeCustomTypesCachesByTableIdentity()
-    local mergeCustomTypes = AdamantModpackLib_Internal.shared.fieldRegistry.MergeCustomTypes
+    local mergeCustomTypes = AdamantModpackLib_Internal.registry.MergeCustomTypes
     local customTypes = {
         widgets = {
             fancyStepper = {

@@ -1,5 +1,4 @@
 local internal = AdamantModpackLib_Internal
-local shared = internal.shared
 public.definition = public.definition or {}
 public.mutation = public.mutation or {}
 local definition = public.definition
@@ -60,13 +59,13 @@ function definition.validate(def, label)
             and key ~= "stateSchema"
             and key ~= "options"
             and not KnownDefinitionKeys[key] then
-            shared.logging.warn("%s: unknown definition key '%s'", prefix, tostring(key))
+            internal.logging.warn("%s: unknown definition key '%s'", prefix, tostring(key))
         end
     end
 
     local function warnType(key, expected)
         if def[key] ~= nil and type(def[key]) ~= expected then
-            shared.logging.warn("%s: definition.%s should be %s, got %s",
+            internal.logging.warn("%s: definition.%s should be %s, got %s",
                 prefix, key, expected, type(def[key]))
         end
     end
@@ -86,32 +85,32 @@ function definition.validate(def, label)
 
     if def.special == true then
         if def.category ~= nil then
-            shared.logging.warn("%s: special modules ignore definition.category", prefix)
+            internal.logging.warn("%s: special modules ignore definition.category", prefix)
         end
         if def.subgroup ~= nil then
-            shared.logging.warn("%s: special modules ignore definition.subgroup", prefix)
+            internal.logging.warn("%s: special modules ignore definition.subgroup", prefix)
         end
         if def.selectQuickUi ~= nil then
-            shared.logging.warn("%s: special modules ignore definition.selectQuickUi; use DrawQuickContent for Quick Setup", prefix)
+            internal.logging.warn("%s: special modules ignore definition.selectQuickUi; use DrawQuickContent for Quick Setup", prefix)
         end
         if def.modpack ~= nil and def.name == nil then
-            shared.logging.warn("%s: coordinated special modules should declare definition.name", prefix)
+            internal.logging.warn("%s: coordinated special modules should declare definition.name", prefix)
         end
     else
         if def.shortName ~= nil then
-            shared.logging.warn("%s: regular modules ignore definition.shortName", prefix)
+            internal.logging.warn("%s: regular modules ignore definition.shortName", prefix)
         end
         if def.modpack ~= nil and def.id == nil then
-            shared.logging.warn("%s: coordinated regular modules should declare definition.id", prefix)
+            internal.logging.warn("%s: coordinated regular modules should declare definition.id", prefix)
         end
     end
 
     local inferred, info = mutation.inferShape(def)
     if info.hasApply ~= info.hasRevert then
-        shared.logging.warn("%s: manual lifecycle requires both definition.apply and definition.revert", prefix)
+        internal.logging.warn("%s: manual lifecycle requires both definition.apply and definition.revert", prefix)
     end
     if mutation.mutatesRunData(def) and not inferred then
-        shared.logging.warn("%s: affectsRunData=true but module exposes neither patchPlan nor apply/revert", prefix)
+        internal.logging.warn("%s: affectsRunData=true but module exposes neither patchPlan nor apply/revert", prefix)
     end
 
     return def

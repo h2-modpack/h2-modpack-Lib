@@ -1,19 +1,5 @@
-local internal = AdamantModpackLib_Internal
-local shared = internal.shared
 public.accessors = public.accessors or {}
 local accessors = public.accessors
-
-local function StorageKey(key)
-    local helper = shared.StorageKey
-    if type(helper) == "function" then
-        return helper(key)
-    end
-    if type(key) == "table" then
-        return table.concat(key, ".")
-    end
-    return tostring(key)
-end
-shared.StorageKey = StorageKey
 
 --- Reads a value from a table using either a flat key or a nested key path.
 ---@param tbl table Source table to read from.

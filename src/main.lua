@@ -14,22 +14,14 @@ local chalk = mods['SGG_Modding-Chalk']
 local libConfig = chalk.auto('config.lua')
 public.config = libConfig
 
-local StorageTypes = {}
-local WidgetTypes = {}
-local WidgetHelpers = {}
-local LayoutTypes = {}
 local _coordinators = {}
 AdamantModpackLib_Internal = AdamantModpackLib_Internal or {}
 local internal = AdamantModpackLib_Internal
-internal.shared = {
-    libConfig = libConfig,
-    StorageTypes = StorageTypes,
-    WidgetTypes = WidgetTypes,
-    WidgetHelpers = WidgetHelpers,
-    LayoutTypes = LayoutTypes,
-    coordinators = _coordinators,
-    chalk = chalk,
-}
+internal.libConfig    = libConfig
+internal.coordinators = _coordinators
+internal.logging      = internal.logging or {}
+internal.ui           = internal.ui or {}
+internal.registry     = internal.registry or {}
 
 import 'core/init.lua'
 import 'field_registry/init.lua'

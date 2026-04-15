@@ -273,15 +273,14 @@ Use:
 
 ### `separator`
 
-There is no dedicated v2 layout node for the old `separator` yet.
+The old `separator` layout node is replaced by a `separator` widget:
 
-For now:
-- use a `text` node or a small custom widget where a true visual separator still
-  matters
-- avoid depending on old `separator` nodes during migration
+```lua
+{ type = "separator" }
+```
 
-If separator-like structure proves common enough, it can return later as a
-simple widget rather than as a layout node.
+It draws a full-width horizontal rule, stores nothing, and always returns
+`changed = false`. No props required.
 
 ## Custom Widget Migration
 
@@ -479,9 +478,27 @@ that as a design bug, not just polish debt.
 ## Current Rough Edges
 
 Expect these sections to get refined as more modules migrate:
-- whether a dedicated separator widget returns
 - whether shared cross-row sizing needs a first-class surface earlier
-- whether `split` sizing rules need tightening
+
+### `split` requires a constrained parent (or `firstSize`)
+
+`split` divides its available axis extent between two children. When the parent
+does not pass a constrained `availWidth` (horizontal) or `availHeight`
+(vertical), the sizing options `ratio`, `secondSize`, and the default equal-split
+have nothing to divide and the first child silently receives zero width.
+
+The only sizing option that works correctly in an unconstrained context is
+`firstSize` — the first pane gets a fixed size and the second pane renders
+unconstrained. This is intentional for fixed-sidebar + flexible-content layouts.
+
+Rules:
+- If the parent is a `scrollRegion`, `tabs` pane, or the root of a window — it
+  is constrained; `ratio` and `secondSize` work correctly.
+- If the parent is a `vstack` or `hstack` with no explicit size — it is
+  unconstrained; use `firstSize` or provide a constrained intermediate container.
+
+A runtime warning fires when the fallback to zero is hit, so misconfigured
+splits are visible during development.
 
 ## Migration Checklist
 

@@ -1,9 +1,15 @@
 local internal = AdamantModpackLib_Internal
-local shared = internal.shared
-local StorageTypes = shared.StorageTypes
-local chalk = shared.chalk
+local chalk = rom.mods['SGG_Modding-Chalk']
+local ui = internal.ui
 public.store = public.store or {}
 local storeApi = public.store
+
+local function ClonePersistedValue(value)
+    if type(value) == "table" then
+        return rom.game.DeepCopyTable(value)
+    end
+    return value
+end
 
 local function BuildManagedStorage(definition)
     if type(definition) ~= "table" then
@@ -24,7 +30,7 @@ local function BuildManagedStorage(definition)
             return definition.storage
         end
         if type(definition.ui) == "table" and #definition.ui > 0 then
-            shared.logging.warn("%s: module declares definition.ui but missing definition.storage; no uiState created", label)
+            internal.logging.warn("%s: module declares definition.ui but missing definition.storage; no uiState created", label)
         end
         return nil
     end
@@ -36,7 +42,7 @@ local function BuildManagedStorage(definition)
 end
 
 local function NormalizeStorageValue(node, value)
-    local storageType = node and node.type and StorageTypes[node.type] or nil
+    local storageType = node and node.type and public.registry.storage[node.type] or nil
     if storageType and type(storageType.normalize) == "function" then
         return storageType.normalize(node, value)
     end
@@ -92,7 +98,7 @@ local function GetConfigBackend(config)
     backend = {}
 
     function backend.getEntry(configKey)
-        local pathKey = shared.StorageKey(configKey)
+        local pathKey = ui.StorageKey(configKey)
         local cached = pathEntryCache[pathKey]
         if cached ~= nil then
             return cached or nil
@@ -130,7 +136,252 @@ local function GetConfigBackend(config)
     ConfigBackendCache[rawConfig] = backend
     return backend
 end
-shared.GetConfigBackend = GetConfigBackend
+
+local function CreateUiState(modConfig, configBackend, storage)
+    local persistedRootNodes = public.storage.getRoots(storage)
+    local transientRootNodes = type(storage) == "table" and (rawget(storage, "_transientRootNodes") or {}) or {}
+    local aliasNodes = public.storage.getAliases(storage)
+    local staging = {}
+    local dirty = false
+    local dirtyRoots = {}
+    local configEntries = {}
+
+    if configBackend then
+        for _, root in ipairs(persistedRootNodes) do
+            configEntries[root.alias] = configBackend.getEntry(root.configKey)
+        end
+    else
+        configEntries = nil
+    end
+
+    local function readConfigValue(root)
+        local entry = configEntries and configEntries[root.alias] or nil
+        if entry then
+            return entry:get()
+        end
+        return public.accessors.readNestedPath(modConfig, root.configKey)
+    end
+
+    local function writeConfigValue(root, value)
+        local entry = configEntries and configEntries[root.alias] or nil
+        if entry then
+            entry:set(value)
+            return
+        end
+        public.accessors.writeNestedPath(modConfig, root.configKey, value)
+    end
+
+    local function syncPackedChildren(root, packedValue)
+        for _, child in ipairs(root._bitAliases or {}) do
+            local rawValue = public.accessors.readPackedBits(packedValue, child.offset, child.width)
+            if child.type == "bool" then
+                rawValue = rawValue ~= 0
+            end
+            staging[child.alias] = NormalizeStorageValue(child, rawValue)
+        end
+    end
+
+    local function writeRootToStaging(root, value)
+        local normalized = NormalizeStorageValue(root, value)
+        staging[root.alias] = normalized
+        if root.type == "packedInt" then
+            syncPackedChildren(root, normalized)
+        end
+        if root._lifetime ~= "transient" then
+            dirtyRoots[root.alias] = true
+            dirty = true
+        end
+    end
+
+    local function loadPersistedRootIntoStaging(root)
+        local value = readConfigValue(root)
+        if value == nil then
+            value = ClonePersistedValue(root.default)
+        end
+        local normalized = NormalizeStorageValue(root, value)
+        staging[root.alias] = normalized
+        if root.type == "packedInt" then
+            syncPackedChildren(root, normalized)
+        end
+    end
+
+    local function loadTransientRootIntoStaging(root)
+        local value = ClonePersistedValue(root.default)
+        staging[root.alias] = NormalizeStorageValue(root, value)
+    end
+
+    local function copyConfigToStaging()
+        for _, root in ipairs(persistedRootNodes) do
+            loadPersistedRootIntoStaging(root)
+        end
+    end
+
+    local function resetTransientToDefaults()
+        for _, root in ipairs(transientRootNodes) do
+            loadTransientRootIntoStaging(root)
+        end
+    end
+
+    local function copyStagingToConfig()
+        for _, root in ipairs(persistedRootNodes) do
+            if dirtyRoots[root.alias] then
+                writeConfigValue(root, staging[root.alias])
+            end
+        end
+    end
+
+    local function captureDirtyConfigSnapshot()
+        local snapshot = {}
+        for _, root in ipairs(persistedRootNodes) do
+            if dirtyRoots[root.alias] then
+                table.insert(snapshot, {
+                    root = root,
+                    value = ClonePersistedValue(readConfigValue(root)),
+                })
+            end
+        end
+        return snapshot
+    end
+
+    local function restoreConfigSnapshot(snapshot)
+        for _, entry in ipairs(snapshot or {}) do
+            writeConfigValue(entry.root, ClonePersistedValue(entry.value))
+        end
+    end
+
+    local function clearDirty()
+        dirty = false
+        dirtyRoots = {}
+    end
+
+    local readonlyProxy = setmetatable({}, {
+        __index = function(_, key)
+            return staging[key]
+        end,
+        __newindex = function()
+            error("uiState view is read-only; use state.set/update/toggle", 2)
+        end,
+        __pairs = function()
+            return next, staging, nil
+        end,
+    })
+
+    local function readStagingValue(alias)
+        return staging[alias], aliasNodes[alias]
+    end
+
+    local function writeStagingValue(alias, value)
+        local node = aliasNodes[alias]
+        if not node then
+            if internal.logging and internal.logging.warnIf then
+                internal.logging.warnIf("uiState.set: unknown alias '%s'; value will not be persisted", tostring(alias))
+            end
+            return
+        end
+
+        if node._isBitAlias then
+            local parent = node.parent
+            local packedValue = staging[parent.alias]
+            if packedValue == nil then
+                if parent._lifetime == "transient" then
+                    loadTransientRootIntoStaging(parent)
+                else
+                    loadPersistedRootIntoStaging(parent)
+                end
+                packedValue = staging[parent.alias]
+            end
+            local normalized = NormalizeStorageValue(node, value)
+            local encoded = node.type == "bool" and (normalized and 1 or 0) or normalized
+            local nextPacked = public.accessors.writePackedBits(packedValue, node.offset, node.width, encoded)
+            writeRootToStaging(parent, nextPacked)
+            staging[node.alias] = normalized
+            return
+        end
+
+        writeRootToStaging(node, value)
+    end
+
+    local function resetAliasValue(alias)
+        local node = aliasNodes[alias]
+        if not node then
+            if internal.logging and internal.logging.warnIf then
+                internal.logging.warnIf("uiState.reset: unknown alias '%s'; value will not be reset", tostring(alias))
+            end
+            return
+        end
+
+        local defaultValue = ClonePersistedValue(node.default)
+        writeStagingValue(alias, defaultValue)
+    end
+
+    copyConfigToStaging()
+    resetTransientToDefaults()
+    clearDirty()
+
+    return {
+        view = readonlyProxy,
+        get = function(alias)
+            return readStagingValue(alias)
+        end,
+        set = function(alias, value)
+            writeStagingValue(alias, value)
+        end,
+        reset = function(alias)
+            resetAliasValue(alias)
+        end,
+        update = function(alias, updater)
+            local current = readStagingValue(alias)
+            writeStagingValue(alias, updater(current))
+        end,
+        toggle = function(alias)
+            local current = readStagingValue(alias)
+            writeStagingValue(alias, not (current == true))
+        end,
+        reloadFromConfig = function()
+            copyConfigToStaging()
+            resetTransientToDefaults()
+            clearDirty()
+        end,
+        flushToConfig = function()
+            copyStagingToConfig()
+            clearDirty()
+        end,
+        _captureDirtyConfigSnapshot = captureDirtyConfigSnapshot,
+        _restoreConfigSnapshot = restoreConfigSnapshot,
+        isDirty = function()
+            return dirty
+        end,
+        getAliasNode = function(alias)
+            return aliasNodes[alias]
+        end,
+        collectConfigMismatches = function()
+            local mismatches = {}
+            for _, root in ipairs(persistedRootNodes) do
+                local persistedValue = readConfigValue(root)
+                if persistedValue == nil then
+                    persistedValue = ClonePersistedValue(root.default)
+                end
+                persistedValue = NormalizeStorageValue(root, persistedValue)
+                if not public.storage.valuesEqual(root, persistedValue, staging[root.alias]) then
+                    table.insert(mismatches, root.alias)
+                end
+                if root.type == "packedInt" then
+                    for _, child in ipairs(root._bitAliases or {}) do
+                        local childValue = public.accessors.readPackedBits(persistedValue, child.offset, child.width)
+                        if child.type == "bool" then
+                            childValue = childValue ~= 0
+                        end
+                        childValue = NormalizeStorageValue(child, childValue)
+                        if not public.storage.valuesEqual(child, childValue, staging[child.alias]) then
+                            table.insert(mismatches, child.alias)
+                        end
+                    end
+                end
+            end
+            return mismatches
+        end,
+    }
+end
 
 --- Creates a managed store wrapper around a module definition and its persisted config table.
 ---@param modConfig table Module config table used for persisted reads and writes.
@@ -166,7 +417,7 @@ function storeApi.create(modConfig, definition, dataDefaults)
             public.ui.validate(definition.ui, label, storage, definition.customTypes)
         end
     elseif type(definition) == "table" and type(definition.ui) == "table" and #definition.ui > 0 then
-        shared.logging.warn("%s: definition.ui declared without definition.storage; UI state disabled", label)
+        internal.logging.warn("%s: definition.ui declared without definition.storage; UI state disabled", label)
     end
 
     local aliasNodes = storage and public.storage.getAliases(storage) or {}
@@ -194,7 +445,7 @@ function storeApi.create(modConfig, definition, dataDefaults)
     local function readRootNode(root)
         local raw = readRaw(root.configKey)
         if raw == nil then
-            raw = CloneMutationValue(root.default)
+            raw = ClonePersistedValue(root.default)
         end
         return NormalizeStorageValue(root, raw)
     end
@@ -209,11 +460,13 @@ function storeApi.create(modConfig, definition, dataDefaults)
     function store.read(keyOrAlias)
         if type(keyOrAlias) == "string" then
             local node = aliasNodes[keyOrAlias]
-            if node then
-                if node._lifetime == "transient" then
-                    shared.logging.warn("store.read: alias '%s' is transient; use store.uiState for UI-only state", tostring(keyOrAlias))
-                    return nil
-                end
+                if node then
+                    if node._lifetime == "transient" then
+                        internal.logging.warn(
+                            "store.read: alias '%s' is transient; use store.uiState for UI-only state",
+                            tostring(keyOrAlias))
+                        return nil
+                    end
                 if node._isBitAlias then
                     local packed = readRootNode(node.parent)
                     local rawValue = public.accessors.readPackedBits(packed, node.offset, node.width)
@@ -225,7 +478,7 @@ function storeApi.create(modConfig, definition, dataDefaults)
                 return readRootNode(node)
             end
 
-            local root = rootByKey[shared.StorageKey(keyOrAlias)]
+            local root = rootByKey[ui.StorageKey(keyOrAlias)]
             if root then
                 return readRootNode(root)
             end
@@ -241,7 +494,9 @@ function storeApi.create(modConfig, definition, dataDefaults)
             local node = aliasNodes[keyOrAlias]
             if node then
                 if node._lifetime == "transient" then
-                    shared.logging.warn("store.write: alias '%s' is transient; use store.uiState for UI-only state", tostring(keyOrAlias))
+                    internal.logging.warn(
+                        "store.write: alias '%s' is transient; use store.uiState for UI-only state",
+                        tostring(keyOrAlias))
                     return
                 end
                 if node._isBitAlias then
@@ -257,7 +512,7 @@ function storeApi.create(modConfig, definition, dataDefaults)
                 return
             end
 
-            local root = rootByKey[shared.StorageKey(keyOrAlias)]
+            local root = rootByKey[ui.StorageKey(keyOrAlias)]
             if root then
                 writeRootNode(root, value)
                 return
@@ -291,7 +546,7 @@ function storeApi.create(modConfig, definition, dataDefaults)
     store._persistedAliasNodes = persistedAliasNodes
 
     if storage then
-        store.uiState = shared.CreateUiState(modConfig, backend, storage)
+        store.uiState = CreateUiState(modConfig, backend, storage)
     end
 
     return store

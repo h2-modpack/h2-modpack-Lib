@@ -1,15 +1,32 @@
 local internal = AdamantModpackLib_Internal
-local shared = internal.shared
-local WidgetTypes = shared.WidgetTypes
-local libWarn = shared.logging.warnIf
-local registry = shared.fieldRegistry
+local WidgetTypes = public.registry.widgets
+local libWarn = internal.logging.warnIf
+local ui = internal.ui
+local widgets = internal.widgets
 
-local NormalizeColor = registry.NormalizeColor
-local PrepareWidgetText = registry.PrepareWidgetText
-local CalcTextWidth = registry.CalcTextWidth
-local EstimateStructuredRowAdvanceY = registry.EstimateStructuredRowAdvanceY
-local DrawStructuredAt = registry.DrawStructuredAt
-local ShowPreparedTooltip = registry.ShowPreparedTooltip
+local NormalizeColor = ui.NormalizeColor
+local PrepareWidgetText = widgets.PrepareWidgetText
+local CalcTextWidth = ui.CalcTextWidth
+local EstimateStructuredRowAdvanceY = ui.EstimateStructuredRowAdvanceY
+local DrawStructuredAt = ui.DrawStructuredAt
+local ShowPreparedTooltip = ui.ShowPreparedTooltip
+
+WidgetTypes.separator = {
+    binds = {},
+    validate = function() end,
+    draw = function(imgui, _, _, x, y, availWidth)
+        local _, _, _, consumedHeight = DrawStructuredAt(
+            imgui,
+            x,
+            y,
+            EstimateStructuredRowAdvanceY(imgui),
+            function()
+                imgui.Separator()
+                return false
+            end)
+        return availWidth or 0, consumedHeight, false
+    end,
+}
 
 WidgetTypes.text = {
     binds = { value = { storageType = "string", optional = true } },

@@ -1,11 +1,10 @@
 local internal = AdamantModpackLib_Internal
-local shared = internal.shared
-local StorageTypes = shared.StorageTypes
-local libWarn = shared.logging.warnIf
-local registry = shared.fieldRegistry
+local StorageTypes = public.registry.storage
+local libWarn = internal.logging.warnIf
+local ui = internal.ui
 public.storage = public.storage or {}
 local storageApi = public.storage
-local NormalizeInteger = registry.NormalizeInteger
+local NormalizeInteger = ui.NormalizeInteger
 
 local function DeepValueEqual(a, b)
     if a == b then return true end
@@ -24,6 +23,68 @@ local function DeepValueEqual(a, b)
     end
     return true
 end
+
+local function PrepareRootNodeMetadata(node)
+    node._storageKey = node.configKey ~= nil and ui.StorageKey(node.configKey) or nil
+    if not node.alias and node._storageKey ~= nil then
+        node.alias = node._storageKey
+    end
+end
+
+local function ValidateChildAlias(bitNode, root, storage, seenAliases, seenRootKeys, prefix)
+    if type(bitNode.alias) ~= "string" or bitNode.alias == "" then
+        return
+    end
+
+    if seenAliases[bitNode.alias] then
+        libWarn("%s: duplicate alias '%s'", prefix, bitNode.alias)
+        return
+    end
+    local ownerKey = seenRootKeys[bitNode.alias]
+    if ownerKey and ownerKey ~= root._storageKey then
+        libWarn("%s: alias '%s' conflicts with root configKey '%s'", prefix, bitNode.alias, ownerKey)
+        return
+    end
+
+    local storageType = StorageTypes[bitNode.type]
+    local child = {
+        alias = bitNode.alias,
+        label = bitNode.label or bitNode.alias,
+        type = bitNode.type,
+        default = bitNode.default,
+        min = bitNode.min,
+        max = bitNode.max,
+        offset = bitNode.offset,
+        width = bitNode.width,
+        parent = root,
+        _isBitAlias = true,
+        _storageKey = root._storageKey .. "." .. bitNode.alias,
+        _valueKind = storageType and storageType.valueKind or bitNode.type,
+    }
+    if child.type == "bool" and child.default == nil then
+        child.default = false
+    end
+    if child.type == "int" and child.default == nil then
+        child.default = 0
+    end
+
+    seenAliases[child.alias] = true
+    storage._aliasNodes[child.alias] = child
+    root._bitAliases[#root._bitAliases + 1] = child
+end
+
+local function EnsurePreparedStorage(storage, label)
+    if type(storage) ~= "table" then
+        return {}
+    end
+    if rawget(storage, "_aliasNodes") ~= nil and rawget(storage, "_rootNodes") ~= nil then
+        return storage._aliasNodes
+    end
+    storageApi.validate(storage, label or "storage")
+    return storageApi.getAliases(storage)
+end
+
+ui.EnsurePreparedStorage = EnsurePreparedStorage
 
 StorageTypes.bool = {
     valueKind = "bool",
@@ -203,55 +264,6 @@ StorageTypes.packedInt = {
     end,
 }
 
-local function PrepareRootNodeMetadata(node)
-    node._storageKey = node.configKey ~= nil and shared.StorageKey(node.configKey) or nil
-    if not node.alias and node._storageKey ~= nil then
-        node.alias = node._storageKey
-    end
-end
-
-local function ValidateChildAlias(bitNode, root, storage, seenAliases, seenRootKeys, prefix)
-    if type(bitNode.alias) ~= "string" or bitNode.alias == "" then
-        return
-    end
-
-    if seenAliases[bitNode.alias] then
-        libWarn("%s: duplicate alias '%s'", prefix, bitNode.alias)
-        return
-    end
-    local ownerKey = seenRootKeys[bitNode.alias]
-    if ownerKey and ownerKey ~= root._storageKey then
-        libWarn("%s: alias '%s' conflicts with root configKey '%s'", prefix, bitNode.alias, ownerKey)
-        return
-    end
-
-    local storageType = StorageTypes[bitNode.type]
-    local child = {
-        alias = bitNode.alias,
-        label = bitNode.label or bitNode.alias,
-        type = bitNode.type,
-        default = bitNode.default,
-        min = bitNode.min,
-        max = bitNode.max,
-        offset = bitNode.offset,
-        width = bitNode.width,
-        parent = root,
-        _isBitAlias = true,
-        _storageKey = root._storageKey .. "." .. bitNode.alias,
-        _valueKind = storageType and storageType.valueKind or bitNode.type,
-    }
-    if child.type == "bool" and child.default == nil then
-        child.default = false
-    end
-    if child.type == "int" and child.default == nil then
-        child.default = 0
-    end
-
-    seenAliases[child.alias] = true
-    storage._aliasNodes[child.alias] = child
-    root._bitAliases[#root._bitAliases + 1] = child
-end
-
 --- Validates a storage schema and prepares its root, alias, and packed-bit metadata in place.
 ---@param storage table Ordered list of storage root descriptors to validate.
 ---@param label string Validation label used to prefix warnings.
@@ -412,15 +424,3 @@ function storageApi.getAliases(storage)
     return rawget(storage, "_aliasNodes") or {}
 end
 
-local function EnsurePreparedStorage(storage, label)
-    if type(storage) ~= "table" then
-        return {}
-    end
-    if rawget(storage, "_aliasNodes") ~= nil and rawget(storage, "_rootNodes") ~= nil then
-        return storage._aliasNodes
-    end
-    storageApi.validate(storage, label or "storage")
-    return storageApi.getAliases(storage)
-end
-
-registry.EnsurePreparedStorage = EnsurePreparedStorage

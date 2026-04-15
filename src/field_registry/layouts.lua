@@ -1,15 +1,14 @@
 local internal = AdamantModpackLib_Internal
-local shared = internal.shared
-local LayoutTypes = shared.LayoutTypes
-local libWarn = shared.logging.warnIf
-local registry = shared.fieldRegistry
-local GetCursorPosXSafe = registry.GetCursorPosXSafe
-local GetCursorPosYSafe = registry.GetCursorPosYSafe
-local GetStyleMetricX = registry.GetStyleMetricX
-local GetStyleMetricY = registry.GetStyleMetricY
-local NormalizeColor = registry.NormalizeColor
-local EstimateStructuredRowAdvanceY = registry.EstimateStructuredRowAdvanceY
-local DrawStructuredAt = registry.DrawStructuredAt
+local LayoutTypes = public.registry.layouts
+local libWarn = internal.logging.warnIf
+local ui = internal.ui
+local GetCursorPosXSafe = ui.GetCursorPosXSafe
+local GetCursorPosYSafe = ui.GetCursorPosYSafe
+local GetStyleMetricX = ui.GetStyleMetricX
+local GetStyleMetricY = ui.GetStyleMetricY
+local NormalizeColor = ui.NormalizeColor
+local EstimateStructuredRowAdvanceY = ui.EstimateStructuredRowAdvanceY
+local DrawStructuredAt = ui.DrawStructuredAt
 
 local function ValidateChildren(node, prefix, layoutName)
     if node.children ~= nil and type(node.children) ~= "table" then
@@ -128,81 +127,6 @@ local function DrawChildrenHStack(imgui, node, drawChild, x, y, availWidth, avai
     return math.max(currentX - x, 0), maxHeight, changed
 end
 
-LayoutTypes.vstack = {
-    validate = function(node, prefix)
-        ValidateLayoutId(node, prefix, "vstack", false)
-        ValidateGap(node, prefix, "vstack")
-        ValidateChildren(node, prefix, "vstack")
-    end,
-    render = function(imgui, node, drawChild, x, y, availWidth, availHeight)
-        local hasId = PushLayoutId(imgui, node)
-        local consumedWidth, consumedHeight, changed = DrawChildrenVStack(
-            imgui, node, drawChild, x, y, availWidth, availHeight)
-        PopLayoutId(imgui, hasId)
-        return consumedWidth, consumedHeight, changed
-    end,
-}
-
-LayoutTypes.hstack = {
-    validate = function(node, prefix)
-        ValidateLayoutId(node, prefix, "hstack", false)
-        ValidateGap(node, prefix, "hstack")
-        ValidateChildren(node, prefix, "hstack")
-    end,
-    render = function(imgui, node, drawChild, x, y, availWidth, availHeight)
-        local hasId = PushLayoutId(imgui, node)
-        local consumedWidth, consumedHeight, changed = DrawChildrenHStack(
-            imgui, node, drawChild, x, y, availWidth, availHeight)
-        PopLayoutId(imgui, hasId)
-        return consumedWidth, consumedHeight, changed
-    end,
-}
-
-LayoutTypes.collapsible = {
-    validate = function(node, prefix)
-        if node.label ~= nil and type(node.label) ~= "string" then
-            libWarn("%s: collapsible label must be string", prefix)
-        end
-        if node.defaultOpen ~= nil and type(node.defaultOpen) ~= "boolean" then
-            libWarn("%s: collapsible defaultOpen must be boolean", prefix)
-        end
-        ValidateChildren(node, prefix, "collapsible")
-    end,
-    render = function(imgui, node, drawChild, x, y, availWidth, availHeight)
-        local fallbackHeight = EstimateStructuredRowAdvanceY(imgui)
-        local changed, endX, endY, consumedHeight = DrawStructuredAt(
-            imgui,
-            x,
-            y,
-            fallbackHeight,
-            function()
-                local flags = node.defaultOpen == true and 32 or 0
-                local open = imgui.CollapsingHeader(node.label or "", flags)
-                local childChanged = false
-                if open then
-                    local childX = GetCursorPosXSafe(imgui)
-                    local childY = GetCursorPosYSafe(imgui)
-                    local _, _, nestedChanged = DrawChildrenVStack(
-                        imgui,
-                        { children = node.children, gap = node.gap },
-                        drawChild,
-                        childX,
-                        childY,
-                        availWidth,
-                        availHeight)
-                    childChanged = nestedChanged
-                end
-                return childChanged
-            end)
-
-        local consumedWidth = type(availWidth) == "number"
-            and availWidth
-            or math.max((type(endX) == "number" and endX or x) - x, 0)
-        local _ = endY
-        return consumedWidth, consumedHeight, changed
-    end,
-}
-
 local function ValidateTabbedChildren(node, prefix, layoutName)
     if node.children ~= nil and type(node.children) ~= "table" then
         libWarn("%s: %s children must be a table", prefix, layoutName)
@@ -285,6 +209,112 @@ local function SyncActiveTabBinding(node, bound, activeKey)
         end
     end
 end
+
+local function DrawLayoutNode(imgui, node, drawChild, layoutTypes, uiState, x, y, availWidth, availHeight)
+    local layoutType = layoutTypes[node.type]
+    if not layoutType then
+        return false, 0, 0, false
+    end
+
+    local bound = nil
+    if type(layoutType.binds) == "table" then
+        bound = node._boundCache
+        if bound == nil or node._boundCacheUiState ~= uiState or node._boundCacheBindOwnerType ~= layoutType then
+            bound = ui.BuildBoundEntries(node, layoutType, uiState)
+        end
+        bound._changed = false
+    end
+
+    local consumedWidth, consumedHeight, layoutChanged = layoutType.render(
+        imgui,
+        node,
+        drawChild,
+        x,
+        y,
+        availWidth,
+        availHeight,
+        uiState,
+        bound)
+
+    return true, consumedWidth or 0, consumedHeight or 0, (bound and bound._changed or false) or layoutChanged == true
+end
+
+ui.DrawLayoutNode = DrawLayoutNode
+
+LayoutTypes.vstack = {
+    validate = function(node, prefix)
+        ValidateLayoutId(node, prefix, "vstack", false)
+        ValidateGap(node, prefix, "vstack")
+        ValidateChildren(node, prefix, "vstack")
+    end,
+    render = function(imgui, node, drawChild, x, y, availWidth, availHeight)
+        local hasId = PushLayoutId(imgui, node)
+        local consumedWidth, consumedHeight, changed = DrawChildrenVStack(
+            imgui, node, drawChild, x, y, availWidth, availHeight)
+        PopLayoutId(imgui, hasId)
+        return consumedWidth, consumedHeight, changed
+    end,
+}
+
+LayoutTypes.hstack = {
+    validate = function(node, prefix)
+        ValidateLayoutId(node, prefix, "hstack", false)
+        ValidateGap(node, prefix, "hstack")
+        ValidateChildren(node, prefix, "hstack")
+    end,
+    render = function(imgui, node, drawChild, x, y, availWidth, availHeight)
+        local hasId = PushLayoutId(imgui, node)
+        local consumedWidth, consumedHeight, changed = DrawChildrenHStack(
+            imgui, node, drawChild, x, y, availWidth, availHeight)
+        PopLayoutId(imgui, hasId)
+        return consumedWidth, consumedHeight, changed
+    end,
+}
+
+LayoutTypes.collapsible = {
+    validate = function(node, prefix)
+        if node.label ~= nil and type(node.label) ~= "string" then
+            libWarn("%s: collapsible label must be string", prefix)
+        end
+        if node.defaultOpen ~= nil and type(node.defaultOpen) ~= "boolean" then
+            libWarn("%s: collapsible defaultOpen must be boolean", prefix)
+        end
+        ValidateChildren(node, prefix, "collapsible")
+    end,
+    render = function(imgui, node, drawChild, x, y, availWidth, availHeight)
+        local fallbackHeight = EstimateStructuredRowAdvanceY(imgui)
+        local changed, endX, endY, consumedHeight = DrawStructuredAt(
+            imgui,
+            x,
+            y,
+            fallbackHeight,
+            function()
+                local flags = node.defaultOpen == true and 32 or 0
+                local open = imgui.CollapsingHeader(node.label or "", flags)
+                local childChanged = false
+                if open then
+                    local childX = GetCursorPosXSafe(imgui)
+                    local childY = GetCursorPosYSafe(imgui)
+                    local _, _, nestedChanged = DrawChildrenVStack(
+                        imgui,
+                        { children = node.children, gap = node.gap },
+                        drawChild,
+                        childX,
+                        childY,
+                        availWidth,
+                        availHeight)
+                    childChanged = nestedChanged
+                end
+                return childChanged
+            end)
+
+        local consumedWidth = type(availWidth) == "number"
+            and availWidth
+            or math.max((type(endX) == "number" and endX or x) - x, 0)
+        local _ = endY
+        return consumedWidth, consumedHeight, changed
+    end,
+}
 
 LayoutTypes.tabs = {
     binds = {
@@ -507,6 +537,9 @@ LayoutTypes.split = {
         elseif type(axisExtent) == "number" then
             firstExtent = math.max((axisExtent - gap) / 2, 0)
         else
+            libWarn(
+                "split: no axis constraint and no firstSize - first child will render at zero width; " ..
+                "set firstSize or ensure a constrained parent")
             firstExtent = 0
         end
 
@@ -536,33 +569,3 @@ LayoutTypes.split = {
     end,
 }
 
-local function DrawLayoutNode(imgui, node, drawChild, layoutTypes, uiState, x, y, availWidth, availHeight)
-    local layoutType = layoutTypes[node.type]
-    if not layoutType then
-        return false, 0, 0, false
-    end
-
-    local bound = nil
-    if type(layoutType.binds) == "table" then
-        bound = node._boundCache
-        if bound == nil or node._boundCacheUiState ~= uiState or node._boundCacheBindOwnerType ~= layoutType then
-            bound = shared.fieldRegistry.BuildBoundEntries(node, layoutType, uiState)
-        end
-        bound._changed = false
-    end
-
-    local consumedWidth, consumedHeight, layoutChanged = layoutType.render(
-        imgui,
-        node,
-        drawChild,
-        x,
-        y,
-        availWidth,
-        availHeight,
-        uiState,
-        bound)
-
-    return true, consumedWidth or 0, consumedHeight or 0, (bound and bound._changed or false) or layoutChanged == true
-end
-
-registry.DrawLayoutNode = DrawLayoutNode

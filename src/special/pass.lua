@@ -1,5 +1,4 @@
 local internal = AdamantModpackLib_Internal
-local shared = internal.shared
 public.special = public.special or {}
 local special = public.special
 
@@ -15,8 +14,8 @@ function special.runPass(opts)
 
     local uiState = opts.uiState
     if not uiState or type(uiState.isDirty) ~= "function" or type(uiState.flushToConfig) ~= "function" then
-        if shared.logging and shared.logging.warnIf then
-            shared.logging.warnIf("runUiStatePass: uiState is missing or malformed; pass skipped")
+        if internal.logging and internal.logging.warnIf then
+            internal.logging.warnIf("runUiStatePass: uiState is missing or malformed; pass skipped")
         end
         return false
     end
@@ -42,8 +41,8 @@ function special.runPass(opts)
                 end
                 return true, nil
             end
-            if shared.logging and shared.logging.warn then
-                shared.logging.warn("%s: uiState commit failed: %s",
+            if internal.logging and internal.logging.warn then
+                internal.logging.warn("%s: uiState commit failed: %s",
                     tostring(opts.name or "uiState"),
                     tostring(err))
             end
@@ -67,8 +66,8 @@ end
 ---@return boolean changed True when any derived alias value changed.
 function special.runDerivedText(uiState, entries, cache)
     if not uiState or type(uiState.set) ~= "function" or type(uiState.view) ~= "table" then
-        if shared.logging and shared.logging.warnIf then
-            shared.logging.warnIf("runDerivedText: uiState is missing or malformed; pass skipped")
+        if internal.logging and internal.logging.warnIf then
+            internal.logging.warnIf("runDerivedText: uiState is missing or malformed; pass skipped")
         end
         return false
     end
@@ -83,12 +82,12 @@ function special.runDerivedText(uiState, entries, cache)
         local alias = type(entry) == "table" and entry.alias or nil
         local compute = type(entry) == "table" and entry.compute or nil
         if type(alias) ~= "string" or alias == "" then
-            if shared.logging and shared.logging.warnIf then
-                shared.logging.warnIf("runDerivedText: entries[%d].alias must be a non-empty string", index)
+            if internal.logging and internal.logging.warnIf then
+                internal.logging.warnIf("runDerivedText: entries[%d].alias must be a non-empty string", index)
             end
         elseif type(compute) ~= "function" then
-            if shared.logging and shared.logging.warnIf then
-                shared.logging.warnIf("runDerivedText: entries[%d].compute must be a function", index)
+            if internal.logging and internal.logging.warnIf then
+                internal.logging.warnIf("runDerivedText: entries[%d].compute must be a function", index)
             end
         else
             local cached = derivedCache and derivedCache[alias] or nil
@@ -139,8 +138,8 @@ end
 ---@return table|nil previousNode Previously cached node, if one existed.
 function special.getCachedPreparedNode(cacheEntry, signature, buildFn, opts)
     if type(buildFn) ~= "function" then
-        if shared.logging and shared.logging.warnIf then
-            shared.logging.warnIf("getCachedPreparedNode: buildFn must be a function")
+        if internal.logging and internal.logging.warnIf then
+            internal.logging.warnIf("getCachedPreparedNode: buildFn must be a function")
         end
         return nil, nil, false, nil
     end
@@ -223,8 +222,8 @@ function special.commitState(def, store, uiState)
 
     local rollbackOk, rollbackErr = public.mutation.reapply(def, store)
     if not rollbackOk then
-        if shared.logging and shared.logging.warn then
-            shared.logging.warn("%s: uiState rollback reapply failed: %s",
+        if internal.logging and internal.logging.warn then
+            internal.logging.warn("%s: uiState rollback reapply failed: %s",
                 tostring(def.name or def.id or "module"),
                 tostring(rollbackErr))
         end

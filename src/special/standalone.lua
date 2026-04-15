@@ -1,6 +1,5 @@
 local internal = AdamantModpackLib_Internal
-local shared = internal.shared
-local _coordinators = shared.coordinators
+local _coordinators = internal.coordinators
 public.special = public.special or {}
 local special = public.special
 
@@ -80,8 +79,8 @@ function special.standaloneUI(def, store, uiState, opts)
                         rom.game.SetupRunData()
                     end
                 else
-                    if shared.logging and shared.logging.warn then
-                        shared.logging.warn("%s %s failed: %s",
+                    if internal.logging and internal.logging.warn then
+                        internal.logging.warn("%s %s failed: %s",
                             tostring(def.name or def.id or "module"),
                             enabledValue and "enable" or "disable",
                             tostring(err))

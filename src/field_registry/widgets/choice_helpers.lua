@@ -1,9 +1,9 @@
 local internal = AdamantModpackLib_Internal
-local shared = internal.shared
-local libWarn = shared.logging.warnIf
-local registry = shared.fieldRegistry
+local libWarn = internal.logging.warnIf
+local ui = internal.ui
+local widgets = internal.widgets
 
-local NormalizeColor = registry.NormalizeColor
+local NormalizeColor = ui.NormalizeColor
 
 local choiceHelpers = {}
 
@@ -186,4 +186,4 @@ function choiceHelpers.ValidatePackedChoiceWidget(node, prefix, widgetName)
     choiceHelpers.ValidateValueColorsTable(node, prefix, widgetName)
 end
 
-registry.choiceHelpers = choiceHelpers
+widgets.choiceHelpers = choiceHelpers

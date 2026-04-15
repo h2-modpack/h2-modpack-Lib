@@ -1,10 +1,58 @@
-local internal = AdamantModpackLib_Internal
-local shared = internal.shared
-local StorageTypes = shared.StorageTypes
-local _mutationRuntime = shared.mutationRuntime or setmetatable({}, { __mode = "k" })
-shared.mutationRuntime = _mutationRuntime
 public.mutation = public.mutation or {}
 local mutation = public.mutation
+local mutationRuntime = setmetatable({}, { __mode = "k" })
+
+local function CloneMutationValue(value)
+    if type(value) == "table" then
+        return rom.game.DeepCopyTable(value)
+    end
+    return value
+end
+
+local function MutationDeepEqual(a, b)
+    if a == b then return true end
+    if type(a) ~= type(b) then return false end
+    if type(a) ~= "table" then return false end
+
+    for key, value in pairs(a) do
+        if not MutationDeepEqual(value, b[key]) then
+            return false
+        end
+    end
+    for key in pairs(b) do
+        if a[key] == nil then
+            return false
+        end
+    end
+    return true
+end
+
+local function GetActiveMutationPlan(store)
+    local runtime = store and mutationRuntime[store]
+    return runtime and runtime.plan or nil
+end
+
+local function SetActiveMutationPlan(store, plan)
+    if not store then
+        return
+    end
+    if plan == nil then
+        mutationRuntime[store] = nil
+        return
+    end
+    mutationRuntime[store] = { plan = plan }
+end
+
+local function BuildMutationPlan(def, store)
+    local builder = def and def.patchPlan
+    if type(builder) ~= "function" then
+        return nil
+    end
+
+    local plan = mutation.createPlan()
+    builder(plan, store)
+    return plan
+end
 
 --- Infers which mutation lifecycle a module definition exposes.
 ---@param def table Candidate module definition table.
@@ -43,30 +91,6 @@ function mutation.mutatesRunData(def)
     return def.affectsRunData == true
 end
 
-local function CloneMutationValue(value)
-    if type(value) == "table" then
-        return rom.game.DeepCopyTable(value)
-    end
-    return value
-end
-
-local function MutationDeepEqual(a, b)
-    if a == b then return true end
-    if type(a) ~= type(b) then return false end
-    if type(a) ~= "table" then return false end
-
-    for key, value in pairs(a) do
-        if not MutationDeepEqual(value, b[key]) then
-            return false
-        end
-    end
-    for key in pairs(b) do
-        if a[key] == nil then
-            return false
-        end
-    end
-    return true
-end
 
 --- Creates backup and restore helpers for reversible table mutations.
 ---@return function backup Captures original values on a table before mutation.
@@ -332,33 +356,6 @@ function mutation.createPlan()
         return true
     end
 
-    return plan
-end
-
-local function GetActiveMutationPlan(store)
-    local runtime = store and _mutationRuntime[store]
-    return runtime and runtime.plan or nil
-end
-
-local function SetActiveMutationPlan(store, plan)
-    if not store then
-        return
-    end
-    if plan == nil then
-        _mutationRuntime[store] = nil
-        return
-    end
-    _mutationRuntime[store] = { plan = plan }
-end
-
-local function BuildMutationPlan(def, store)
-    local builder = def and def.patchPlan
-    if type(builder) ~= "function" then
-        return nil
-    end
-
-    local plan = mutation.createPlan()
-    builder(plan, store)
     return plan
 end
 

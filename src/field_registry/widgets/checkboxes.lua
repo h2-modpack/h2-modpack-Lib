@@ -1,17 +1,17 @@
 local internal = AdamantModpackLib_Internal
-local shared = internal.shared
-local WidgetTypes = shared.WidgetTypes
-local libWarn = shared.logging.warnIf
-local registry = shared.fieldRegistry
+local WidgetTypes = public.registry.widgets
+local libWarn = internal.logging.warnIf
+local ui = internal.ui
+local widgets = internal.widgets
 
-local PrepareWidgetText = registry.PrepareWidgetText
-local EstimateStructuredRowAdvanceY = registry.EstimateStructuredRowAdvanceY
-local DrawStructuredAt = registry.DrawStructuredAt
-local ShowPreparedTooltip = registry.ShowPreparedTooltip
-local EstimateToggleWidth = registry.EstimateToggleWidth
-local DrawOrderedEntries = registry.DrawOrderedEntries
+local PrepareWidgetText = widgets.PrepareWidgetText
+local EstimateStructuredRowAdvanceY = ui.EstimateStructuredRowAdvanceY
+local DrawStructuredAt = ui.DrawStructuredAt
+local ShowPreparedTooltip = ui.ShowPreparedTooltip
+local EstimateToggleWidth = ui.EstimateToggleWidth
+local DrawOrderedEntries = ui.DrawOrderedEntries
 
-local choiceHelpers = registry.choiceHelpers
+local choiceHelpers = widgets.choiceHelpers
 local ValidateValueColorsTable = choiceHelpers.ValidateValueColorsTable
 local DrawWithValueColor = choiceHelpers.DrawWithValueColor
 
