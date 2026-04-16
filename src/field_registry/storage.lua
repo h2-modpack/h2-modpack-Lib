@@ -364,7 +364,10 @@ function storageApi.validate(storage, label)
                             else
                                 local expected = public.accessors.readPackedBits(node.default, child.offset, child.width)
                                 local normalized = StorageTypes[child.type].normalize(child, child.default)
-                                if expected ~= normalized then
+                                local encoded = child.type == "bool"
+                                    and (normalized == true and 1 or 0)
+                                    or normalized
+                                if expected ~= encoded then
                                     libWarn("%s: packed child default '%s' does not match packedInt default",
                                         prefix, child.alias)
                                 end

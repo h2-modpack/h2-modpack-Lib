@@ -25,18 +25,63 @@ local ApplyPackedChoiceSelection = choiceHelpers.ApplyPackedChoiceSelection
 local ClearPackedChoiceSelection = choiceHelpers.ClearPackedChoiceSelection
 local ValidatePackedChoiceWidget = choiceHelpers.ValidatePackedChoiceWidget
 
+local function PrepareStaticDropdownOptions(node)
+    local options = {}
+    for index, candidate in ipairs(node.values or {}) do
+        options[#options + 1] = {
+            value = candidate,
+            label = ChoiceDisplay(node, candidate),
+            color = node._valueColors and node._valueColors[candidate] or nil,
+            uniqueId = index,
+        }
+    end
+    return options
+end
+
+local function PrepareStaticPackedDropdownOptions(node)
+    local bindNodes = node._bindNodes
+    local aliasNode = bindNodes and bindNodes.value or nil
+    local children = aliasNode and aliasNode._bitAliases or nil
+    if type(children) ~= "table" then
+        return nil
+    end
+
+    local options = {
+        {
+            alias = nil,
+            label = node.noneLabel or "None",
+            color = nil,
+            uniqueId = "none",
+            isNone = true,
+        },
+    }
+    for _, child in ipairs(children) do
+        options[#options + 1] = {
+            alias = child.alias,
+            label = GetPackedChoiceLabel(node, child),
+            color = node._valueColors and node._valueColors[child.alias] or nil,
+            uniqueId = child.alias,
+            isNone = false,
+        }
+    end
+    return options
+end
+
 local function DrawLabeledDropdownControl(imgui, node, x, y, availWidth, estimatedControlWidth, drawControl)
     local labelText = node._label or ""
-    local hasLabel = labelText ~= ""
+    local hasLabel = node._hasLabel == true
     local labelWidth = hasLabel and CalcTextWidth(imgui, labelText) or 0
     local controlWidth = type(node.controlWidth) == "number" and node.controlWidth > 0
         and node.controlWidth
         or availWidth or estimatedControlWidth
-    local itemSpacingX = GetStyleMetricX(imgui.GetStyle(), "ItemSpacing", 8)
+    local controlGap = type(node.controlGap) == "number"
+        and node.controlGap >= 0
+        and node.controlGap
+        or GetStyleMetricX(imgui.GetStyle(), "ItemSpacing", 8)
 
     local controlSlotX
     if hasLabel then
-        controlSlotX = x + labelWidth + itemSpacingX
+        controlSlotX = x + labelWidth + controlGap
     else
         controlSlotX = x
     end
@@ -51,6 +96,7 @@ local function DrawLabeledDropdownControl(imgui, node, x, y, availWidth, estimat
             y,
             EstimateStructuredRowAdvanceY(imgui),
             function()
+                imgui.AlignTextToFramePadding()
                 imgui.Text(labelText)
                 ShowPreparedTooltip(imgui, node)
                 return false
@@ -89,6 +135,16 @@ end
 
 WidgetTypes.dropdown = {
     binds = { value = { storageType = { "string", "int" } } },
+    params = {
+        label = { type = "string", optional = true },
+        tooltip = { type = "string", optional = true },
+        values = { type = "table", required = true },
+        displayValues = { type = "table", optional = true },
+        valueColors = { type = "table", optional = true },
+        controlWidth = { type = "number", optional = true },
+        controlGap = { type = "number", optional = true },
+        quick = { type = "boolean", optional = true },
+    },
     validate = function(node, prefix)
         if not node.values then
             libWarn("%s: dropdown missing values list", prefix)
@@ -106,24 +162,27 @@ WidgetTypes.dropdown = {
         if node.displayValues ~= nil and type(node.displayValues) ~= "table" then
             libWarn("%s: dropdown displayValues must be a table", prefix)
         end
+        if node.controlGap ~= nil and (type(node.controlGap) ~= "number" or node.controlGap < 0) then
+            libWarn("%s: dropdown controlGap must be a non-negative number", prefix)
+        end
         ValidateValueColorsTable(node, prefix, "dropdown")
         PrepareWidgetText(node, node.binds and node.binds.value)
+        node._hasLabel = (node._label or "") ~= ""
+        node._options = PrepareStaticDropdownOptions(node)
     end,
     draw = function(imgui, node, bound, x, y, availWidth)
         local current = NormalizeChoiceValue(node, bound.value:get())
-        local currentIdx = 1
-        for index, candidate in ipairs(node.values or {}) do
-            if candidate == current then currentIdx = index; break end
+        local currentOption = nil
+        for _, option in ipairs(node._options or {}) do
+            if option.value == current then
+                currentOption = option
+                break
+            end
         end
-
-        local ctx = node._dropdownCtx or {}
-        ctx.boundValue = bound.value
-        ctx.current = current
-        ctx.currentIdx = currentIdx
-        ctx.previewValue = (node.values and node.values[currentIdx]) or ""
-        node._dropdownCtx = ctx
-        local previewText = ChoiceDisplay(node, ctx.previewValue or "")
-        local previewColor = node._valueColors and node._valueColors[ctx.previewValue] or nil
+        currentOption = currentOption or (node._options and node._options[1]) or nil
+        local previewValue = currentOption and currentOption.value or ""
+        local previewText = currentOption and currentOption.label or ChoiceDisplay(node, previewValue)
+        local previewColor = currentOption and currentOption.color or nil
         local estimatedControlWidth = EstimateButtonWidth(imgui, previewText) + 16
 
         return DrawLabeledDropdownControl(
@@ -143,20 +202,19 @@ WidgetTypes.dropdown = {
 
                 local changed = false
                 local pendingValue = nil
-                for index, candidate in ipairs(node.values or {}) do
-                    local optionColor = node._valueColors and node._valueColors[candidate] or nil
-                    local selected = DrawWithValueColor(imgui, optionColor, function()
+                for _, option in ipairs(node._options or {}) do
+                    local selected = DrawWithValueColor(imgui, option.color, function()
                         return imgui.Selectable(
-                            MakeSelectableId(ChoiceDisplay(node, candidate), index),
+                            MakeSelectableId(option.label, option.uniqueId),
                             false)
                     end)
-                    if selected and candidate ~= ctx.current then
-                        pendingValue = candidate
+                    if selected and option.value ~= current then
+                        pendingValue = option.value
                     end
                 end
                 imgui.EndCombo()
                 if pendingValue ~= nil then
-                    ctx.boundValue:set(pendingValue)
+                    bound.value:set(pendingValue)
                     changed = true
                 end
                 return changed
@@ -166,6 +224,16 @@ WidgetTypes.dropdown = {
 
 WidgetTypes.mappedDropdown = {
     binds = { value = {} },
+    params = {
+        label = { type = "string", optional = true },
+        tooltip = { type = "string", optional = true },
+        getPreview = { type = "function", required = true },
+        getOptions = { type = "function", required = true },
+        getPreviewColor = { type = "function", optional = true },
+        controlWidth = { type = "number", optional = true },
+        controlGap = { type = "number", optional = true },
+        quick = { type = "boolean", optional = true },
+    },
     validate = function(node, prefix)
         if type(node.getPreview) ~= "function" then
             libWarn("%s: mappedDropdown getPreview must be function", prefix)
@@ -176,7 +244,11 @@ WidgetTypes.mappedDropdown = {
         if node.getPreviewColor ~= nil and type(node.getPreviewColor) ~= "function" then
             libWarn("%s: mappedDropdown getPreviewColor must be function", prefix)
         end
+        if node.controlGap ~= nil and (type(node.controlGap) ~= "number" or node.controlGap < 0) then
+            libWarn("%s: mappedDropdown controlGap must be a non-negative number", prefix)
+        end
         PrepareWidgetText(node, node.binds and node.binds.value)
+        node._hasLabel = (node._label or "") ~= ""
     end,
     draw = function(imgui, node, bound, x, y, availWidth, _, uiState)
         local ctx = node._mappedDropdownCtx or {}
@@ -246,9 +318,25 @@ WidgetTypes.mappedDropdown = {
 
 WidgetTypes.packedDropdown = {
     binds = { value = { storageType = "int", rootType = "packedInt" } },
+    params = {
+        label = { type = "string", optional = true },
+        tooltip = { type = "string", optional = true },
+        noneLabel = { type = "string", optional = true },
+        multipleLabel = { type = "string", optional = true },
+        packedDisplayValues = { type = "table", optional = true },
+        valueColors = { type = "table", optional = true },
+        controlWidth = { type = "number", optional = true },
+        controlGap = { type = "number", optional = true },
+        quick = { type = "boolean", optional = true },
+    },
     validate = function(node, prefix)
         PrepareWidgetText(node, node.binds and node.binds.value)
         ValidatePackedChoiceWidget(node, prefix, "packedDropdown")
+        if node.controlGap ~= nil and (type(node.controlGap) ~= "number" or node.controlGap < 0) then
+            libWarn("%s: packedDropdown controlGap must be a non-negative number", prefix)
+        end
+        node._hasLabel = (node._label or "") ~= ""
+        node._options = PrepareStaticPackedDropdownOptions(node)
     end,
     draw = function(imgui, node, bound, x, y, availWidth)
         local children = GetPackedChoiceChildren(node, bound, "packedDropdown")
@@ -257,23 +345,19 @@ WidgetTypes.packedDropdown = {
         end
 
         local selection = ClassifyPackedChoice(node, children)
-        local ctx = node._packedDropdownCtx or {}
-        ctx.children = children
-        ctx.selection = selection
-        ctx.noneLabel = node.noneLabel or "None"
-        ctx.multipleLabel = node.multipleLabel or "Multiple"
+        local noneLabel = node.noneLabel or "None"
+        local multipleLabel = node.multipleLabel or "Multiple"
+        local preview
+        local previewColor = nil
         if selection.state == "single" and selection.selectedChild then
-            ctx.preview = GetPackedChoiceLabel(node, selection.selectedChild)
-            ctx.previewColor = node._valueColors and node._valueColors[selection.selectedChild.alias] or nil
+            preview = GetPackedChoiceLabel(node, selection.selectedChild)
+            previewColor = node._valueColors and node._valueColors[selection.selectedChild.alias] or nil
         elseif selection.state == "multiple" then
-            ctx.preview = ctx.multipleLabel
-            ctx.previewColor = nil
+            preview = multipleLabel
         else
-            ctx.preview = ctx.noneLabel
-            ctx.previewColor = nil
+            preview = noneLabel
         end
-        node._packedDropdownCtx = ctx
-        local estimatedControlWidth = EstimateButtonWidth(imgui, ctx.preview or "") + 16
+        local estimatedControlWidth = EstimateButtonWidth(imgui, preview or "") + 16
         return DrawLabeledDropdownControl(
             imgui,
             node,
@@ -282,8 +366,8 @@ WidgetTypes.packedDropdown = {
             availWidth,
             estimatedControlWidth,
             function()
-                local opened = DrawWithValueColor(imgui, ctx.previewColor, function()
-                    return imgui.BeginCombo(node._imguiId, ctx.preview or "")
+                local opened = DrawWithValueColor(imgui, previewColor, function()
+                    return imgui.BeginCombo(node._imguiId, preview or "")
                 end)
                 if not opened then
                     return false
@@ -292,28 +376,26 @@ WidgetTypes.packedDropdown = {
                 local changed = false
                 local pendingClear = false
                 local pendingAlias = nil
-                if imgui.Selectable(MakeSelectableId(ctx.noneLabel or "None", "none"), false) then
-                    pendingClear = true
-                end
-
-                for _, child in ipairs(ctx.children or {}) do
-                    local optionColor = node._valueColors and node._valueColors[child.alias] or nil
-                    local clicked = DrawWithValueColor(imgui, optionColor, function()
-                        return imgui.Selectable(
-                            MakeSelectableId(GetPackedChoiceLabel(node, child), child.alias),
-                            false)
+                for _, option in ipairs(node._options or {}) do
+                    local clicked = DrawWithValueColor(imgui, option.color, function()
+                        return imgui.Selectable(MakeSelectableId(option.label, option.uniqueId), false)
                     end)
                     if clicked then
-                        pendingClear = false
-                        pendingAlias = child.alias
+                        if option.isNone then
+                            pendingClear = true
+                            pendingAlias = nil
+                        else
+                            pendingClear = false
+                            pendingAlias = option.alias
+                        end
                     end
                 end
 
                 imgui.EndCombo()
                 if pendingAlias ~= nil then
-                    changed = ApplyPackedChoiceSelection(ctx.children, pendingAlias, ctx.selection) or changed
+                    changed = ApplyPackedChoiceSelection(children, pendingAlias, selection) or changed
                 elseif pendingClear then
-                    changed = ClearPackedChoiceSelection(ctx.children, ctx.selection) or changed
+                    changed = ClearPackedChoiceSelection(children, selection) or changed
                 end
                 return changed
             end)

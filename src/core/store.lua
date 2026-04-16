@@ -407,7 +407,7 @@ function storeApi.create(modConfig, definition, dataDefaults)
         and tostring(definition.name or definition.id or _PLUGIN.guid or "module")
         or tostring(_PLUGIN.guid or "module")
 
-    if type(definition) == "table" then
+    if type(definition) == "table" and internal.libConfig.DebugMode == true then
         public.definition.validate(definition, label)
     end
 

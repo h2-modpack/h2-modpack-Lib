@@ -113,6 +113,7 @@ local function makeBasicImgui()
         SameLine = function()
             state.sameLineCalls = state.sameLineCalls + 1
         end,
+        AlignTextToFramePadding = function() end,
         NewLine = function()
             state.newLineCalls = state.newLineCalls + 1
             state.cursorPosY = state.cursorPosY + 26

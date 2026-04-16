@@ -144,6 +144,18 @@ local function ValidateTabbedChildren(node, prefix, layoutName)
                 if child.tabId ~= nil and (type(child.tabId) ~= "string" or child.tabId == "") then
                     libWarn("%s: %s child tabId must be a non-empty string", childPrefix, layoutName)
                 end
+                child._tabKey = nil
+                if type(child.tabId) == "string" and child.tabId ~= "" then
+                    child._tabKey = child.tabId
+                elseif type(child.tabLabel) == "string" and child.tabLabel ~= "" then
+                    child._tabKey = child.tabLabel
+                else
+                    child._tabKey = tostring(childIndex)
+                end
+                child._tabItemLabel = type(child.tabLabel) == "string" and child.tabLabel or ""
+                if type(child.tabId) == "string" and child.tabId ~= "" and child._tabItemLabel ~= "" then
+                    child._tabItemLabel = ("%s##%s"):format(child._tabItemLabel, child.tabId)
+                end
                 child._tabLabelColor = nil
                 if child.tabLabelColor ~= nil then
                     local normalized = NormalizeColor(child.tabLabelColor)
@@ -178,6 +190,9 @@ end
 local function GetTabbedChildKey(child, index)
     if type(child) ~= "table" then
         return tostring(index)
+    end
+    if type(child._tabKey) == "string" and child._tabKey ~= "" then
+        return child._tabKey
     end
     if type(child.tabId) == "string" and child.tabId ~= "" then
         return child.tabId
@@ -328,6 +343,7 @@ LayoutTypes.tabs = {
         if node.navWidth ~= nil and (type(node.navWidth) ~= "number" or node.navWidth <= 0) then
             libWarn("%s: tabs navWidth must be a positive number", prefix)
         end
+        node._verticalTabs = node.orientation == "vertical"
         ValidateTabbedChildren(node, prefix, "tabs")
     end,
     render = function(imgui, node, drawChild, x, y, availWidth, availHeight, _, bound)
@@ -340,7 +356,7 @@ LayoutTypes.tabs = {
         local activeChild, activeIndex = FindTabbedChildByKey(children, requestedKey or node._activeTabKey)
         SyncActiveTabBinding(node, bound, GetTabbedChildKey(activeChild, activeIndex))
 
-        if node.orientation == "vertical" then
+        if node._verticalTabs == true then
             local sidebarWidth = node.navWidth or 180
             local gap = ResolveGap(imgui, node, "x")
             local sidebarHeight = type(availHeight) == "number" and availHeight or 0
@@ -355,7 +371,17 @@ LayoutTypes.tabs = {
                 EstimateStructuredRowAdvanceY(imgui),
                 function()
                     imgui.BeginChild(node.id .. "##tabs", sidebarWidth, sidebarHeight, true)
+                    local lastGroup = nil
                     for index, child in ipairs(children) do
+                        local childGroup = type(child.tabGroup) == "string" and child.tabGroup or nil
+                        if childGroup ~= nil and childGroup ~= "" and childGroup ~= lastGroup then
+                            if lastGroup ~= nil then
+                                imgui.Separator()
+                            end
+                            imgui.TextDisabled(childGroup)
+                            imgui.Separator()
+                            lastGroup = childGroup
+                        end
                         local childKey = GetTabbedChildKey(child, index)
                         local selected = WithTabLabelColor(imgui, child, function()
                             return imgui.Selectable(child.tabLabel, childKey == node._activeTabKey)
@@ -413,12 +439,8 @@ LayoutTypes.tabs = {
                 local childChanged = false
                 if imgui.BeginTabBar(node.id) then
                     for index, child in ipairs(children) do
-                        local tabLabel = child.tabLabel
-                        if type(child.tabId) == "string" and child.tabId ~= "" then
-                            tabLabel = ("%s##%s"):format(tabLabel, child.tabId)
-                        end
                         local opened = WithTabLabelColor(imgui, child, function()
-                            return imgui.BeginTabItem(tabLabel)
+                            return imgui.BeginTabItem(child._tabItemLabel or child.tabLabel)
                         end)
                         if opened then
                             SyncActiveTabBinding(node, bound, GetTabbedChildKey(child, index))
@@ -514,6 +536,16 @@ LayoutTypes.split = {
         if node.ratio ~= nil and (type(node.ratio) ~= "number" or node.ratio < 0 or node.ratio > 1) then
             libWarn("%s: split ratio must be between 0 and 1", prefix)
         end
+        node._horizontalSplit = node.orientation ~= "vertical"
+        if type(node.firstSize) == "number" then
+            node._splitSizingMode = "firstSize"
+        elseif type(node.secondSize) == "number" then
+            node._splitSizingMode = "secondSize"
+        elseif type(node.ratio) == "number" then
+            node._splitSizingMode = "ratio"
+        else
+            node._splitSizingMode = "auto"
+        end
     end,
     render = function(imgui, node, drawChild, x, y, availWidth, availHeight)
         local children = type(node.children) == "table" and node.children or {}
@@ -523,16 +555,16 @@ LayoutTypes.split = {
             return 0, 0, false
         end
 
-        local horizontal = node.orientation ~= "vertical"
+        local horizontal = node._horizontalSplit ~= false
         local gap = ResolveGap(imgui, node, horizontal and "x" or "y")
         local axisExtent = horizontal and availWidth or availHeight
         local firstExtent
 
-        if type(node.firstSize) == "number" then
+        if node._splitSizingMode == "firstSize" then
             firstExtent = node.firstSize
-        elseif type(node.secondSize) == "number" and type(axisExtent) == "number" then
+        elseif node._splitSizingMode == "secondSize" and type(axisExtent) == "number" then
             firstExtent = math.max(axisExtent - gap - node.secondSize, 0)
-        elseif type(node.ratio) == "number" and type(axisExtent) == "number" then
+        elseif node._splitSizingMode == "ratio" and type(axisExtent) == "number" then
             firstExtent = math.max((axisExtent - gap) * node.ratio, 0)
         elseif type(axisExtent) == "number" then
             firstExtent = math.max((axisExtent - gap) / 2, 0)

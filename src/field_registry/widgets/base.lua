@@ -13,6 +13,9 @@ local ShowPreparedTooltip = ui.ShowPreparedTooltip
 
 WidgetTypes.separator = {
     binds = {},
+    params = {
+        quick = { type = "boolean", optional = true },
+    },
     validate = function() end,
     draw = function(imgui, _, _, x, y, availWidth)
         local _, _, _, consumedHeight = DrawStructuredAt(
@@ -30,6 +33,15 @@ WidgetTypes.separator = {
 
 WidgetTypes.text = {
     binds = { value = { storageType = "string", optional = true } },
+    params = {
+        text = { type = "string", optional = true },
+        label = { type = "string", optional = true },
+        tooltip = { type = "string", optional = true },
+        color = { type = "number[3|4]", optional = true },
+        width = { type = "number", optional = true },
+        alignToFramePadding = { type = "boolean", optional = true },
+        quick = { type = "boolean", optional = true },
+    },
     validate = function(node, prefix)
         if node.text ~= nil and type(node.text) ~= "string" then
             libWarn("%s: text text must be string", prefix)
@@ -58,22 +70,30 @@ WidgetTypes.text = {
         if node.width ~= nil and (type(node.width) ~= "number" or node.width <= 0) then
             libWarn("%s: text width must be a positive number", prefix)
         end
+        if node.alignToFramePadding ~= nil and type(node.alignToFramePadding) ~= "boolean" then
+            libWarn("%s: text alignToFramePadding must be boolean", prefix)
+        end
         node._text = tostring(node.text or node.label or "")
         node._color = NormalizeColor(node.color)
+        node._alignToFramePadding = node.alignToFramePadding == true
         PrepareWidgetText(node)
     end,
     draw = function(imgui, node, bound, x, y)
-        node._boundText = bound.value and bound.value:get() or nil
-        local text = node._boundText ~= nil and tostring(node._boundText) or node._text or ""
+        local boundText = bound.value and bound.value:get() or nil
+        local text = boundText ~= nil and tostring(boundText) or node._text or ""
         local contentWidth = CalcTextWidth(imgui, text)
         local reservedWidth = type(node.width) == "number" and node.width > 0 and node.width or nil
         local color = node._color
+        local alignToFramePadding = node._alignToFramePadding == true
         local changed, _, _, consumedHeight = DrawStructuredAt(
             imgui,
             x,
             y,
             EstimateStructuredRowAdvanceY(imgui),
             function()
+                if alignToFramePadding then
+                    imgui.AlignTextToFramePadding()
+                end
                 if type(color) == "table" then
                     imgui.TextColored(color[1], color[2], color[3], color[4], text)
                 else

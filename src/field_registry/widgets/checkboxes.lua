@@ -16,6 +16,35 @@ local ValidateValueColorsTable = choiceHelpers.ValidateValueColorsTable
 local DrawWithValueColor = choiceHelpers.DrawWithValueColor
 
 local DEFAULT_PACKED_SLOT_COUNT = 32
+local function CompareEntries(left, right)
+    if left.line ~= right.line then
+        return left.line < right.line
+    end
+    if type(left.start) == "number" and type(right.start) == "number" and left.start ~= right.start then
+        return left.start < right.start
+    end
+    return left.index < right.index
+end
+
+local function PrepareStaticPackedCheckboxItems(node)
+    local bindNodes = node._bindNodes
+    local aliasNode = bindNodes and bindNodes.value or nil
+    local children = aliasNode and aliasNode._bitAliases or nil
+    if type(children) ~= "table" then
+        return nil
+    end
+
+    local items = {}
+    for index, child in ipairs(children) do
+        items[#items + 1] = {
+            index = index,
+            alias = child.alias,
+            label = child.label or "",
+            color = node._valueColors and node._valueColors[child.alias] or nil,
+        }
+    end
+    return items
+end
 
 local function BuildOrderedCheckboxEntries(optionEntries)
     local entries = {}
@@ -59,31 +88,30 @@ local function BuildOrderedCheckboxEntries(optionEntries)
         })
     end
 
-    table.sort(entries, function(left, right)
-        if left.line ~= right.line then
-            return left.line < right.line
-        end
-        if type(left.start) == "number" and type(right.start) == "number" and left.start ~= right.start then
-            return left.start < right.start
-        end
-        return left.index < right.index
-    end)
+    table.sort(entries, CompareEntries)
 
     return entries
 end
 
 WidgetTypes.checkbox = {
     binds = { value = { storageType = "bool" } },
+    params = {
+        label = { type = "string", optional = true },
+        tooltip = { type = "string", optional = true },
+        default = { type = "boolean", optional = true },
+        quick = { type = "boolean", optional = true },
+    },
     validate = function(node, prefix)
         if node.default ~= nil and type(node.default) ~= "boolean" then
             libWarn("%s: checkbox default must be boolean, got %s", prefix, type(node.default))
         end
         PrepareWidgetText(node, node.binds and node.binds.value)
+        node._hasLabel = (node._label or "") ~= ""
     end,
     draw = function(imgui, node, bound, x, y)
-        node._checkboxBound = bound.value
-        node._checkboxValue = bound.value:get()
-        if node._checkboxValue == nil then node._checkboxValue = node.default == true end
+        local boundValue = bound.value
+        local currentValue = boundValue:get()
+        if currentValue == nil then currentValue = node.default == true end
         local contentWidth = EstimateToggleWidth(imgui, node._label or "")
         local changed, _, _, consumedHeight = DrawStructuredAt(
             imgui,
@@ -91,11 +119,11 @@ WidgetTypes.checkbox = {
             y,
             EstimateStructuredRowAdvanceY(imgui),
             function()
-                local value = node._checkboxValue == true
+                local value = currentValue == true
                 local newVal, widgetChanged = imgui.Checkbox((node._label or "") .. (node._imguiId or ""), value)
                 ShowPreparedTooltip(imgui, node)
                 if widgetChanged then
-                    node._checkboxBound:set(newVal)
+                    boundValue:set(newVal)
                     return true
                 end
                 return false
@@ -109,6 +137,11 @@ WidgetTypes.packedCheckboxList = {
         value = { storageType = "int", rootType = "packedInt" },
         filterText = { storageType = "string", optional = true },
         filterMode = { storageType = "string", optional = true },
+    },
+    params = {
+        slotCount = { type = "integer", optional = true },
+        valueColors = { type = "table", optional = true },
+        quick = { type = "boolean", optional = true },
     },
     validate = function(node, prefix)
         if node.slotCount == nil then
@@ -124,6 +157,7 @@ WidgetTypes.packedCheckboxList = {
         end
 
         ValidateValueColorsTable(node, prefix, "packedCheckboxList")
+        node._items = PrepareStaticPackedCheckboxItems(node)
     end,
     draw = function(imgui, node, bound, x, y)
         local children = bound.value and bound.value.children
@@ -145,10 +179,17 @@ WidgetTypes.packedCheckboxList = {
         end
         local visibleIndex = 0
         local optionEntries = {}
-
+        local childByAlias = {}
         for _, child in ipairs(children) do
+            if child ~= nil and type(child.alias) == "string" and child.alias ~= "" then
+                childByAlias[child.alias] = child
+            end
+        end
+
+        for _, item in ipairs(node._items or {}) do
+            local child = childByAlias[item.alias]
             if child ~= nil then
-                local label = child.label or ""
+                local label = item.label or ""
                 local val = child.get()
                 if val == nil then val = false end
                 local matchesText = not hasFilter or label:lower():find(lowerFilter, 1, true) ~= nil
@@ -163,7 +204,7 @@ WidgetTypes.packedCheckboxList = {
                         line = visibleIndex,
                         label = label,
                         current = val == true,
-                        color = node._valueColors and node._valueColors[child.alias] or nil,
+                        color = item.color,
                         onToggle = function(nextValue)
                             child.set(nextValue)
                             return true

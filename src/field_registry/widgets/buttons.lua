@@ -12,6 +12,12 @@ local ShowPreparedTooltip = ui.ShowPreparedTooltip
 
 WidgetTypes.button = {
     binds = {},
+    params = {
+        label = { type = "string", required = true },
+        tooltip = { type = "string", optional = true },
+        onClick = { type = "function", optional = true },
+        quick = { type = "boolean", optional = true },
+    },
     validate = function(node, prefix)
         PrepareWidgetText(node)
         if node._label == "" then
@@ -46,6 +52,14 @@ WidgetTypes.button = {
 
 WidgetTypes.confirmButton = {
     binds = {},
+    params = {
+        label = { type = "string", required = true },
+        tooltip = { type = "string", optional = true },
+        onConfirm = { type = "function", optional = true },
+        confirmLabel = { type = "string", optional = true },
+        cancelLabel = { type = "string", optional = true },
+        quick = { type = "boolean", optional = true },
+    },
     validate = function(node, prefix)
         PrepareWidgetText(node)
         if node._label == "" then
@@ -65,10 +79,6 @@ WidgetTypes.confirmButton = {
         node._confirmPopupId = (node._imguiId or "confirmButton") .. "##popup"
     end,
     draw = function(imgui, node, _, x, y, _, _, uiState)
-        local state = node._confirmButtonState or {}
-        state.uiState = uiState
-        node._confirmButtonState = state
-
         local contentWidth = EstimateButtonWidth(imgui, node._label or "")
         local changed, _, _, consumedHeight = DrawStructuredAt(
             imgui,
@@ -77,7 +87,6 @@ WidgetTypes.confirmButton = {
             EstimateStructuredRowAdvanceY(imgui),
             function()
                 if imgui.Button((node._label or "") .. (node._imguiId or "")) then
-                    node._confirmButtonState = state
                     if type(imgui.OpenPopup) == "function" then
                         imgui.OpenPopup(node._confirmPopupId)
                     end
@@ -87,9 +96,8 @@ WidgetTypes.confirmButton = {
                 local popupChanged = false
                 if type(imgui.BeginPopup) == "function" and imgui.BeginPopup(node._confirmPopupId) then
                     if imgui.Button(node._confirmLabel .. (node._imguiId or "")) then
-                        node._confirmButtonState = state
                         if type(node.onConfirm) == "function" then
-                            node.onConfirm(state.uiState, node, imgui)
+                            node.onConfirm(uiState, node, imgui)
                         end
                         if type(imgui.CloseCurrentPopup) == "function" then
                             imgui.CloseCurrentPopup()
@@ -100,7 +108,6 @@ WidgetTypes.confirmButton = {
                         imgui.SameLine()
                     end
                     if imgui.Button(node._cancelLabel .. "##cancel" .. (node._imguiId or "")) then
-                        node._confirmButtonState = state
                         if type(imgui.CloseCurrentPopup) == "function" then
                             imgui.CloseCurrentPopup()
                         end

@@ -2,6 +2,19 @@ local internal = AdamantModpackLib_Internal
 local libWarn = internal.logging.warn
 local coordinator = public.coordinator
 
+local function ResolveAvailableUiWidth(imgui)
+    if type(imgui.GetContentRegionAvail) == "function" then
+        local availX = imgui.GetContentRegionAvail()
+        if type(availX) == "number" and availX > 0 then
+            return availX
+        end
+    end
+    if type(imgui.GetWindowWidth) == "function" then
+        return imgui.GetWindowWidth()
+    end
+    return nil
+end
+
 --- Creates a standalone menu renderer for a regular coordinated-capable module.
 ---@param def table Module definition declaring UI, storage, and mutation behavior.
 ---@param store table Managed module store associated with the definition.
@@ -61,7 +74,7 @@ function coordinator.standaloneUI(def, store)
                         return public.special.commitState(def, store, state)
                     end,
                     draw = function()
-                        public.ui.drawTree(imgui, def.ui, store.uiState, imgui.GetWindowWidth() * 0.45, def.customTypes)
+                        public.ui.drawTree(imgui, def.ui, store.uiState, ResolveAvailableUiWidth(imgui), def.customTypes)
                     end,
                     onFlushed = onUiStateFlushed,
                 })

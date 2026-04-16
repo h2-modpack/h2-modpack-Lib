@@ -3,6 +3,19 @@ local _coordinators = internal.coordinators
 public.special = public.special or {}
 local special = public.special
 
+local function ResolveAvailableUiWidth(imgui)
+    if type(imgui.GetContentRegionAvail) == "function" then
+        local availX = imgui.GetContentRegionAvail()
+        if type(availX) == "number" and availX > 0 then
+            return availX
+        end
+    end
+    if type(imgui.GetWindowWidth) == "function" then
+        return imgui.GetWindowWidth()
+    end
+    return nil
+end
+
 --- Creates standalone window and menu-bar renderers for a special module.
 ---@param def table Special module definition declaring UI and mutation behavior.
 ---@param store table Managed module store associated with the definition.
@@ -105,7 +118,7 @@ function special.standaloneUI(def, store, uiState, opts)
             local afterDrawTab = getAfterDrawTab()
             if not drawTab and type(def.ui) == "table" and #def.ui > 0 then
                 drawTab = function(ui)
-                    public.ui.drawTree(ui, def.ui, uiState, ui.GetWindowWidth() * 0.4, def.customTypes)
+                    public.ui.drawTree(ui, def.ui, uiState, ResolveAvailableUiWidth(ui), def.customTypes)
                 end
             end
 

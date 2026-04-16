@@ -8,6 +8,7 @@ local NormalizeChoiceValue = ui.NormalizeChoiceValue
 local PrepareWidgetText = widgets.PrepareWidgetText
 local ChoiceDisplay = widgets.ChoiceDisplay
 local CalcTextWidth = ui.CalcTextWidth
+local GetStyleMetricX = ui.GetStyleMetricX
 local EstimateStructuredRowAdvanceY = ui.EstimateStructuredRowAdvanceY
 local ShowPreparedTooltip = ui.ShowPreparedTooltip
 local EstimateToggleWidth = ui.EstimateToggleWidth
@@ -23,6 +24,16 @@ local ApplyPackedChoiceSelection = choiceHelpers.ApplyPackedChoiceSelection
 local ClearPackedChoiceSelection = choiceHelpers.ClearPackedChoiceSelection
 local ValidatePackedChoiceWidget = choiceHelpers.ValidatePackedChoiceWidget
 
+local function CompareEntries(left, right)
+    if left.line ~= right.line then
+        return left.line < right.line
+    end
+    if type(left.start) == "number" and type(right.start) == "number" and left.start ~= right.start then
+        return left.start < right.start
+    end
+    return left.index < right.index
+end
+
 local function BuildOrderedChoiceEntries(node, options)
     options = options or {}
     local labelText = options.labelText
@@ -31,6 +42,14 @@ local function BuildOrderedChoiceEntries(node, options)
     end
     local labelSlotName = options.labelSlotName or "label"
     local entries = {}
+
+    local function OptionGap(imgui)
+        if type(options.optionGap) == "number" and options.optionGap >= 0 then
+            return options.optionGap
+        end
+        local style = type(imgui.GetStyle) == "function" and imgui.GetStyle() or nil
+        return GetStyleMetricX(style, "ItemSpacing", 8)
+    end
 
     local function AddEntry(name, config)
         entries[#entries + 1] = {
@@ -78,23 +97,77 @@ local function BuildOrderedChoiceEntries(node, options)
                 return false, EstimateToggleWidth(imgui, option.label), EstimateStructuredRowAdvanceY(imgui)
             end,
         })
+        if index < #(options.optionEntries or {}) then
+            AddEntry(slotName .. ":gap", {
+                line = option.line,
+                estimateWidth = function(imgui)
+                    return OptionGap(imgui)
+                end,
+                render = function(imgui)
+                    return false, OptionGap(imgui), EstimateStructuredRowAdvanceY(imgui)
+                end,
+            })
+        end
     end
 
-    table.sort(entries, function(left, right)
-        if left.line ~= right.line then
-            return left.line < right.line
-        end
-        if type(left.start) == "number" and type(right.start) == "number" and left.start ~= right.start then
-            return left.start < right.start
-        end
-        return left.index < right.index
-    end)
+    table.sort(entries, CompareEntries)
 
     return entries
 end
 
+local function PrepareStaticRadioOptionEntries(node)
+    local optionEntries = {}
+    for index, candidate in ipairs(node.values or {}) do
+        optionEntries[#optionEntries + 1] = {
+            slotName = "option:" .. tostring(index),
+            value = candidate,
+            label = ChoiceDisplay(node, candidate),
+            color = node._valueColors and node._valueColors[candidate] or nil,
+        }
+    end
+    return optionEntries
+end
+
+local function PrepareStaticPackedRadioOptionEntries(node)
+    local bindNodes = node._bindNodes
+    local aliasNode = bindNodes and bindNodes.value or nil
+    local children = aliasNode and aliasNode._bitAliases or nil
+    if type(children) ~= "table" then
+        return nil
+    end
+
+    local optionEntries = {
+        {
+            slotName = "option:none",
+            alias = nil,
+            label = node.noneLabel or "None",
+            color = nil,
+            isNone = true,
+        },
+    }
+    for index, child in ipairs(children) do
+        optionEntries[#optionEntries + 1] = {
+            slotName = "option:" .. tostring(index),
+            alias = child.alias,
+            label = GetPackedChoiceLabel(node, child),
+            color = node._valueColors and node._valueColors[child.alias] or nil,
+            isNone = false,
+        }
+    end
+    return optionEntries
+end
+
 WidgetTypes.radio = {
     binds = { value = { storageType = { "string", "int" } } },
+    params = {
+        label = { type = "string", optional = true },
+        tooltip = { type = "string", optional = true },
+        values = { type = "table", required = true },
+        displayValues = { type = "table", optional = true },
+        valueColors = { type = "table", optional = true },
+        optionGap = { type = "number", optional = true },
+        quick = { type = "boolean", optional = true },
+    },
     validate = function(node, prefix)
         if not node.values then
             libWarn("%s: radio missing values list", prefix)
@@ -112,8 +185,12 @@ WidgetTypes.radio = {
         if node.displayValues ~= nil and type(node.displayValues) ~= "table" then
             libWarn("%s: radio displayValues must be a table", prefix)
         end
+        if node.optionGap ~= nil and (type(node.optionGap) ~= "number" or node.optionGap < 0) then
+            libWarn("%s: radio optionGap must be a non-negative number", prefix)
+        end
         ValidateValueColorsTable(node, prefix, "radio")
         PrepareWidgetText(node, node.binds and node.binds.value)
+        node._optionEntries = PrepareStaticRadioOptionEntries(node)
     end,
     draw = function(imgui, node, bound, x, y)
         local ctx = node._radioCtx or {}
@@ -121,11 +198,12 @@ WidgetTypes.radio = {
         ctx.current = NormalizeChoiceValue(node, bound.value:get())
         node._radioCtx = ctx
         local optionEntries = {}
-        for index, candidate in ipairs(node.values or {}) do
+        for index, option in ipairs(node._optionEntries or {}) do
+            local candidate = option.value
             optionEntries[#optionEntries + 1] = {
-                slotName = "option:" .. tostring(index),
-                label = ChoiceDisplay(node, candidate),
-                color = node._valueColors and node._valueColors[candidate] or nil,
+                slotName = option.slotName or ("option:" .. tostring(index)),
+                label = option.label,
+                color = option.color,
                 selected = ctx.current == candidate,
                 onSelect = function()
                     if candidate ~= ctx.current then
@@ -141,6 +219,7 @@ WidgetTypes.radio = {
             imgui,
             BuildOrderedChoiceEntries(node, {
                 optionEntries = optionEntries,
+                optionGap = node.optionGap,
             }),
             x,
             y,
@@ -150,9 +229,19 @@ WidgetTypes.radio = {
 
 WidgetTypes.mappedRadio = {
     binds = { value = {} },
+    params = {
+        label = { type = "string", optional = true },
+        tooltip = { type = "string", optional = true },
+        getOptions = { type = "function", required = true },
+        optionGap = { type = "number", optional = true },
+        quick = { type = "boolean", optional = true },
+    },
     validate = function(node, prefix)
         if type(node.getOptions) ~= "function" then
             libWarn("%s: mappedRadio getOptions must be function", prefix)
+        end
+        if node.optionGap ~= nil and (type(node.optionGap) ~= "number" or node.optionGap < 0) then
+            libWarn("%s: mappedRadio optionGap must be a non-negative number", prefix)
         end
         PrepareWidgetText(node, node.binds and node.binds.value)
     end,
@@ -201,6 +290,7 @@ WidgetTypes.mappedRadio = {
             imgui,
             BuildOrderedChoiceEntries(node, {
                 optionEntries = optionEntries,
+                optionGap = node.optionGap,
             }),
             x,
             y,
@@ -210,9 +300,22 @@ WidgetTypes.mappedRadio = {
 
 WidgetTypes.packedRadio = {
     binds = { value = { storageType = "int", rootType = "packedInt" } },
+    params = {
+        label = { type = "string", optional = true },
+        tooltip = { type = "string", optional = true },
+        noneLabel = { type = "string", optional = true },
+        packedDisplayValues = { type = "table", optional = true },
+        valueColors = { type = "table", optional = true },
+        optionGap = { type = "number", optional = true },
+        quick = { type = "boolean", optional = true },
+    },
     validate = function(node, prefix)
         PrepareWidgetText(node, node.binds and node.binds.value)
         ValidatePackedChoiceWidget(node, prefix, "packedRadio")
+        if node.optionGap ~= nil and (type(node.optionGap) ~= "number" or node.optionGap < 0) then
+            libWarn("%s: packedRadio optionGap must be a non-negative number", prefix)
+        end
+        node._optionEntries = PrepareStaticPackedRadioOptionEntries(node)
     end,
     draw = function(imgui, node, bound, x, y)
         local children = GetPackedChoiceChildren(node, bound, "packedRadio")
@@ -221,24 +324,20 @@ WidgetTypes.packedRadio = {
         end
 
         local selection = ClassifyPackedChoice(node, children)
-        local optionEntries = {
-            {
-                slotName = "option:none",
-                label = node.noneLabel or "None",
-                selected = selection.state == "none",
-                onSelect = function()
-                    return ClearPackedChoiceSelection(children, selection) == true
-                end,
-            },
-        }
-        for index, child in ipairs(children) do
+        local optionEntries = {}
+        for index, option in ipairs(node._optionEntries or {}) do
             optionEntries[#optionEntries + 1] = {
-                slotName = "option:" .. tostring(index),
-                label = GetPackedChoiceLabel(node, child),
-                color = node._valueColors and node._valueColors[child.alias] or nil,
-                selected = selection.selectedChild and selection.selectedChild.alias == child.alias or false,
+                slotName = option.slotName or ("option:" .. tostring(index)),
+                label = option.label,
+                color = option.color,
+                selected = option.isNone
+                    and selection.state == "none"
+                    or (selection.selectedChild and selection.selectedChild.alias == option.alias or false),
                 onSelect = function()
-                    return ApplyPackedChoiceSelection(children, child.alias, selection) == true
+                    if option.isNone then
+                        return ClearPackedChoiceSelection(children, selection) == true
+                    end
+                    return ApplyPackedChoiceSelection(children, option.alias, selection) == true
                 end,
             }
         end
@@ -247,6 +346,7 @@ WidgetTypes.packedRadio = {
             imgui,
             BuildOrderedChoiceEntries(node, {
                 optionEntries = optionEntries,
+                optionGap = node.optionGap,
             }),
             x,
             y,

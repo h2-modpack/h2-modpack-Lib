@@ -13,6 +13,14 @@ local ShowPreparedTooltip = ui.ShowPreparedTooltip
 
 WidgetTypes.inputText = {
     binds = { value = { storageType = "string" } },
+    params = {
+        label = { type = "string", optional = true },
+        tooltip = { type = "string", optional = true },
+        maxLen = { type = "number", optional = true },
+        controlWidth = { type = "number", optional = true },
+        controlGap = { type = "number", optional = true },
+        quick = { type = "boolean", optional = true },
+    },
     validate = function(node, prefix)
         if node.maxLen ~= nil and (type(node.maxLen) ~= "number" or node.maxLen < 1) then
             libWarn("%s: inputText maxLen must be a positive number", prefix)
@@ -20,31 +28,35 @@ WidgetTypes.inputText = {
         if node.controlWidth ~= nil and (type(node.controlWidth) ~= "number" or node.controlWidth <= 0) then
             libWarn("%s: inputText controlWidth must be a positive number", prefix)
         end
+        if node.controlGap ~= nil and (type(node.controlGap) ~= "number" or node.controlGap < 0) then
+            libWarn("%s: inputText controlGap must be a non-negative number", prefix)
+        end
         node._maxLen = math.floor(tonumber(node.maxLen) or 0)
         if node._maxLen < 1 then
             node._maxLen = nil
         end
         PrepareWidgetText(node, node.binds and node.binds.value)
+        node._hasLabel = (node._label or "") ~= ""
     end,
     draw = function(imgui, node, bound, x, y, availWidth)
         local aliasNode = bound.value and bound.value.node or nil
-        local ctx = node._inputTextCtx or {}
-        ctx.boundValue = bound.value
-        ctx.current = tostring(bound.value:get() or "")
-        ctx.maxLen = node._maxLen or (aliasNode and aliasNode._maxLen) or 256
-        node._inputTextCtx = ctx
-
+        local boundValue = bound.value
+        local current = tostring(boundValue:get() or "")
+        local maxLen = node._maxLen or (aliasNode and aliasNode._maxLen) or 256
         local labelText = node._label or ""
-        local hasLabel = labelText ~= ""
+        local hasLabel = node._hasLabel == true
         local labelWidth = hasLabel and CalcTextWidth(imgui, labelText) or 0
         local controlWidth = type(node.controlWidth) == "number" and node.controlWidth > 0
             and node.controlWidth
             or availWidth or 120
-        local itemSpacingX = GetStyleMetricX(imgui.GetStyle(), "ItemSpacing", 8)
+        local controlGap = type(node.controlGap) == "number"
+            and node.controlGap >= 0
+            and node.controlGap
+            or GetStyleMetricX(imgui.GetStyle(), "ItemSpacing", 8)
 
         local controlSlotX
         if hasLabel then
-            controlSlotX = x + labelWidth + itemSpacingX
+            controlSlotX = x + labelWidth + controlGap
         else
             controlSlotX = x
         end
@@ -59,6 +71,7 @@ WidgetTypes.inputText = {
                 y,
                 EstimateStructuredRowAdvanceY(imgui),
                 function()
+                    imgui.AlignTextToFramePadding()
                     imgui.Text(labelText)
                     ShowPreparedTooltip(imgui, node)
                     return false
@@ -77,13 +90,13 @@ WidgetTypes.inputText = {
                 if type(controlWidth) == "number" and controlWidth > 0 then
                     imgui.PushItemWidth(controlWidth)
                 end
-                local newValue, widgetChanged = imgui.InputText(node._imguiId, ctx.current or "", ctx.maxLen)
+                local newValue, widgetChanged = imgui.InputText(node._imguiId, current, maxLen)
                 if type(controlWidth) == "number" and controlWidth > 0 then
                     imgui.PopItemWidth()
                 end
                 ShowPreparedTooltip(imgui, node)
                 if widgetChanged then
-                    ctx.boundValue:set(newValue)
+                    boundValue:set(newValue)
                     return true
                 end
                 return false
