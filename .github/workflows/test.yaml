@@ -11,13 +11,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@1d96c772d19495a3b5c517cd2bc0cb401ea0529f
+        uses: actions/checkout@v4
 
-      - name: Install Lua 5.2 & Luarocks
-        run: sudo apt-get install -y lua5.2 luarocks
+      - name: Setup Lua
+        uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "5.2"
+
+      - name: Setup Luarocks
+        uses: leafo/gh-actions-luarocks@v4
 
       - name: Install LuaUnit
-        run: sudo luarocks install luaunit
+        run: luarocks install luaunit
 
       - name: Run tests
-        run: lua5.2 tests/all.lua
+        run: lua tests/all.lua

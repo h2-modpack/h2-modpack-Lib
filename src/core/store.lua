@@ -407,7 +407,7 @@ local function CreateUiState(modConfig, configBackend, storage)
         end,
         toggle = function(alias)
             local current = readStagingValue(alias)
-            writeStagingValue(alias, not (current == true))
+            writeStagingValue(alias, current ~= true)
         end,
         reloadFromConfig = function()
             copyConfigToStaging()
