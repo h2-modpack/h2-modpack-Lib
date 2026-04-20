@@ -6,7 +6,7 @@ It is written for the live surface:
 - namespaced public API
 - managed storage and explicit `session`
 - immediate-mode widgets
-- direct `DrawTab(ui, session)` authoring
+- direct draw-function authoring through `internal.DrawTab(ui, session)`
 
 It does not document the old declarative `definition.ui` model.
 
@@ -49,9 +49,8 @@ public.definition = {
     },
 }
 
-public.store, public.session = lib.createStore(config, public.definition, dataDefaults)
-store = public.store
-session = public.session
+local store, session = lib.createStore(config, public.definition, dataDefaults)
+internal.store = store
 
 function internal.DrawTab(ui, session)
     lib.widgets.checkbox(ui, session, "EnabledFlag", {
@@ -73,8 +72,13 @@ function internal.DrawQuickContent(ui, session)
     })
 end
 
-public.DrawTab = internal.DrawTab
-public.DrawQuickContent = internal.DrawQuickContent
+public.host = lib.createModuleHost({
+    definition = public.definition,
+    store = store,
+    session = session,
+    drawTab = internal.DrawTab,
+    drawQuickContent = internal.DrawQuickContent,
+})
 ```
 
 This example assumes coordinated/framework hosting.
@@ -135,9 +139,15 @@ Lifecycle/framework plumbing can persist built-in host state through:
 
 Hash/profile plumbing should stage arbitrary decoded aliases through:
 - `session.write(alias, value)`
-- `session.flushToConfig()`
+- `session._flushToConfig()`
 
 Do not write schema-backed persisted values directly from draw code through raw config or `lib.lifecycle.*` helpers.
+
+Normal draw code should not need `_flushToConfig()`. Under the host contract, draw callbacks receive an author session with only:
+- `session.view`
+- `session.read(alias)`
+- `session.write(alias, value)`
+- `session.reset(alias)`
 
 Also avoid:
 - `store.read(...)` for transient aliases
@@ -242,11 +252,7 @@ Lib helpers:
 
 Framework-hosted modules should export:
 - `public.definition`
-- `public.store`
-- `public.session`
 - `public.host`
-- `public.DrawTab`
-- optional `public.DrawQuickContent`
 
 Framework discovery requires:
 - `definition.modpack`
@@ -254,26 +260,25 @@ Framework discovery requires:
 - `definition.name`
 - `definition.storage`
 - public `host`
-- public `store`
-- public `session`
-- public `DrawTab`
 
 Framework behavior:
 - each coordinated module gets its own top-level tab
-- `DrawTab` is the normal rendering contract
-- `DrawQuickContent` participates only in Quick Setup
+- `host.drawTab(...)` is the normal rendering contract
+- `host.drawQuickContent(...)` participates only in Quick Setup
 
 ## Standalone Modules
 
 For non-framework hosting, use:
 
 ```lua
+local store, session = lib.createStore(config, public.definition, dataDefaults)
+
 public.host = lib.createModuleHost({
     definition = public.definition,
-    store = public.store,
-    session = public.session,
-    drawTab = public.DrawTab,
-    drawQuickContent = public.DrawQuickContent,
+    store = store,
+    session = session,
+    drawTab = internal.DrawTab,
+    drawQuickContent = internal.DrawQuickContent,
 })
 
 local runtime = lib.standaloneHost(public.host)
@@ -311,13 +316,20 @@ game = rom.game
 modutil = mods["SGG_Modding-ModUtil"]
 local chalk = mods["SGG_Modding-Chalk"]
 local reload = mods["SGG_Modding-ReLoad"]
+---@type AdamantModpackLib
 lib = mods["adamant-ModpackLib"]
 
 local dataDefaults = import("config.lua")
 local config = chalk.auto("config.lua")
 
 local PACK_ID = "example-pack"
+---@class ExampleModuleInternal
+---@field store ManagedStore|nil
+---@field standaloneUi StandaloneRuntime|nil
+---@field DrawTab fun(imgui: table, session: AuthorSession)|nil
+---@field DrawQuickContent fun(imgui: table, session: AuthorSession)|nil
 ExampleModule_Internal = ExampleModule_Internal or {}
+---@type ExampleModuleInternal
 local internal = ExampleModule_Internal
 
 public.definition = {
@@ -345,11 +357,9 @@ public.definition = {
     },
 }
 
-public.store = nil
-public.session = nil
 public.host = nil
-store = nil
-session = nil
+local store = nil
+local session = nil
 internal.standaloneUi = nil
 
 function internal.DrawTab(ui, session)
@@ -384,25 +394,18 @@ function internal.DrawQuickContent(ui, session)
     })
 end
 
-local function registerHooks()
-    public.DrawTab = internal.DrawTab
-    public.DrawQuickContent = internal.DrawQuickContent
-end
-
 local function init()
     import_as_fallback(rom.game)
 
-    public.store, public.session = lib.createStore(config, public.definition, dataDefaults)
-    store = public.store
-    session = public.session
-    registerHooks()
+    store, session = lib.createStore(config, public.definition, dataDefaults)
+    internal.store = store
 
     public.host = lib.createModuleHost({
         definition = public.definition,
-        store = public.store,
-        session = public.session,
-        drawTab = public.DrawTab,
-        drawQuickContent = public.DrawQuickContent,
+        store = store,
+        session = session,
+        drawTab = internal.DrawTab,
+        drawQuickContent = internal.DrawQuickContent,
     })
 
     internal.standaloneUi = lib.standaloneHost(public.host)
@@ -430,6 +433,7 @@ end)
 Notes on the example:
 - `config` and `reload` stay local to `main.lua`
 - `store` is recreated on every reload
+- `session` stays local to `main.lua`; draw callbacks receive the restricted author session through `public.host`
 - `public.host` owns the behavior contract used by framework or standalone hosting
 - `DrawTab` uses raw ImGui for structure and `lib.widgets.*` for controls
 - `DrawQuickContent` is optional

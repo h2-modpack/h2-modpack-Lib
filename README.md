@@ -11,10 +11,14 @@ Lib now owns:
 - immediate-mode widgets and navigation helpers
 
 Lib does not own a declarative UI tree/runtime anymore.
-New module UI should be written directly in `DrawTab(ui, session)` and optional `DrawQuickContent(ui, session)`.
+New module UI should be written directly in module draw functions such as
+`internal.DrawTab(ui, session)` and optional `internal.DrawQuickContent(ui, session)`,
+then exposed through `public.host = lib.createModuleHost(...)`.
 
 ## Docs
 
+- [GETTING_STARTED.md](GETTING_STARTED.md)
+  First-time author guide: core concepts, file roles, and your first module.
 - [API.md](API.md)
   Reference for the current public namespaces and functions.
 - [MODULE_AUTHORING.md](MODULE_AUTHORING.md)

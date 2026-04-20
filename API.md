@@ -31,9 +31,13 @@ Modules now declare:
   - `apply`
   - `revert`
 
-Modules render UI directly:
-- `public.DrawTab(ui, session)`
-- optional `public.DrawQuickContent(ui, session)`
+Modules expose a behavior host:
+- `public.host = lib.createModuleHost(...)`
+
+That host owns:
+- `drawTab`
+- optional `drawQuickContent`
+- built-in lifecycle/state helpers for Framework and standalone hosting
 
 There is no supported new authoring based on:
 - `definition.ui`
@@ -65,8 +69,7 @@ What it does:
 Typical use:
 
 ```lua
-public.store, public.session = lib.createStore(config, public.definition, dataDefaults)
-store = public.store
+local store, session = lib.createStore(config, public.definition, dataDefaults)
 ```
 
 Returned surface:
@@ -79,16 +82,16 @@ lib.lifecycle.setEnabled(def, store, enabled)
 lib.lifecycle.setDebugMode(store, enabled)
 ```
 
-Use `setEnabled` for module enabled toggles. It persists the `Enabled` flag and applies/reverts mutation state as needed. Use `setDebugMode` for module debug toggles. Use `session.write(...)` plus `session.flushToConfig()` for arbitrary storage value changes such as profile/hash import. Do not use store helpers for ordinary draw-code edits.
+Use `setEnabled` for module enabled toggles. It persists the `Enabled` flag and applies/reverts mutation state as needed. Use `setDebugMode` for module debug toggles. Use `session.write(...)` plus `session._flushToConfig()` only from module/host plumbing when you intentionally need an immediate persisted write such as profile/hash import. Ordinary draw-code edits should stay staged and commit through the host/framework flow.
 
 Rules:
 - widgets and draw code should usually read staged values from `session.view`
 - runtime/gameplay code should read persisted values through `store.read(...)`
 - enabled toggles should write through `lib.lifecycle.setEnabled(def, store, enabled)`
 - debug toggles should write through `lib.lifecycle.setDebugMode(store, enabled)`
-- profile/hash plumbing should stage values through `session.write(...)` and flush them through `session.flushToConfig()`
+- profile/hash plumbing should stage values through `session.write(...)` and flush them through `session._flushToConfig()`
 - transient aliases are not readable through `store.read(...)`
-- transient aliases are not persisted by `session.flushToConfig()`
+- transient aliases are not persisted by `session._flushToConfig()`
 
 ### `session`
 
@@ -100,8 +103,19 @@ Useful surface:
 - `session.write(alias, value)`
 - `session.reset(alias)`
 - `session.isDirty()`
-- `session.flushToConfig()`
 - `session.auditMismatches()`
+
+Host/framework plumbing only also uses:
+- `session._flushToConfig()`
+- `session._reloadFromConfig()`
+- `session._captureDirtyConfigSnapshot()`
+- `session._restoreConfigSnapshot(snapshot)`
+
+When a module is rendered through `lib.createModuleHost(...)`, draw callbacks receive a restricted author-facing session view with:
+- `view`
+- `read(alias)`
+- `write(alias, value)`
+- `reset(alias)`
 
 Behavior:
 - persisted aliases stage in `session` and only hit config on flush/commit
@@ -233,7 +247,7 @@ Reverts and reapplies the module's mutation lifecycle.
 
 Syncs live mutation state to the module's effective enabled state on load. Framework calls this for coordinated modules; `lib.standaloneHost(moduleHost, ...)` calls it for standalone modules.
 
-### `lib.lifecycle.resyncSession(def, store, session)`
+### `lib.lifecycle.resyncSession(def, session)`
 
 Audits staged state against persisted config, logs drift, then reloads staged values from config.
 
@@ -256,6 +270,14 @@ Creates a behavior-only host object around:
 - `session`
 - `drawTab`
 - optional `drawQuickContent`
+
+`drawTab` and `drawQuickContent` receive a restricted author session:
+- `session.view`
+- `session.read(alias)`
+- `session.write(alias, value)`
+- `session.reset(alias)`
+
+They do not receive commit/reload plumbing helpers.
 
 Returned surface:
 - `host.getDefinition()`
