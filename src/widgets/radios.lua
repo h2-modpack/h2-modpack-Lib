@@ -1,17 +1,5 @@
-local internal = AdamantModpackLib_Internal
+local helpers = ...
 local WidgetFns = public.widgets
-
-local widgetHelpers = internal.widgetHelpers
-local NormalizeChoiceValue = widgetHelpers.NormalizeChoiceValue
-local ChoiceDisplay = widgetHelpers.ChoiceDisplay
-local DrawWithValueColor = widgetHelpers.DrawWithValueColor
-local GetPackedChoiceLabel = widgetHelpers.GetPackedChoiceLabel
-local ClassifyPackedChoice = widgetHelpers.ClassifyPackedChoice
-local ApplyPackedChoiceSelection = widgetHelpers.ApplyPackedChoiceSelection
-local ClearPackedChoiceSelection = widgetHelpers.ClearPackedChoiceSelection
-local ResolvePackedChildren = widgetHelpers.ResolvePackedChildren
-local SameLineWithGap = widgetHelpers.SameLineWithGap
-local ResolveGap = widgetHelpers.ResolveGap
 
 ---@class RadioOpts
 ---@field label string|nil
@@ -63,7 +51,7 @@ local function DrawRadioOptions(imgui, radioId, labelText, optionEntries, option
     if normalizedPerLine < 1 then
         normalizedPerLine = #optionEntries
     end
-    local normalizedGap = ResolveGap(imgui, optionGap)
+    local normalizedGap = helpers.ResolveGap(imgui, optionGap)
 
     if labelText ~= "" then
         imgui.AlignTextToFramePadding()
@@ -73,10 +61,10 @@ local function DrawRadioOptions(imgui, radioId, labelText, optionEntries, option
     for index, option in ipairs(optionEntries) do
         local positionInLine = (index - 1) % normalizedPerLine
         if positionInLine ~= 0 then
-            SameLineWithGap(imgui, normalizedGap)
+            helpers.SameLineWithGap(imgui, normalizedGap)
         end
 
-        local clicked = DrawWithValueColor(imgui, option.color, function()
+        local clicked = helpers.DrawWithValueColor(imgui, option.color, function()
             return imgui.RadioButton(option.label .. "##" .. tostring(radioId) .. "_" .. tostring(index), option.selected == true)
         end)
         if clicked and type(option.onSelect) == "function" and option.onSelect() == true then
@@ -94,13 +82,13 @@ end
 ---@return boolean
 function WidgetFns.radio(imgui, session, alias, opts)
     opts = opts or {}
-    local current = NormalizeChoiceValue(opts, session.read(alias))
+    local current = helpers.NormalizeChoiceValue(opts, session.read(alias))
     local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
     local optionEntries = {}
 
     for _, value in ipairs(opts.values or {}) do
         optionEntries[#optionEntries + 1] = {
-            label = ChoiceDisplay(opts, value),
+            label = helpers.ChoiceDisplay(opts, value),
             color = valueColors and valueColors[value] or nil,
             selected = current == value,
             onSelect = function()
@@ -175,30 +163,30 @@ end
 ---@return boolean
 function WidgetFns.packedRadio(imgui, session, alias, store, opts)
     opts = opts or {}
-    local children = ResolvePackedChildren(session, alias, store)
+    local children = helpers.ResolvePackedChildren(session, alias, store)
     local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
     local optionEntries = {
         {
             label = tostring(opts.noneLabel or "None"),
-            selected = ClassifyPackedChoice(opts, children).state == "none",
+            selected = helpers.ClassifyPackedChoice(opts, children).state == "none",
             onSelect = function()
-                local selection = ClassifyPackedChoice(opts, children)
-                return ClearPackedChoiceSelection(children, selection) == true
+                local selection = helpers.ClassifyPackedChoice(opts, children)
+                return helpers.ClearPackedChoiceSelection(children, selection) == true
             end,
         },
     }
 
     for _, child in ipairs(children) do
         optionEntries[#optionEntries + 1] = {
-            label = GetPackedChoiceLabel(opts, child),
+            label = helpers.GetPackedChoiceLabel(opts, child),
             color = valueColors and valueColors[child.alias] or nil,
             selected = (function()
-                local selection = ClassifyPackedChoice(opts, children)
+                local selection = helpers.ClassifyPackedChoice(opts, children)
                 return selection.selectedChild and selection.selectedChild.alias == child.alias or false
             end)(),
             onSelect = function()
-                local selection = ClassifyPackedChoice(opts, children)
-                return ApplyPackedChoiceSelection(children, child.alias, selection) == true
+                local selection = helpers.ClassifyPackedChoice(opts, children)
+                return helpers.ApplyPackedChoiceSelection(children, child.alias, selection) == true
             end,
         }
     end

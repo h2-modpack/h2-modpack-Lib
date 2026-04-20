@@ -1,9 +1,5 @@
-local internal = AdamantModpackLib_Internal
+local helpers = ...
 local WidgetFns = public.widgets
-
-local widgetHelpers = internal.widgetHelpers
-local NormalizeColor = widgetHelpers.NormalizeColor
-local ShowTooltip = widgetHelpers.ShowTooltip
 
 ---@class TextOpts
 ---@field color Color|nil
@@ -23,7 +19,7 @@ end
 function WidgetFns.text(imgui, text, opts)
     opts = opts or {}
     local renderedText = tostring(text or "")
-    local color = NormalizeColor(opts.color)
+    local color = helpers.NormalizeColor(opts.color)
     if opts.alignToFramePadding == true then
         imgui.AlignTextToFramePadding()
     end
@@ -32,5 +28,5 @@ function WidgetFns.text(imgui, text, opts)
     else
         imgui.Text(renderedText)
     end
-    ShowTooltip(imgui, opts.tooltip)
+    helpers.ShowTooltip(imgui, opts.tooltip)
 end

@@ -127,8 +127,9 @@ rom.mods['SGG_Modding-ModUtil'] = {
     },
 }
 
-import = function(path)
-    dofile("src/" .. path)
+import = function(path, fenv, ...)
+    local chunk = assert(loadfile("src/" .. path, "t", fenv or _ENV))
+    return chunk(...)
 end
 
 -- Warning capture: collect warnings for assertions

@@ -23,8 +23,8 @@ local NormalizeStorageValue = storageInternal.NormalizeStorageValue
 ---@field read fun(alias: string): any
 ---@field write fun(alias: string, value: any)
 ---@field reset fun(alias: string)
+---@field _flushToConfig fun()
 ---@field _reloadFromConfig fun()
----@field flushToConfig fun()
 ---@field _captureDirtyConfigSnapshot fun(): table[]
 ---@field _restoreConfigSnapshot fun(snapshot: table[]|nil)
 ---@field isDirty fun(): boolean

@@ -1,13 +1,5 @@
-local internal = AdamantModpackLib_Internal
+local helpers = ...
 local WidgetFns = public.widgets
-
-local widgetHelpers = internal.widgetHelpers
-local DrawWithValueColor = widgetHelpers.DrawWithValueColor
-local NormalizeColor = widgetHelpers.NormalizeColor
-local ResolvePackedChildren = widgetHelpers.ResolvePackedChildren
-local ShowTooltip = widgetHelpers.ShowTooltip
-local SameLineWithGap = widgetHelpers.SameLineWithGap
-local ResolveGap = widgetHelpers.ResolveGap
 
 local DEFAULT_PACKED_SLOT_COUNT = 32
 
@@ -33,11 +25,11 @@ function WidgetFns.checkbox(imgui, session, alias, opts)
     opts = opts or {}
     local label = tostring(opts.label or alias or "")
     local current = session.read(alias) == true
-    local color = NormalizeColor(opts.color)
-    local nextValue, changed = DrawWithValueColor(imgui, color, function()
+    local color = helpers.NormalizeColor(opts.color)
+    local nextValue, changed = helpers.DrawWithValueColor(imgui, color, function()
         return imgui.Checkbox(label .. "##" .. tostring(alias), current)
     end)
-    ShowTooltip(imgui, opts.tooltip)
+    helpers.ShowTooltip(imgui, opts.tooltip)
     if changed then
         session.write(alias, nextValue)
         return true
@@ -53,7 +45,7 @@ end
 ---@return boolean
 function WidgetFns.packedCheckboxList(imgui, session, alias, store, opts)
     opts = opts or {}
-    local children = ResolvePackedChildren(session, alias, store)
+    local children = helpers.ResolvePackedChildren(session, alias, store)
     local lowerFilter = type(opts.filterText) == "string" and opts.filterText:lower() or ""
     local hasFilter = lowerFilter ~= ""
     local filterMode = opts.filterMode
@@ -66,7 +58,7 @@ function WidgetFns.packedCheckboxList(imgui, session, alias, store, opts)
     if optionsPerLine < 1 then
         optionsPerLine = 1
     end
-    local optionGap = ResolveGap(imgui, opts.optionGap, 8)
+    local optionGap = helpers.ResolveGap(imgui, opts.optionGap)
     local drawn = 0
     local changed = false
 
@@ -83,10 +75,10 @@ function WidgetFns.packedCheckboxList(imgui, session, alias, store, opts)
             drawn = drawn + 1
             local positionInLine = (drawn - 1) % optionsPerLine
             if positionInLine ~= 0 then
-                SameLineWithGap(imgui, optionGap)
+                helpers.SameLineWithGap(imgui, optionGap)
             end
             local color = valueColors and valueColors[child.alias] or nil
-            local nextValue, clicked = DrawWithValueColor(imgui, color, function()
+            local nextValue, clicked = helpers.DrawWithValueColor(imgui, color, function()
                 return imgui.Checkbox(tostring(child.label) .. "##" .. tostring(child.alias), current)
             end)
             if clicked then

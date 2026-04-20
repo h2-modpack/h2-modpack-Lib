@@ -1,5 +1,5 @@
+local helpers = ...
 local WidgetFns = public.widgets
-local ShowTooltip = AdamantModpackLib_Internal.widgetHelpers.ShowTooltip
 
 ---@class ButtonOpts
 ---@field id string|number|nil
@@ -20,7 +20,7 @@ function WidgetFns.button(imgui, label, opts)
     opts = opts or {}
     local id = tostring(opts.id or label or "")
     local clicked = imgui.Button(tostring(label or "") .. "##" .. id)
-    ShowTooltip(imgui, opts.tooltip)
+    helpers.ShowTooltip(imgui, opts.tooltip)
     if clicked and type(opts.onClick) == "function" then
         opts.onClick(imgui)
     end
@@ -39,7 +39,7 @@ function WidgetFns.confirmButton(imgui, id, label, opts)
     if imgui.Button(tostring(label or "") .. "##" .. tostring(id)) then
         imgui.OpenPopup(popupId)
     end
-    ShowTooltip(imgui, opts.tooltip)
+    helpers.ShowTooltip(imgui, opts.tooltip)
     if imgui.BeginPopup(popupId) then
         local confirmLabel = tostring(opts.confirmLabel or "Confirm")
         local cancelLabel = tostring(opts.cancelLabel or "Cancel")

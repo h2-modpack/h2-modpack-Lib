@@ -8,17 +8,43 @@ local _coordinators = internal.coordinators
 ---@field renderWindow fun()
 ---@field addMenuBar fun()
 
+---@class AuthorSession
+---@field view table<string, any>
+---@field read fun(alias: string): any
+---@field write fun(alias: string, value: any)
+---@field reset fun(alias: string)
+
 ---@class ModuleHostOpts
 ---@field definition ModuleDefinition
 ---@field store ManagedStore
 ---@field session Session
----@field drawTab fun(imgui: table, session: Session)|nil
----@field drawQuickContent fun(imgui: table, session: Session)|nil
+---@field drawTab fun(imgui: table, session: AuthorSession)|nil
+---@field drawQuickContent fun(imgui: table, session: AuthorSession)|nil
+
+---@class ModuleHost
+---@field getDefinition fun(): ModuleDefinition
+---@field read fun(aliasOrKey: ConfigPath): any
+---@field writeAndFlush fun(aliasOrKey: ConfigPath, value: any): boolean
+---@field stage fun(aliasOrKey: ConfigPath, value: any): boolean
+---@field flush fun(): boolean
+---@field reloadFromConfig fun()
+---@field resync fun(): string[]
+---@field commitIfDirty fun(): boolean, string|nil, boolean
+---@field isEnabled fun(): boolean
+---@field setEnabled fun(enabled: boolean): boolean, string|nil
+---@field setDebugMode fun(enabled: boolean)
+---@field applyOnLoad fun(): boolean, string|nil
+---@field applyMutation fun(): boolean, string|nil
+---@field revertMutation fun(): boolean, string|nil
+---@field hasDrawTab fun(): boolean
+---@field drawTab fun(imgui: table)
+---@field hasQuickContent fun(): boolean
+---@field drawQuickContent fun(imgui: table)
 
 --- Creates a behavior-only host object for Framework and standalone hosting.
 --- The host closes over store/session without exposing those state handles publicly.
 ---@param opts ModuleHostOpts
----@return table host Module host behavior contract.
+---@return ModuleHost host Module host behavior contract.
 function public.createModuleHost(opts)
     assert(type(opts) == "table", "createModuleHost: opts must be a table")
     local def = opts.definition
@@ -32,6 +58,15 @@ function public.createModuleHost(opts)
     local drawTab = opts.drawTab
     local drawQuickContent = opts.drawQuickContent
 
+    ---@type AuthorSession
+    local authorSession = {
+        view = session.view,
+        read = session.read,
+        write = session.write,
+        reset = session.reset,
+    }
+
+    ---@type ModuleHost
     local host = {}
 
     function host.getDefinition()
@@ -44,7 +79,7 @@ function public.createModuleHost(opts)
 
     function host.writeAndFlush(aliasOrKey, value)
         session.write(aliasOrKey, value)
-        session.flushToConfig()
+        session._flushToConfig()
         return true
     end
 
@@ -54,7 +89,7 @@ function public.createModuleHost(opts)
     end
 
     function host.flush()
-        session.flushToConfig()
+        session._flushToConfig()
         return true
     end
 
@@ -63,7 +98,7 @@ function public.createModuleHost(opts)
     end
 
     function host.resync()
-        return public.lifecycle.resyncSession(def, store, session)
+        return public.lifecycle.resyncSession(def, session)
     end
 
     function host.commitIfDirty()
@@ -104,7 +139,7 @@ function public.createModuleHost(opts)
 
     function host.drawTab(imgui)
         if type(drawTab) == "function" then
-            return drawTab(imgui, session)
+            return drawTab(imgui, authorSession)
         end
     end
 
@@ -114,7 +149,7 @@ function public.createModuleHost(opts)
 
     function host.drawQuickContent(imgui)
         if type(drawQuickContent) == "function" then
-            return drawQuickContent(imgui, session)
+            return drawQuickContent(imgui, authorSession)
         end
     end
 
@@ -176,7 +211,8 @@ function public.standaloneHost(moduleHost, opts)
         local imgui = rom.ImGui
         local title = (opts.windowTitle or def.name) .. "###" .. tostring(def.id)
         seedWindowSize(imgui)
-        if imgui.Begin(title) then
+        local open, shouldDraw = imgui.Begin(title, showWindow)
+        if shouldDraw then
             local enabled = moduleHost.read("Enabled") == true
             local enabledValue, enabledChanged = imgui.Checkbox("Enabled", enabled)
             if enabledChanged then
@@ -209,9 +245,9 @@ function public.standaloneHost(moduleHost, opts)
                     markRunDataDirty()
                 end
             end
-
-            imgui.End()
-        else
+        end
+        imgui.End()
+        if open == false then
             flushPendingRunData()
             showWindow = false
         end
@@ -235,4 +271,3 @@ function public.standaloneHost(moduleHost, opts)
         addMenuBar = addMenuBar,
     }
 end
-

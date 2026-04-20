@@ -1,11 +1,11 @@
 public.widgets = public.widgets or {}
-import 'widgets/widget_helpers.lua'
-import 'widgets/base.lua'
-import 'widgets/inputs.lua'
-import 'widgets/dropdowns.lua'
-import 'widgets/radios.lua'
-import 'widgets/steppers.lua'
-import 'widgets/checkboxes.lua'
-import 'widgets/buttons.lua'
+local widgetHelpers = import 'widgets/widget_helpers.lua'
+import('widgets/base.lua', nil, widgetHelpers)
+import('widgets/inputs.lua', nil, widgetHelpers)
+import('widgets/dropdowns.lua', nil, widgetHelpers)
+import('widgets/radios.lua', nil, widgetHelpers)
+import('widgets/steppers.lua', nil, widgetHelpers)
+import('widgets/checkboxes.lua', nil, widgetHelpers)
+import('widgets/buttons.lua', nil, widgetHelpers)
 
 import 'widgets/nav.lua'

@@ -1,8 +1,6 @@
+local mutationPlan = ...
 public.mutation = public.mutation or {}
 local mutation = public.mutation
-local internal = AdamantModpackLib_Internal
-internal.mutation = internal.mutation or {}
-local mutationInternal = internal.mutation
 
 ---@class MutationPlan
 ---@field set fun(self: MutationPlan, tbl: table, key: any, value: any): MutationPlan
@@ -19,11 +17,11 @@ local mutationInternal = internal.mutation
 ---@return function backup Captures original values on a table before mutation.
 ---@return function restore Restores all captured values back onto their original tables.
 function mutation.createBackup()
-    return mutationInternal.createBackup()
+    return mutationPlan.createBackup()
 end
 
 --- Creates a reversible mutation plan that can batch table updates and roll them back later.
 ---@return MutationPlan plan Mutable mutation plan with operation builders plus apply/revert methods.
 function mutation.createPlan()
-    return mutationInternal.createPlan() --[[@as MutationPlan]]
+    return mutationPlan.createPlan() --[[@as MutationPlan]]
 end

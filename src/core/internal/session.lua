@@ -219,7 +219,7 @@ function internal.store.createSession(modConfig, configBackend, storage)
             resetTransientToDefaults()
             clearDirty()
         end,
-        flushToConfig = function()
+        _flushToConfig = function()
             copyStagingToConfig()
             clearDirty()
         end,

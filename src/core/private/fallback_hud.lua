@@ -1,4 +1,4 @@
-local internal = AdamantModpackLib_Internal
+local fallbackHud = {}
 
 local COMPONENT_NAME = "ModpackMark_StandaloneLib"
 local HUD_Y = 250
@@ -17,11 +17,11 @@ local function shouldShowFallbackMarker()
     return true
 end
 
-function internal.createHUDFallbackMarker()
-    if internal.hudFallbackMarkerInitialized then
+function fallbackHud.createMarker()
+    if fallbackHud._initialized then
         return
     end
-    internal.hudFallbackMarkerInitialized = true
+    fallbackHud._initialized = true
 
     if not (ScreenData and ScreenData.HUD and ScreenData.HUD.ComponentData) then
         return
@@ -77,4 +77,4 @@ function internal.createHUDFallbackMarker()
     end)
 end
 
-return internal
+return fallbackHud

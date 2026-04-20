@@ -1,11 +1,5 @@
-local internal = AdamantModpackLib_Internal
-local storageInternal = internal.storage
+local helpers = ...
 local WidgetFns = public.widgets
-
-local NormalizeInteger = storageInternal.NormalizeInteger
-local widgetHelpers = internal.widgetHelpers
-local SameLineWithGap = widgetHelpers.SameLineWithGap
-local ResolveGap = widgetHelpers.ResolveGap
 
 ---@class StepperOpts
 ---@field label string|nil
@@ -37,7 +31,7 @@ end
 local function PrepareStepperDrawContext(node, boundValue, limits)
     local ctx = node._stepperCtx or {}
     ctx.boundValue = boundValue
-    ctx.renderedValue = NormalizeInteger(node, boundValue:get())
+    ctx.renderedValue = helpers.NormalizeInteger(node, boundValue:get())
     ctx.min = limits and limits.min or node.min
     ctx.max = limits and limits.max or node.max
     node._stepperCtx = ctx
@@ -54,7 +48,7 @@ end
 local function CommitStepperValue(node, nextValue)
     local ctx = node._stepperCtx
     local minValue, maxValue = GetStepperLimits(node)
-    local normalized = NormalizeInteger(node, nextValue)
+    local normalized = helpers.NormalizeInteger(node, nextValue)
     if minValue ~= nil and normalized < minValue then normalized = minValue end
     if maxValue ~= nil and normalized > maxValue then normalized = maxValue end
     if normalized ~= ctx.renderedValue then
@@ -67,7 +61,7 @@ end
 
 local function GetValueText(node)
     local ctx = node._stepperCtx
-    local renderedValue = ctx and ctx.renderedValue or NormalizeInteger(node, node.default)
+    local renderedValue = ctx and ctx.renderedValue or helpers.NormalizeInteger(node, node.default)
     local displayValue = node.displayValues and node.displayValues[renderedValue]
     return tostring(displayValue ~= nil and displayValue or renderedValue), renderedValue
 end
@@ -94,7 +88,7 @@ end
 
 local function DrawStepperControl(imgui, node)
     local changed = false
-    local gap = ResolveGap(imgui, node.buttonSpacing)
+    local gap = helpers.ResolveGap(imgui, node.buttonSpacing)
     local renderedValue = node._stepperCtx.renderedValue
     local minValue, maxValue = GetStepperLimits(node)
 
@@ -102,10 +96,10 @@ local function DrawStepperControl(imgui, node)
         changed = CommitStepperValue(node, renderedValue - (node.step or 1)) or changed
     end
 
-    SameLineWithGap(imgui, gap)
+    helpers.SameLineWithGap(imgui, gap)
     DrawCenteredValue(imgui, node)
 
-    SameLineWithGap(imgui, gap)
+    helpers.SameLineWithGap(imgui, gap)
     if imgui.Button("+") and (maxValue == nil or renderedValue < maxValue) then
         changed = CommitStepperValue(node, renderedValue + (node.step or 1)) or changed
     end
@@ -131,8 +125,8 @@ function WidgetFns.stepper(imgui, session, alias, opts)
     if cfg.label ~= "" then
         imgui.AlignTextToFramePadding()
         imgui.Text(cfg.label)
-        local gap = ResolveGap(imgui, cfg.buttonSpacing)
-        SameLineWithGap(imgui, gap)
+        local gap = helpers.ResolveGap(imgui, cfg.buttonSpacing)
+        helpers.SameLineWithGap(imgui, gap)
     end
     changed = DrawStepperControl(imgui, cfg) or changed
     return changed
@@ -179,21 +173,21 @@ function WidgetFns.steppedRange(imgui, session, minAlias, maxAlias, opts)
     PrepareStepperDrawContext(maxStepper, maxBound, { min = minValue, max = maxStepper.max })
 
     local changed = false
-    local rangeGap = ResolveGap(imgui, opts.rangeGap)
+    local rangeGap = helpers.ResolveGap(imgui, opts.rangeGap)
 
     if type(opts.label) == "string" and opts.label ~= "" then
         imgui.AlignTextToFramePadding()
         imgui.Text(opts.label)
-        SameLineWithGap(imgui, rangeGap)
+        helpers.SameLineWithGap(imgui, rangeGap)
     end
 
     changed = DrawStepperControl(imgui, minStepper) or changed
 
-    SameLineWithGap(imgui, rangeGap)
+    helpers.SameLineWithGap(imgui, rangeGap)
     imgui.AlignTextToFramePadding()
     imgui.Text("to")
 
-    SameLineWithGap(imgui, rangeGap)
+    helpers.SameLineWithGap(imgui, rangeGap)
     changed = DrawStepperControl(imgui, maxStepper) or changed
 
     return changed

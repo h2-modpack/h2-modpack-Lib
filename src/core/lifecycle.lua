@@ -105,17 +105,17 @@ end
 
 --- Audits staged session values against persisted config values and reloads staged values from config.
 ---@param def ModuleDefinition Module definition used for diagnostic labels.
----@param _store ManagedStore Managed module store associated with the definition.
 ---@param session Session Session exposing config mismatch and reload helpers.
 ---@return table mismatches List of alias names whose staged values drifted from persisted config.
-function lifecycleApi.resyncSession(def, _store, session)
-    local _ = _store
+function lifecycleApi.resyncSession(def, session)
     local mismatches = session.auditMismatches()
     if #mismatches > 0 then
         local name = def and (def.name or def.id) or "module"
-        print("[" .. tostring(name) .. "] Session drift detected; reloading staged values for: " .. table.concat(mismatches, ", "))
+        internal.logging.warn("%s: session drift detected; reloading staged values for: %s",
+            tostring(name),
+            table.concat(mismatches, ", "))
+        session._reloadFromConfig()
     end
-    session._reloadFromConfig()
     return mismatches
 end
 
@@ -131,7 +131,7 @@ function lifecycleApi.commitSession(def, store, session)
     end
 
     local snapshot = session._captureDirtyConfigSnapshot()
-    session.flushToConfig()
+    session._flushToConfig()
 
     local shouldReapply = lifecycleApi.mutatesRunData(def)
         and store.read("Enabled") == true
@@ -194,6 +194,6 @@ end
 ---@param store ManagedStore
 ---@param enabled boolean
 function lifecycleApi.setDebugMode(store, enabled)
-    return internal.store.writePersisted(store, "DebugMode", enabled == true)
+    internal.store.writePersisted(store, "DebugMode", enabled == true)
 end
 

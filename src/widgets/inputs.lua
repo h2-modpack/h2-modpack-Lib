@@ -1,8 +1,5 @@
+local helpers = ...
 local WidgetFns = public.widgets
-local widgetHelpers = AdamantModpackLib_Internal.widgetHelpers
-local ShowTooltip = widgetHelpers.ShowTooltip
-local SameLineWithGap = widgetHelpers.SameLineWithGap
-local ResolveGap = widgetHelpers.ResolveGap
 
 ---@class InputTextOpts
 ---@field label string|nil
@@ -22,13 +19,13 @@ function WidgetFns.inputText(imgui, session, alias, opts)
     local maxLen = math.max(math.floor(tonumber(opts.maxLen) or 256), 1)
     local label = tostring(opts.label or "")
     local controlWidth = tonumber(opts.controlWidth) or 120
-    local controlGap = ResolveGap(imgui, opts.controlGap)
+    local controlGap = helpers.ResolveGap(imgui, opts.controlGap)
 
     if label ~= "" then
         imgui.AlignTextToFramePadding()
         imgui.Text(label)
-        ShowTooltip(imgui, opts.tooltip)
-        SameLineWithGap(imgui, controlGap)
+        helpers.ShowTooltip(imgui, opts.tooltip)
+        helpers.SameLineWithGap(imgui, controlGap)
     end
 
     if controlWidth > 0 then
@@ -38,7 +35,7 @@ function WidgetFns.inputText(imgui, session, alias, opts)
     if controlWidth > 0 then
         imgui.PopItemWidth()
     end
-    ShowTooltip(imgui, opts.tooltip)
+    helpers.ShowTooltip(imgui, opts.tooltip)
     if changed then
         session.write(alias, nextValue)
         return true

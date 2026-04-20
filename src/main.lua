@@ -21,6 +21,23 @@ local internal = AdamantModpackLib_Internal
 internal.libConfig = libConfig
 internal.coordinators = _coordinators
 internal.logging = internal.logging or {}
+local fallbackHud = import 'core/private/fallback_hud.lua'
+
+---@class AdamantModpackLib
+---@field config table
+---@field createStore fun(modConfig: table, definition: ModuleDefinition, dataDefaults: table|nil): ManagedStore, Session
+---@field resetStorageToDefaults fun(storage: StorageSchema, session: Session, opts: table|nil)
+---@field createModuleHost fun(opts: ModuleHostOpts): ModuleHost
+---@field standaloneHost fun(moduleHost: ModuleHost, opts: StandaloneOpts|nil): StandaloneRuntime
+---@field isModuleCoordinated fun(packId: string|nil): boolean
+---@field isModuleEnabled fun(store: ManagedStore, packId: string|nil): boolean
+---@field lifecycle table
+---@field mutation table
+---@field logging table
+---@field hashing table
+---@field imguiHelpers table
+---@field widgets table
+---@field nav table
 
 import 'core/init.lua'
 import 'widgets/init.lua'
@@ -40,7 +57,5 @@ rom.gui.add_to_menu_bar(function()
 end)
 
 modutil.once_loaded.game(function()
-    if internal.createHUDFallbackMarker then
-        internal.createHUDFallbackMarker()
-    end
+    fallbackHud.createMarker()
 end)

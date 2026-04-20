@@ -1,5 +1,6 @@
 local internal = AdamantModpackLib_Internal
 local widgetHelpers = {}
+local storageInternal = internal.storage
 
 ---@alias Color number[]
 ---@alias ChoiceValue any
@@ -51,6 +52,10 @@ function widgetHelpers.ChoiceDisplay(node, value)
         return tostring(node.displayValues[value])
     end
     return tostring(value)
+end
+
+function widgetHelpers.NormalizeInteger(node, value)
+    return storageInternal.NormalizeInteger(node, value)
 end
 
 function widgetHelpers.ShowTooltip(imgui, tooltip)
@@ -218,4 +223,4 @@ function widgetHelpers.ResolvePackedChildren(session, alias, store)
     return children
 end
 
-internal.widgetHelpers = widgetHelpers
+return widgetHelpers

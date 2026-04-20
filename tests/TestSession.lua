@@ -60,7 +60,7 @@ function TestStore:testCreateStoreReadsAndWritesScalarAliasesAndRawKeys()
 
     session.write("Enabled", true)
     session.write("MaxGods", 12)
-    session.flushToConfig()
+    session._flushToConfig()
 
     lu.assertTrue(config.Enabled)
     lu.assertEquals(config.MaxGodsPerRun, 9)
@@ -76,12 +76,12 @@ function TestStore:testPackedAliasReadWriteUpdatesOwningRoot()
     lu.assertEquals(store.read("Packed"), 0)
 
     session.write("EnabledBit", true)
-    session.flushToConfig()
+    session._flushToConfig()
     lu.assertEquals(config.Packed, 1)
     lu.assertTrue(store.read("EnabledBit"))
 
     session.write("ModeBits", 3)
-    session.flushToConfig()
+    session._flushToConfig()
     lu.assertEquals(config.Packed, 7)
     lu.assertEquals(store.read("ModeBits"), 3)
 end
@@ -119,7 +119,7 @@ function TestSession:testSessionStagesScalarAliases()
     lu.assertTrue(session.isDirty())
     lu.assertFalse(session.view.Enabled)
 
-    session.flushToConfig()
+    session._flushToConfig()
     lu.assertFalse(session.isDirty())
     lu.assertFalse(config.Enabled)
 end
@@ -135,7 +135,7 @@ function TestSession:testPackedAliasEditReencodesPackedRootOnFlush()
     lu.assertEquals(session.view.Packed, 4)
     lu.assertEquals(config.Packed, 0)
 
-    session.flushToConfig()
+    session._flushToConfig()
 
     lu.assertEquals(config.Packed, 4)
     lu.assertFalse(session.isDirty())
@@ -158,7 +158,7 @@ function TestSession:testResyncSessionDetectsPackedDrift()
     local store, session = lib.createStore(config, makePackedDefinition())
 
     config.Packed = 5
-    local mismatches = lib.lifecycle.resyncSession({ name = "PackedSession" }, store, session)
+    local mismatches = lib.lifecycle.resyncSession({ name = "PackedSession" }, session)
 
     table.sort(mismatches)
     lu.assertEquals(mismatches, { "EnabledBit", "ModeBits", "Packed" })
@@ -194,7 +194,7 @@ function TestSession:testTransientAliasesLiveOnlyInSession()
     lu.assertEquals(session.view.FilterMode, "allowed")
     lu.assertFalse(session.isDirty())
 
-    session.flushToConfig()
+    session._flushToConfig()
     lu.assertFalse(session.isDirty())
     lu.assertNil(config.FilterText)
 end
@@ -234,7 +234,7 @@ function TestSession:testResetRestoresPersistedAliasDefaultAndMarksDirty()
     lu.assertFalse(session.view.Enabled)
     lu.assertTrue(session.isDirty())
 
-    session.flushToConfig()
+    session._flushToConfig()
     lu.assertFalse(config.Enabled)
 end
 
