@@ -36,35 +36,35 @@ local function ResolveOptionGap(_, optionGap)
 end
 
 ---@param imgui table
----@param uiState UiState
+---@param session Session
 ---@param alias string
 ---@param opts CheckboxOpts|nil
 ---@return boolean
-function WidgetFns.checkbox(imgui, uiState, alias, opts)
+function WidgetFns.checkbox(imgui, session, alias, opts)
     opts = opts or {}
     local label = tostring(opts.label or alias or "")
-    local current = uiState.view[alias] == true
+    local current = session.read(alias) == true
     local color = NormalizeColor(opts.color)
     local nextValue, changed = DrawWithValueColor(imgui, color, function()
         return imgui.Checkbox(label .. "##" .. tostring(alias), current)
     end)
     ShowTooltip(imgui, opts.tooltip)
     if changed then
-        uiState.set(alias, nextValue)
+        session.write(alias, nextValue)
         return true
     end
     return false
 end
 
 ---@param imgui table
----@param uiState UiState
+---@param session Session
 ---@param alias string
 ---@param store ManagedStore|nil
 ---@param opts PackedCheckboxListOpts|nil
 ---@return boolean
-function WidgetFns.packedCheckboxList(imgui, uiState, alias, store, opts)
+function WidgetFns.packedCheckboxList(imgui, session, alias, store, opts)
     opts = opts or {}
-    local children = ResolvePackedChildren(uiState, alias, store)
+    local children = ResolvePackedChildren(session, alias, store)
     local lowerFilter = type(opts.filterText) == "string" and opts.filterText:lower() or ""
     local hasFilter = lowerFilter ~= ""
     local filterMode = opts.filterMode

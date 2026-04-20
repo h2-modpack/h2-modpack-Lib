@@ -25,13 +25,7 @@ internal.logging = internal.logging or {}
 import 'core/init.lua'
 import 'widgets/init.lua'
 
-modutil.once_loaded.game(function()
-    if internal.InitFallbackHud then
-        internal.InitFallbackHud()
-    end
-end)
-
--- Standalone framework debug toggle - hidden when Core is installed.
+-- Standalone framework debug toggle - hidden when Core/Framework registers coordinators.
 ---@diagnostic disable-next-line: redundant-parameter
 rom.gui.add_to_menu_bar(function()
     if next(_coordinators) ~= nil then return end
@@ -42,5 +36,11 @@ rom.gui.add_to_menu_bar(function()
             rom.ImGui.SetTooltip("Print lib-internal diagnostic warnings (schema errors, unknown field types)")
         end
         rom.ImGui.EndMenu()
+    end
+end)
+
+modutil.once_loaded.game(function()
+    if internal.createHUDFallbackMarker then
+        internal.createHUDFallbackMarker()
     end
 end)

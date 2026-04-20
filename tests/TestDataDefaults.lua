@@ -7,32 +7,32 @@ local lu = require('luaunit')
 TestGetPackWidth = {}
 
 function TestGetPackWidth:testBoolAlwaysReturnsOne()
-    lu.assertEquals(lib.storage.getPackWidth({ type = "bool" }), 1)
+    lu.assertEquals(lib.hashing.getPackWidth({ type = "bool" }), 1)
 end
 
 function TestGetPackWidth:testIntDerivesFromMinMax()
     -- min=0, max=7 → range 7 → ceil(log2(8)) = 3
-    lu.assertEquals(lib.storage.getPackWidth({ type = "int", min = 0, max = 7 }), 3)
+    lu.assertEquals(lib.hashing.getPackWidth({ type = "int", min = 0, max = 7 }), 3)
     -- min=0, max=15 → range 15 → ceil(log2(16)) = 4
-    lu.assertEquals(lib.storage.getPackWidth({ type = "int", min = 0, max = 15 }), 4)
+    lu.assertEquals(lib.hashing.getPackWidth({ type = "int", min = 0, max = 15 }), 4)
     -- min=1, max=12 → range 11 → ceil(log2(12)) = 4
-    lu.assertEquals(lib.storage.getPackWidth({ type = "int", min = 1, max = 12 }), 4)
+    lu.assertEquals(lib.hashing.getPackWidth({ type = "int", min = 1, max = 12 }), 4)
 end
 
 function TestGetPackWidth:testIntUsesExplicitWidthOverMinMax()
-    lu.assertEquals(lib.storage.getPackWidth({ type = "int", min = 0, max = 7, width = 5 }), 5)
+    lu.assertEquals(lib.hashing.getPackWidth({ type = "int", min = 0, max = 7, width = 5 }), 5)
 end
 
 function TestGetPackWidth:testIntWithNoMaxReturnsNil()
-    lu.assertNil(lib.storage.getPackWidth({ type = "int", min = 0 }))
+    lu.assertNil(lib.hashing.getPackWidth({ type = "int", min = 0 }))
 end
 
 function TestGetPackWidth:testStringReturnsNil()
-    lu.assertNil(lib.storage.getPackWidth({ type = "string" }))
+    lu.assertNil(lib.hashing.getPackWidth({ type = "string" }))
 end
 
 function TestGetPackWidth:testUnknownTypeReturnsNil()
-    lu.assertNil(lib.storage.getPackWidth({ type = "unknown" }))
+    lu.assertNil(lib.hashing.getPackWidth({ type = "unknown" }))
 end
 
 -- =============================================================================
@@ -43,7 +43,8 @@ TestDataDefaults = {}
 
 local function makeStore(definition, config, dataDefaults)
     config = config or {}
-    return lib.store.create(config, definition, dataDefaults), config
+    local store, session = lib.createStore(config, definition, dataDefaults)
+    return store, session, config
 end
 
 -- dataDefaults fills in missing defaults from configKey lookup
@@ -53,9 +54,9 @@ function TestDataDefaults:testFillsBoolDefaultFromConfigKey()
             { type = "bool", alias = "MyFlag", configKey = "MyFlag" },
         },
     }
-    local store = makeStore(definition, {}, { MyFlag = true })
+    local store, session = makeStore(definition, {}, { MyFlag = true })
 
-    lu.assertTrue(store.uiState.get("MyFlag"))
+    lu.assertTrue(session.read("MyFlag"))
 end
 
 function TestDataDefaults:testFillsIntDefaultFromConfigKey()
@@ -64,9 +65,9 @@ function TestDataDefaults:testFillsIntDefaultFromConfigKey()
             { type = "int", alias = "MyCount", configKey = "MyCount", min = 0, max = 10 },
         },
     }
-    local store = makeStore(definition, {}, { MyCount = 7 })
+    local store, session = makeStore(definition, {}, { MyCount = 7 })
 
-    lu.assertEquals(store.uiState.get("MyCount"), 7)
+    lu.assertEquals(session.read("MyCount"), 7)
 end
 
 function TestDataDefaults:testFillsStringDefaultFromConfigKey()
@@ -75,9 +76,9 @@ function TestDataDefaults:testFillsStringDefaultFromConfigKey()
             { type = "string", alias = "MyChoice", configKey = "MyChoice" },
         },
     }
-    local store = makeStore(definition, {}, { MyChoice = "Forced" })
+    local store, session = makeStore(definition, {}, { MyChoice = "Forced" })
 
-    lu.assertEquals(store.uiState.get("MyChoice"), "Forced")
+    lu.assertEquals(session.read("MyChoice"), "Forced")
 end
 
 -- Explicit default on the node takes precedence over dataDefaults
@@ -87,9 +88,9 @@ function TestDataDefaults:testExplicitDefaultTakesPrecedenceOverDataDefaults()
             { type = "int", alias = "MyCount", configKey = "MyCount", default = 3, min = 0, max = 10 },
         },
     }
-    local store = makeStore(definition, {}, { MyCount = 99 })
+    local store, session = makeStore(definition, {}, { MyCount = 99 })
 
-    lu.assertEquals(store.uiState.get("MyCount"), 3)
+    lu.assertEquals(session.read("MyCount"), 3)
 end
 
 -- Live config value overrides the default when present
@@ -99,9 +100,9 @@ function TestDataDefaults:testLiveConfigValueOverridesDefault()
             { type = "bool", alias = "MyFlag", configKey = "MyFlag" },
         },
     }
-    local store = makeStore(definition, { MyFlag = false }, { MyFlag = true })
+    local store, session = makeStore(definition, { MyFlag = false }, { MyFlag = true })
 
-    lu.assertFalse(store.uiState.get("MyFlag"))
+    lu.assertFalse(session.read("MyFlag"))
 end
 
 -- Missing key in dataDefaults leaves default as nil (storage type normalizes it)
@@ -112,9 +113,9 @@ function TestDataDefaults:testMissingKeyInDataDefaultsNormalizesToTypeDefault()
         },
     }
     -- dataDefaults has no MyFlag entry — bool normalizes nil to false
-    local store = makeStore(definition, {}, {})
+    local store, session = makeStore(definition, {}, {})
 
-    lu.assertFalse(store.uiState.get("MyFlag"))
+    lu.assertFalse(session.read("MyFlag"))
 end
 
 -- nil dataDefaults argument is safe (no error, explicit defaults still work)
@@ -124,9 +125,9 @@ function TestDataDefaults:testNilDataDefaultsIsSafe()
             { type = "bool", alias = "MyFlag", configKey = "MyFlag", default = true },
         },
     }
-    local store = makeStore(definition, {}, nil)
+    local store, session = makeStore(definition, {}, nil)
 
-    lu.assertTrue(store.uiState.get("MyFlag"))
+    lu.assertTrue(session.read("MyFlag"))
 end
 
 -- Lookup uses configKey, not alias, when both are present and differ
@@ -136,12 +137,12 @@ function TestDataDefaults:testLookupUsesConfigKeyNotAlias()
             { type = "int", alias = "MyAlias", configKey = "MyConfigKey", min = 0, max = 10 },
         },
     }
-    local store = makeStore(definition, {}, {
+    local store, session = makeStore(definition, {}, {
         MyAlias     = 1,  -- should be ignored
         MyConfigKey = 9,  -- should be used
     })
 
-    lu.assertEquals(store.uiState.get("MyAlias"), 9)
+    lu.assertEquals(session.read("MyAlias"), 9)
 end
 
 -- Nested configKey table is traversed correctly in dataDefaults
@@ -152,12 +153,12 @@ function TestDataDefaults:testNestedConfigKeyTraversesDataDefaults()
             { type = "int",  alias = "FixedValue",     configKey = { "GodMode", "FixedValue" }, min = 0, max = 10 },
         },
     }
-    local store = makeStore(definition, {}, {
+    local store, session = makeStore(definition, {}, {
         GodMode = { Enabled = true, FixedValue = 3 },
     })
 
-    lu.assertTrue(store.uiState.get("GodModeEnabled"))
-    lu.assertEquals(store.uiState.get("FixedValue"), 3)
+    lu.assertTrue(session.read("GodModeEnabled"))
+    lu.assertEquals(session.read("FixedValue"), 3)
 end
 
 -- createStore called twice on same definition (reload) does not double-apply dataDefaults
@@ -182,13 +183,14 @@ function TestDataDefaults:testMultipleNodesAllFilled()
             { type = "string", alias = "Mode",   configKey = "Mode" },
         },
     }
-    local store = makeStore(definition, {}, {
+    local store, session = makeStore(definition, {}, {
         FlagA = true,
         Count = 5,
         Mode  = "Vanilla",
     })
 
-    lu.assertTrue(store.uiState.get("FlagA"))
-    lu.assertEquals(store.uiState.get("Count"), 5)
-    lu.assertEquals(store.uiState.get("Mode"), "Vanilla")
+    lu.assertTrue(session.read("FlagA"))
+    lu.assertEquals(session.read("Count"), 5)
+    lu.assertEquals(session.read("Mode"), "Vanilla")
 end
+

@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased] — UI Lean-Down
+## [Unreleased] - UI Lean-Down
 
 Complete removal of the v2 declarative UI tree and registry model. This release is not backward-compatible with modules targeting v2 declarative authoring.
 
@@ -25,27 +25,71 @@ Removed:
 
 **Widget and layout draw contracts removed**
 
-The rect-based draw contract `(imgui, node, bound, x, y, availWidth, availHeight, uiState)` → `(consumedWidth, consumedHeight, changed)` is gone.
+The rect-based draw contract `(imgui, node, bound, x, y, availWidth, availHeight, uiState)` -> `(consumedWidth, consumedHeight, changed)` is gone.
 
-Layout types removed: `vstack`, `hstack`, `tabs`, `collapsible`, `scrollRegion`, `split`
+Layout types removed: `vstack`, `hstack`, `tabs`, `collapsible`, `scrollRegion`, `split`.
 
 Custom widget/layout registry extension is no longer supported.
 
-**`lib.special.*` replaced by `lib.host.*`**
+**`lib.special.*` replaced by top-level host/lifecycle helpers**
 
 `lib.special.runPass` and `lib.special.getCachedPreparedNode` are removed with no replacement.
 
 Remaining helpers migrated:
-- `lib.special.runDerivedText` → `lib.host.runDerivedText`
-- `lib.special.auditAndResyncState` → `lib.host.auditAndResyncState`
-- `lib.special.commitState` → `lib.host.commitState`
-- `lib.special.standaloneUI` → `lib.host.standaloneUI`
+- `lib.special.auditAndResyncState` -> `lib.lifecycle.resyncSession`
+- `lib.special.commitState` -> `lib.lifecycle.commitSession`
+- `lib.special.standaloneUI` -> `lib.standaloneHost`
 
 **`lib.ui.*` nav helpers replaced by `lib.nav.*`**
 
-`lib.ui.verticalTabs` → `lib.nav.verticalTabs`
+- `lib.ui.verticalTabs` -> `lib.nav.verticalTabs`
+- `lib.ui.isVisible` -> `lib.nav.isVisible`
 
-`lib.ui.isVisible` → `lib.nav.isVisible`
+**Managed store/session split**
+
+`lib.createStore(config, definition, dataDefaults?)` now returns two values:
+- `store` for persisted runtime reads
+- `session` for staged UI state
+
+Removed from managed store instances:
+- `store.uiState`
+- `store.write`
+- `store._write`
+- `store.readBits`
+- `store.writeBits`
+- `store._readBits`
+- `store._writeBits`
+- `store.getPackedAliases`
+- `store._getPackedAliases`
+- `store.storage`
+
+Persisted writes now go through:
+- `lib.lifecycle.setEnabled(def, store, enabled)` for module enabled toggles
+- `lib.lifecycle.setDebugMode(store, enabled)` for module debug toggles
+- `session.write(alias, value)` plus `session.flushToConfig()` for profile/hash storage imports
+
+Draw code should stage edits through:
+- `session.write(alias, value)`
+
+`session.view` remains public and read-only for immediate-mode draw readability.
+
+Removed session compatibility methods:
+- `session.get`
+- `session.set`
+- `session.toggle`
+- `session.update`
+- `session.getAliasNode`
+- `session.reloadFromConfig`
+- `session.collectConfigMismatches`
+
+Current session surface:
+- `session.view`
+- `session.read(alias)`
+- `session.write(alias, value)`
+- `session.reset(alias)`
+- `session.isDirty()`
+- `session.flushToConfig()`
+- `session.auditMismatches()`
 
 **Widget feature removals**
 
@@ -55,7 +99,7 @@ Remaining helpers migrated:
 
 ### Added
 
-**`lib.widgets.*` — immediate-mode widget helpers**
+**`lib.widgets.*` - immediate-mode widget helpers**
 
 Widgets are now direct draw functions, not registered node types. No preparation, no registry lookup, no draw contract.
 
@@ -76,25 +120,36 @@ New and retained widgets under `lib.widgets`:
 - `checkbox`
 - `packedCheckboxList`
 
-**`lib.nav.*` — navigation helpers**
+**`lib.nav.*` - navigation helpers**
 
-- `lib.nav.verticalTabs(imgui, opts)` — immediate-mode vertical tab rail
-- `lib.nav.isVisible(uiState, condition)` — evaluates `visibleIf`-style conditions against `uiState.view`
+- `lib.nav.verticalTabs(imgui, opts)` - immediate-mode vertical tab rail
+- `lib.nav.isVisible(session, condition)` - evaluates `visibleIf`-style conditions through `session.read(...)`
 
-**`lib.host.*` — module lifecycle helpers**
+**`lib.lifecycle.*` - module lifecycle helpers**
 
-- `lib.host.runDerivedText(uiState, entries, cache?)`
-- `lib.host.auditAndResyncState(name, uiState)`
-- `lib.host.commitState(def, store, uiState)`
-- `lib.host.standaloneUI(def, store, uiState?, opts?)`
+- `lib.lifecycle.registerCoordinator(packId, config)` - registers coordinator config for a pack
+- `lib.lifecycle.mutatesRunData(def)` - returns whether a definition opts into live run-data mutations
+- `lib.lifecycle.applyMutation(def, store)`
+- `lib.lifecycle.revertMutation(def, store)`
+- `lib.lifecycle.reapplyMutation(def, store)`
+- `lib.lifecycle.applyOnLoad(def, store)` - syncs startup live mutation state to effective enabled state
+- `lib.lifecycle.resyncSession(def, store, session)`
+- `lib.lifecycle.commitSession(def, store, session)`
+- `lib.lifecycle.setEnabled(def, store, enabled)` - semantic helper for module enabled toggles and mutation lifecycle transitions
+- `lib.lifecycle.setDebugMode(store, enabled)` - semantic helper for module debug toggles
 
-**`lib.storage` additions**
+**Top-level standalone host helper**
 
-- `lib.storage.readPackedBits(packed, offset, width)` — now public
-- `lib.storage.writePackedBits(packed, offset, width, value)` — now public
+- `lib.standaloneHost(def, store, session, opts?)`
+
+**`lib.hashing` additions**
+
+- `lib.hashing.getPackWidth(node)` - public packed-width helper for hash grouping
+- `lib.hashing.toHash(node, value)` / `lib.hashing.fromHash(node, str)` - public hash/profile value encoding
+- `lib.hashing.readPackedBits(packed, offset, width)` - public raw packed-bit read helper
+- `lib.hashing.writePackedBits(packed, offset, width, value)` - public raw packed-bit write helper
 
 ---
-
 ## [v2] — Layout Substrate Rewrite
 
 Complete rewrite of the UI rendering substrate and registry model. This release is not backward-compatible with modules targeting v1.
@@ -177,34 +232,33 @@ Flat `lib.*` names are replaced by a namespaced surface. Old names still work th
 
 **Managed UI state**
 
-- `store.uiState` — transactional staging layer over persisted config
-- `uiState.view` — read-only proxy for safe draw-path reads
-- `uiState.get` / `uiState.set` / `uiState.update` / `uiState.toggle` / `uiState.reset`
-- `uiState.flushToConfig` — flush staged changes to persisted config
-- `uiState.isDirty` — check whether any staged value has diverged from config
+- `session` — transactional staging layer over persisted config, returned separately from `lib.createStore(...)`
+- `session.view` — read-only proxy for safe draw-path reads
+- `session.read` / `session.write` / `session.reset`
+- `session.flushToConfig` — flush staged changes to persisted config
+- `session.isDirty` — check whether any staged value has diverged from config
 - Mismatch detection and snapshot/restore for transactional rollback
 
 **Transient storage roots**
 
-Storage nodes may declare `lifetime = "transient"` instead of `configKey`. Transient roots participate in `uiState` staging but do not persist, hash, or flush.
+Storage nodes may declare `lifetime = "transient"` instead of `configKey`. Transient roots participate in `session` staging but do not persist, hash, or flush.
 
 **Mutation lifecycle**
 
 - `lib.mutation.createPlan()` — reversible mutation plan with `set`, `setMany`, `transform`, `append`, `appendUnique`, `removeElement`, `setElement`, `apply`, `revert`
 - `lib.mutation.createBackup()` — isolated backup/restore pair
-- `lib.mutation.inferShape(def)` — infers lifecycle shape: `patch`, `manual`, `hybrid`
-- `lib.mutation.apply` / `lib.mutation.revert` / `lib.mutation.reapply` / `lib.mutation.setEnabled`
+- `lib.lifecycle.inferMutation(def)` — infers lifecycle shape: `patch`, `manual`, `hybrid`
+- `lib.lifecycle.applyMutation` / `lib.lifecycle.revertMutation` / `lib.lifecycle.reapplyMutation`
 - Modules may declare `affectsRunData = true` to opt into run-data mutation behavior
 
 **Namespaced API surface**
 
-- `lib.store.*`
 - `lib.definition.*`
 - `lib.mutation.*`
 - `lib.ui.*`
-- `lib.storage.*`
+- `lib.resetStorageToDefaults(...)`
+- `lib.hashing.*`
 - `lib.special.*`
-- `lib.coordinator.*`
 - `lib.logging.*`
 - `lib.accessors.*`
 - `lib.registry.*`
@@ -212,11 +266,10 @@ Storage nodes may declare `lifetime = "transient"` instead of `configKey`. Trans
 **Special module helpers**
 
 - `lib.special.runPass(opts)` — orchestrated UI pass with commit/flush/callback flow
-- `lib.special.runDerivedText(uiState, entries, cache?)` — signature-cached derived alias recomputation
 - `lib.special.getCachedPreparedNode(...)` — caller-owned prepared-node cache with rebuild detection
-- `lib.special.auditAndResyncState(name, uiState)` — staged vs config drift audit
-- `lib.special.commitState(def, store, uiState)` — flush + reapply with rollback on failure
-- `lib.special.standaloneUI(def, store, uiState?, opts?)` — standalone window/menu-bar renderers for special modules
+- `lib.special.auditAndResyncState(name, uiState)` — replaced by `lib.lifecycle.resyncSession(def, store, session)`
+- `lib.special.commitState(def, store, uiState)` — replaced by `lib.lifecycle.commitSession(def, store, session)`
+- `lib.special.standaloneUI(def, store, uiState?, opts?)` — replaced by `lib.standaloneHost(def, store, session, opts?)`
 
 **Other**
 
@@ -233,7 +286,7 @@ Storage nodes may declare `lifetime = "transient"` instead of `configKey`. Trans
 ### Added
 
 - `createStore(config, definition?)` — module store facade
-- `standaloneUI()` — menu-bar toggle callback for modules without coordinator hosting
+- `standalone()` — menu-bar toggle callback for modules without coordinator hosting
 - `isEnabled()` — checks module store and coordinator master toggle
 - `readPath()` / `writePath()` — string and table-path accessors for nested config keys
 - `drawField()` — ImGui widget renderer delegating to the FieldTypes registry
@@ -242,3 +295,10 @@ Storage nodes may declare `lifetime = "transient"` instead of `configKey`. Trans
 - FieldTypes registry with `checkbox`, `dropdown`, and `radio` built-in types
 - Unit tests (LuaUnit, Lua 5.1) for field types, path helpers, validation, backup, special state, and `isEnabled`
 - CI with Luacheck linting and branch protection on `main`
+
+
+
+
+
+
+

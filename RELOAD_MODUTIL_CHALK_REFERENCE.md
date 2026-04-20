@@ -58,7 +58,7 @@ The stack still benefits from a separation of responsibilities, but this section
 
 Current run-director pattern:
 - keep `chalk`, `reload`, and raw `config` local to `main.lua`
-- rebuild definition, store, and current UI/runtime state from there
+- rebuild definition, store, session, and current UI/runtime state from there
 - keep imported files boring
 
 ---
@@ -326,7 +326,7 @@ The Chalk wrapper:
 
 This is why current module patterns are correct:
 - create config once at top level
-- recreate store/uiState from config on reload
+- recreate store/session from config on reload
 
 ### Merge behavior
 
@@ -432,8 +432,7 @@ Because after the milestone is already reached, `once_loaded.*` executes immedia
 Good pattern:
 - `local dataDefaults = import("config.lua")`
 - `config = chalk.auto(...)`
-- recreate `store = lib.store.create(config, definition, dataDefaults)`
-- recreate `uiState`
+- recreate `store, session = lib.createStore(config, definition, dataDefaults)`
 - recreate module/framework derived state
 
 Do not try to preserve old wrapper objects just because they already exist.
@@ -523,7 +522,7 @@ local config = chalk.auto('config.lua')
 local loader = reload.auto_single()
 
 local function init()
-    -- reimport locals, rebuild definition/store/uiState, then apply current config
+    -- reimport locals, rebuild definition/store/session, then apply current config
 end
 
 modutil.once_loaded.game(function()
@@ -535,8 +534,8 @@ This is the best default unless you have a specific reason to deviate.
 
 For module files in the current stack:
 - keep `chalk`, `reload`, and raw `config` local to `main.lua`
-- `modutil`, `lib`, and `store` may be shared across the module's imported files
-- after `local dataDefaults = import("config.lua")`, `local config = chalk.auto("config.lua")`, and `public.store = lib.store.create(config, public.definition, dataDefaults)`, imported files should use `store.read(...)` / `store.write(...)`
+- `modutil`, `lib`, `store`, and `session` may be shared across the module's imported files
+- after `local dataDefaults = import("config.lua")`, `local config = chalk.auto("config.lua")`, and `public.store, public.session = lib.createStore(config, public.definition, dataDefaults)`, imported runtime files should use `store.read(...)` for persisted reads and UI files should use `session.view` / `session.write(...)` for staged reads and edits
 
 ## Guidance For Future Agents
 
@@ -553,3 +552,4 @@ If you are an agent reading this later, assume the following unless local repo c
   - persisted config reloading
 
 If you need to revisit library behavior, start with the source files listed near the top of this document.
+

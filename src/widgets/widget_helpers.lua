@@ -77,7 +77,7 @@ function widgetHelpers.ValidateValueColorsTable(node, prefix, widgetName)
 end
 
 function widgetHelpers.DrawWithValueColor(imgui, color, drawFn)
-    if type(color) ~= "table" or type(imgui.PushStyleColor) ~= "function" or type(imgui.PopStyleColor) ~= "function" then
+    if type(color) ~= "table" then
         return drawFn()
     end
 
@@ -233,28 +233,18 @@ function widgetHelpers.ValidatePackedChoiceWidget(node, prefix, widgetName)
     widgetHelpers.ValidateValueColorsTable(node, prefix, widgetName)
 end
 
-function widgetHelpers.ResolvePackedChildren(uiState, alias, store)
-    local aliasNode = uiState and uiState.getAliasNode and uiState.getAliasNode(alias) or nil
+function widgetHelpers.ResolvePackedChildren(session, alias, store)
     local children = {}
-    if store and type(store.getPackedAliases) == "function" then
-        for _, child in ipairs(store.getPackedAliases(alias) or {}) do
-            children[#children + 1] = {
-                alias = child.alias,
-                label = child.label or child.alias,
-                get = function() return uiState.view[child.alias] end,
-                set = function(value) uiState.set(child.alias, value) end,
-            }
-        end
-        if #children > 0 then
-            return children
-        end
+    if not store then
+        return children
     end
-    for _, child in ipairs(aliasNode and aliasNode._bitAliases or {}) do
+
+    for _, child in ipairs(internal.store.getPackedAliases(store, alias) or {}) do
         children[#children + 1] = {
             alias = child.alias,
             label = child.label or child.alias,
-            get = function() return uiState.view[child.alias] end,
-            set = function(value) uiState.set(child.alias, value) end,
+            get = function() return session.read(child.alias) end,
+            set = function(value) session.write(child.alias, value) end,
         }
     end
     return children

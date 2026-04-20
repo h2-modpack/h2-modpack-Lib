@@ -21,7 +21,7 @@ Keep the public surface:
 - Keep docs aligned with code in the same change.
 - Prefer documenting the live contract over preserving old migration history.
 - Do not reintroduce declarative UI-tree abstractions unless the runtime really needs them again.
-- Keep storage typing in `lib.storage`; keep UI authoring in `lib.widgets` / `lib.nav`.
+- Keep storage schema behavior behind `lib.createStore` / internal storage; keep UI authoring in `lib.widgets` / `lib.nav`.
 - Unknown module misuse may warn and degrade where intended. Lib-owned contract breakage should fail loudly.
 
 ## Validation

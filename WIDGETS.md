@@ -1,15 +1,17 @@
-# Widgets, Nav, and Storage
+# Widgets, Nav, Session, and Hashing
 
 Current live coverage:
 - storage typing and packing
+- session helpers
+- hash/profile packing helpers
 - immediate-mode widgets
 - navigation helpers
 
 It does not describe a declarative UI tree/runtime anymore.
 
-## Storage
+## Storage Schema
 
-Storage lives under `lib.storage`.
+Module storage is declared on `definition.storage` and prepared automatically by `lib.createStore(...)`.
 
 Built-in root types:
 - `bool`
@@ -17,18 +19,25 @@ Built-in root types:
 - `string`
 - `packedInt`
 
-Supported helpers:
-- `lib.storage.validate(storage, label)`
-- `lib.storage.getRoots(storage)`
-- `lib.storage.getAliases(storage)`
-- `lib.storage.getPackWidth(node)`
-- `lib.storage.valuesEqual(node, a, b)`
-- `lib.storage.toHash(node, value)`
-- `lib.storage.fromHash(node, str)`
-- `lib.storage.readPackedBits(...)`
-- `lib.storage.writePackedBits(...)`
+There is no public `lib.storage` namespace. Storage metadata helpers used for hash/profile work live under `lib.hashing`.
 
-Storage is now the only typed schema layer left in Lib.
+## Reset Helpers
+
+- `lib.resetStorageToDefaults(storage, session, opts?)`
+
+## Hashing
+
+Hash/profile serialization helpers live under `lib.hashing`.
+
+Supported helpers:
+- `lib.hashing.getRoots(storage)`
+- `lib.hashing.getAliases(storage)`
+- `lib.hashing.valuesEqual(node, a, b)`
+- `lib.hashing.getPackWidth(node)`
+- `lib.hashing.toHash(node, value)`
+- `lib.hashing.fromHash(node, str)`
+- `lib.hashing.readPackedBits(...)`
+- `lib.hashing.writePackedBits(...)`
 
 ## Widgets
 
@@ -61,7 +70,7 @@ They are not:
 Typical call shape:
 
 ```lua
-lib.widgets.dropdown(ui, uiState, "Mode", {
+lib.widgets.dropdown(ui, session, "Mode", {
     label = "Mode",
     values = { "Vanilla", "Chaos" },
     controlWidth = 180,
@@ -69,14 +78,14 @@ lib.widgets.dropdown(ui, uiState, "Mode", {
 ```
 
 All bound widgets return:
-- `true` when they changed staged `uiState`
+- `true` when they changed staged `session`
 - `false` otherwise
 
 ## Common concepts
 
 ### Bound widgets
 
-Most widgets bind to one alias in `uiState.view`:
+Most widgets bind to one staged session alias:
 - `checkbox`
 - `inputText`
 - `dropdown`
@@ -90,8 +99,12 @@ Some bind to packed roots and therefore also need `store`:
 - `packedRadio`
 - `packedCheckboxList`
 
+The `store` argument is used only for packed-root metadata lookup. Packed widgets do not require or expose store-object underscore helpers.
+
 One binds to two aliases:
 - `steppedRange(minAlias, maxAlias, ...)`
+
+Author draw code can read staged values through `session.view.SomeAlias` for readability. Widget internals use `session.read(alias)` and write changes through `session.write(alias, value)`.
 
 ### Labels and tooltips
 
@@ -174,7 +187,7 @@ Notes:
 
 ## Input widget
 
-### `lib.widgets.inputText(imgui, uiState, alias, opts?)`
+### `lib.widgets.inputText(imgui, session, alias, opts?)`
 
 Options:
 - `label`
@@ -184,8 +197,8 @@ Options:
 - `controlGap`
 
 Behavior:
-- reads current text from `uiState.view[alias]`
-- writes the edited string back through `uiState.set(alias, nextValue)`
+- reads current text from `session.read(alias)`
+- writes the edited string back through `session.write(alias, nextValue)`
 
 Use when:
 - the bound alias is a string field
@@ -193,7 +206,7 @@ Use when:
 
 ## Choice widgets
 
-### `lib.widgets.dropdown(imgui, uiState, alias, opts?)`
+### `lib.widgets.dropdown(imgui, session, alias, opts?)`
 
 Options:
 - `label`
@@ -215,7 +228,7 @@ Behavior:
 Use when:
 - the widget owns a fixed explicit choice list
 
-### `lib.widgets.mappedDropdown(imgui, uiState, alias, opts?)`
+### `lib.widgets.mappedDropdown(imgui, session, alias, opts?)`
 
 Options:
 - `label`
@@ -231,10 +244,11 @@ Each returned option may include:
 - `label`
 - `value`
 - `color`
-- `onSelect(option, uiState)`
+- `onSelect(option, session)`
 
 Behavior:
 - the option list is computed from live staged state
+- `getPreview`, `getPreviewColor`, and `getOptions` receive `session.view`
 - if an option provides `onSelect`, that callback owns the write behavior
 - otherwise the widget writes `option.value` to `alias`
 
@@ -246,7 +260,7 @@ Use when:
 Example:
 
 ```lua
-lib.widgets.mappedDropdown(ui, uiState, "SelectedRoot", {
+lib.widgets.mappedDropdown(ui, session, "SelectedRoot", {
     label = "Root",
     controlWidth = 220,
     getPreview = function(view)
@@ -259,7 +273,7 @@ lib.widgets.mappedDropdown(ui, uiState, "SelectedRoot", {
             {
                 label = "Clear",
                 onSelect = function(_, state)
-                    state.set("SelectedRoot", "")
+                    state.write("SelectedRoot", "")
                     return true
                 end,
             },
@@ -268,7 +282,7 @@ lib.widgets.mappedDropdown(ui, uiState, "SelectedRoot", {
 })
 ```
 
-### `lib.widgets.packedDropdown(imgui, uiState, alias, store, opts?)`
+### `lib.widgets.packedDropdown(imgui, session, alias, store, opts?)`
 
 Single-choice dropdown over a packed root.
 
@@ -288,8 +302,9 @@ Options:
 - `singleRemaining`
 
 Behavior:
-- resolves packed children from `store.getPackedAliases(alias)` first
-- falls back to `uiState.getAliasNode(alias)._bitAliases` if needed
+- resolves packed children from store storage metadata
+- packed widgets require the `store` argument so child metadata stays out of `session`
+- no packed child metadata is exposed through the managed store object itself
 - classifies current packed state as:
   - none
   - single
@@ -302,7 +317,7 @@ Use when:
 Example:
 
 ```lua
-lib.widgets.packedDropdown(ui, uiState, "PackedForcedBoon", store, {
+lib.widgets.packedDropdown(ui, session, "PackedForcedBoon", store, {
     label = "Force 1",
     noneLabel = "None",
     selectionMode = "singleEnabled",
@@ -315,7 +330,7 @@ lib.widgets.packedDropdown(ui, uiState, "PackedForcedBoon", store, {
 })
 ```
 
-### `lib.widgets.radio(imgui, uiState, alias, opts?)`
+### `lib.widgets.radio(imgui, session, alias, opts?)`
 
 Options:
 - `label`
@@ -329,7 +344,7 @@ Options:
 Use when:
 - the choice list is small and visible all at once is better than a combo
 
-### `lib.widgets.mappedRadio(imgui, uiState, alias, opts?)`
+### `lib.widgets.mappedRadio(imgui, session, alias, opts?)`
 
 Options:
 - `label`
@@ -342,13 +357,16 @@ Each returned option may include:
 - `value`
 - `color`
 - `selected`
-- `onSelect(option, uiState)`
+- `onSelect(option, session)`
 
 Use when:
 - the visible options are dynamic
 - you need custom selection behavior
 
-### `lib.widgets.packedRadio(imgui, uiState, alias, store, opts?)`
+Note:
+- `getOptions` receives `session.view`
+
+### `lib.widgets.packedRadio(imgui, session, alias, store, opts?)`
 
 Packed single-choice radio surface.
 
@@ -366,7 +384,7 @@ Use when:
 
 ## Numeric widgets
 
-### `lib.widgets.stepper(imgui, uiState, alias, opts?)`
+### `lib.widgets.stepper(imgui, session, alias, opts?)`
 
 Stepper with `-` and `+` buttons around a rendered value.
 
@@ -389,7 +407,7 @@ Use when:
 - the value is small and ordinal
 - button stepping is more readable than typing
 
-### `lib.widgets.steppedRange(imgui, uiState, minAlias, maxAlias, opts?)`
+### `lib.widgets.steppedRange(imgui, session, minAlias, maxAlias, opts?)`
 
 Two coupled steppers rendered as:
 - min stepper
@@ -411,7 +429,7 @@ Use when:
 
 ## Boolean widgets
 
-### `lib.widgets.checkbox(imgui, uiState, alias, opts?)`
+### `lib.widgets.checkbox(imgui, session, alias, opts?)`
 
 Options:
 - `label`
@@ -424,7 +442,7 @@ Behavior:
 Use when:
 - the field is a plain toggle
 
-### `lib.widgets.packedCheckboxList(imgui, uiState, alias, store, opts?)`
+### `lib.widgets.packedCheckboxList(imgui, session, alias, store, opts?)`
 
 Checkbox list over packed child aliases.
 
@@ -442,7 +460,8 @@ Options:
 - `unchecked`
 
 Behavior:
-- resolves packed children from `store.getPackedAliases(alias)` first
+- resolves packed children from store storage metadata
+- no packed child metadata is exposed through the managed store object itself
 - text filter is case-insensitive substring match on option labels
 - items are laid out inline according to `optionsPerLine`
 - rendering stops after `slotCount` matches
@@ -454,8 +473,8 @@ Use when:
 Example:
 
 ```lua
-lib.widgets.packedCheckboxList(ui, uiState, "PackedBannedAphrodite", store, {
-    filterText = uiState.view.BanFilterText,
+lib.widgets.packedCheckboxList(ui, session, "PackedBannedAphrodite", store, {
+    filterText = session.view.BanFilterText,
     optionsPerLine = 2,
     valueColors = {
         PackedBannedAphrodite_Attack = { 1, 0.8, 0.8, 1 },
@@ -484,7 +503,7 @@ Navigation helpers live under `lib.nav`.
 
 Current surface:
 - `lib.nav.verticalTabs(ui, opts)`
-- `lib.nav.isVisible(uiState, condition)`
+- `lib.nav.isVisible(session, condition)`
 
 `verticalTabs(...)` is the current replacement for the old vertical tab layout runtime.
 

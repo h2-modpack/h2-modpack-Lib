@@ -8,7 +8,7 @@ require('tests/TestBackupSystem')
 require('tests/TestDefinitionLifecycle')
 require('tests/TestDefinitionContract')
 require('tests/TestStorageValidation')
-require('tests/TestUiState')
+require('tests/TestSession')
 require('tests/TestIsEnabled')
 require('tests/TestDataDefaults')
 

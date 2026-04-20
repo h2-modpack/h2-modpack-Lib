@@ -27,7 +27,7 @@ local ResolvePackedChildren = widgetHelpers.ResolvePackedChildren
 ---@field label string|nil
 ---@field value any
 ---@field color Color|nil
----@field onSelect fun(option: MappedDropdownOption, uiState: UiState): boolean|nil
+---@field onSelect fun(option: MappedDropdownOption, session: Session): boolean|nil
 
 ---@class MappedDropdownOpts
 ---@field label string|nil
@@ -90,13 +90,13 @@ local function DrawLabeledDropdownControl(imgui, opts, _, previewColor, drawCont
 end
 
 ---@param imgui table
----@param uiState UiState
+---@param session Session
 ---@param alias string
 ---@param opts DropdownOpts|nil
 ---@return boolean
-function WidgetFns.dropdown(imgui, uiState, alias, opts)
+function WidgetFns.dropdown(imgui, session, alias, opts)
     opts = opts or {}
-    local current = NormalizeChoiceValue(opts, uiState.view[alias])
+    local current = NormalizeChoiceValue(opts, session.read(alias))
     local optionEntries = {}
     local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
     for index, value in ipairs(opts.values or {}) do
@@ -131,7 +131,7 @@ function WidgetFns.dropdown(imgui, uiState, alias, opts)
                 return imgui.Selectable(MakeSelectableId(option.label, option.uniqueId), option.value == current)
             end)
             if clicked and option.value ~= current then
-                uiState.set(alias, option.value)
+                session.write(alias, option.value)
                 current = option.value
                 changed = true
             end
@@ -142,18 +142,18 @@ function WidgetFns.dropdown(imgui, uiState, alias, opts)
 end
 
 ---@param imgui table
----@param uiState UiState
+---@param session Session
 ---@param alias string
 ---@param opts MappedDropdownOpts|nil
 ---@return boolean
-function WidgetFns.mappedDropdown(imgui, uiState, alias, opts)
+function WidgetFns.mappedDropdown(imgui, session, alias, opts)
     opts = opts or {}
     local preview = type(opts.getPreview) == "function"
-        and tostring(opts.getPreview(uiState.view) or "")
-        or tostring(uiState.view[alias] or "")
-    local previewColor = type(opts.getPreviewColor) == "function" and opts.getPreviewColor(uiState.view) or nil
+        and tostring(opts.getPreview(session.view) or "")
+        or tostring(session.read(alias) or "")
+    local previewColor = type(opts.getPreviewColor) == "function" and opts.getPreviewColor(session.view) or nil
     local options = type(opts.getOptions) == "function"
-        and (opts.getOptions(uiState.view) or {})
+        and (opts.getOptions(session.view) or {})
         or {}
 
     return DrawLabeledDropdownControl(imgui, opts, preview, previewColor, function()
@@ -173,9 +173,9 @@ function WidgetFns.mappedDropdown(imgui, uiState, alias, opts)
             end)
             if clicked then
                 if type(option) == "table" and type(option.onSelect) == "function" then
-                    changed = option.onSelect(option, uiState) == true or changed
+                    changed = option.onSelect(option, session) == true or changed
                 else
-                    uiState.set(alias, type(option) == "table" and option.value or option)
+                    session.write(alias, type(option) == "table" and option.value or option)
                     changed = true
                 end
             end
@@ -186,16 +186,16 @@ function WidgetFns.mappedDropdown(imgui, uiState, alias, opts)
 end
 
 ---@param imgui table
----@param uiState UiState
+---@param session Session
 ---@param alias string
 ---@param store ManagedStore|nil
 ---@param opts PackedDropdownOpts|nil
 ---@return boolean
-function WidgetFns.packedDropdown(imgui, uiState, alias, store, opts)
+function WidgetFns.packedDropdown(imgui, session, alias, store, opts)
     opts = opts or {}
-    local children = ResolvePackedChildren(uiState, alias, store)
-    local selection = ClassifyPackedChoice(opts, children)
+    local children = ResolvePackedChildren(session, alias, store)
     local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
+    local selection = ClassifyPackedChoice(opts, children)
     local preview = tostring(opts.noneLabel or "None")
     local previewColor = nil
     if selection.state == "single" and selection.selectedChild then
@@ -213,18 +213,25 @@ function WidgetFns.packedDropdown(imgui, uiState, alias, store, opts)
             return false
         end
         local changed = false
-        if imgui.Selectable(MakeSelectableId(tostring(opts.noneLabel or "None"), "none"), selection.state == "none") then
-            changed = ClearPackedChoiceSelection(children, selection) or changed
+        local currentSelection = ClassifyPackedChoice(opts, children)
+        if imgui.Selectable(
+            MakeSelectableId(tostring(opts.noneLabel or "None"), "none"),
+            currentSelection.state == "none"
+        ) then
+            changed = ClearPackedChoiceSelection(children, currentSelection) or changed
         end
         for _, child in ipairs(children) do
             local childLabel = GetPackedChoiceLabel(opts, child)
             local childColor = valueColors and valueColors[child.alias] or nil
             local clicked = DrawWithValueColor(imgui, childColor, function()
-                local isSelected = selection.selectedChild ~= nil and selection.selectedChild.alias == child.alias
+                local currentSelectionForChild = ClassifyPackedChoice(opts, children)
+                local isSelected = currentSelectionForChild.selectedChild ~= nil
+                    and currentSelectionForChild.selectedChild.alias == child.alias
                 return imgui.Selectable(MakeSelectableId(childLabel, child.alias), isSelected)
             end)
             if clicked then
-                changed = ApplyPackedChoiceSelection(children, child.alias, selection) or changed
+                changed = ApplyPackedChoiceSelection(children, child.alias, currentSelection) or changed
+                currentSelection = ClassifyPackedChoice(opts, children)
             end
         end
         imgui.EndCombo()

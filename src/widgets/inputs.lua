@@ -14,13 +14,13 @@ local function ShowTooltip(imgui, tooltip)
 end
 
 ---@param imgui table
----@param uiState UiState
+---@param session Session
 ---@param alias string
 ---@param opts InputTextOpts|nil
 ---@return boolean
-function WidgetFns.inputText(imgui, uiState, alias, opts)
+function WidgetFns.inputText(imgui, session, alias, opts)
     opts = opts or {}
-    local current = tostring((uiState and uiState.view and uiState.view[alias]) or "")
+    local current = tostring(session.read(alias) or "")
     local maxLen = math.max(math.floor(tonumber(opts.maxLen) or 256), 1)
     local label = tostring(opts.label or "")
     local controlWidth = tonumber(opts.controlWidth) or 120
@@ -48,7 +48,7 @@ function WidgetFns.inputText(imgui, uiState, alias, opts)
     end
     ShowTooltip(imgui, opts.tooltip)
     if changed then
-        uiState.set(alias, nextValue)
+        session.write(alias, nextValue)
         return true
     end
     return false

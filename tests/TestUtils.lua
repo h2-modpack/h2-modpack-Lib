@@ -88,6 +88,17 @@ rom.mods['SGG_Modding-Chalk'] = {
     auto = function() return { DebugMode = false } end,
 }
 
+rom.mods['SGG_Modding-ModUtil'] = {
+    once_loaded = {
+        game = function() end,
+    },
+    mod = {
+        Path = {
+            Wrap = function() end,
+        },
+    },
+}
+
 import = function(path)
     dofile("src/" .. path)
 end

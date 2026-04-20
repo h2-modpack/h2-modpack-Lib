@@ -3,14 +3,15 @@
 Shared runtime and immediate-mode UI toolkit for adamant modpack modules.
 
 Lib now owns:
-- managed module storage and `uiState`
-- storage typing, normalization, and hash encoding
+- managed module storage and explicit `session`
+- storage typing and normalization
+- hash/profile encoding helpers
 - mutation lifecycle helpers for `affectsRunData` modules
 - standalone hosting helpers
 - immediate-mode widgets and navigation helpers
 
 Lib does not own a declarative UI tree/runtime anymore.
-New module UI should be written directly in `DrawTab(ui, uiState)` and optional `DrawQuickContent(ui, uiState)`.
+New module UI should be written directly in `DrawTab(ui, session)` and optional `DrawQuickContent(ui, session)`.
 
 ## Docs
 
@@ -32,14 +33,19 @@ New module UI should be written directly in `DrawTab(ui, uiState)` and optional 
 ## Current Public Namespaces
 
 - `lib.config`
-- `lib.coordinator`
 - `lib.logging`
-- `lib.host`
+- `lib.lifecycle`
 - `lib.mutation`
-- `lib.storage`
-- `lib.store`
+- `lib.hashing`
 - `lib.widgets`
 - `lib.nav`
+
+Common top-level helpers:
+- `lib.createStore(...)`
+- `lib.standaloneHost(...)`
+- `lib.isModuleEnabled(...)`
+- `lib.isModuleCoordinated(...)`
+- `lib.resetStorageToDefaults(...)`
 
 ## Validation
 

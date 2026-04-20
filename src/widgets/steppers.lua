@@ -125,16 +125,16 @@ local function DrawStepperControl(imgui, node)
 end
 
 ---@param imgui table
----@param uiState UiState
+---@param session Session
 ---@param alias string
 ---@param opts StepperOpts|nil
 ---@return boolean
-function WidgetFns.stepper(imgui, uiState, alias, opts)
+function WidgetFns.stepper(imgui, session, alias, opts)
     opts = opts or {}
     local cfg = MakeStepperConfig(opts)
     local boundValue = {
-        get = function() return uiState.view[alias] end,
-        set = function(value) uiState.set(alias, value) end,
+        get = function() return session.read(alias) end,
+        set = function(value) session.write(alias, value) end,
     }
     PrepareStepperDrawContext(cfg, boundValue)
 
@@ -153,12 +153,12 @@ function WidgetFns.stepper(imgui, uiState, alias, opts)
 end
 
 ---@param imgui table
----@param uiState UiState
+---@param session Session
 ---@param minAlias string
 ---@param maxAlias string
 ---@param opts SteppedRangeOpts|nil
 ---@return boolean
-function WidgetFns.steppedRange(imgui, uiState, minAlias, maxAlias, opts)
+function WidgetFns.steppedRange(imgui, session, minAlias, maxAlias, opts)
     opts = opts or {}
     local minStepper = MakeStepperConfig({
         label = "",
@@ -179,12 +179,12 @@ function WidgetFns.steppedRange(imgui, uiState, minAlias, maxAlias, opts)
         buttonSpacing = opts.buttonSpacing,
     })
     local minBound = {
-        get = function() return uiState.view[minAlias] end,
-        set = function(value) uiState.set(minAlias, value) end,
+        get = function() return session.read(minAlias) end,
+        set = function(value) session.write(minAlias, value) end,
     }
     local maxBound = {
-        get = function() return uiState.view[maxAlias] end,
-        set = function(value) uiState.set(maxAlias, value) end,
+        get = function() return session.read(maxAlias) end,
+        set = function(value) session.write(maxAlias, value) end,
     }
 
     local minValue = minBound.get()

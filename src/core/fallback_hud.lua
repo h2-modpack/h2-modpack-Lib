@@ -17,11 +17,11 @@ local function shouldShowFallbackMarker()
     return true
 end
 
-function internal.InitFallbackHud()
-    if internal.fallbackHudInitialized then
+function internal.createHUDFallbackMarker()
+    if internal.hudFallbackMarkerInitialized then
         return
     end
-    internal.fallbackHudInitialized = true
+    internal.hudFallbackMarkerInitialized = true
 
     if not (ScreenData and ScreenData.HUD and ScreenData.HUD.ComponentData) then
         return

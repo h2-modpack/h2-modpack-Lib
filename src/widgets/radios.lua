@@ -25,7 +25,7 @@ local ResolvePackedChildren = widgetHelpers.ResolvePackedChildren
 ---@field value any
 ---@field color Color|nil
 ---@field selected boolean|nil
----@field onSelect fun(option: MappedRadioOption, uiState: UiState): boolean|nil
+---@field onSelect fun(option: MappedRadioOption, session: Session): boolean|nil
 
 ---@class MappedRadioOpts
 ---@field label string|nil
@@ -92,13 +92,13 @@ local function DrawRadioOptions(imgui, radioId, labelText, optionEntries, option
 end
 
 ---@param imgui table
----@param uiState UiState
+---@param session Session
 ---@param alias string
 ---@param opts RadioOpts|nil
 ---@return boolean
-function WidgetFns.radio(imgui, uiState, alias, opts)
+function WidgetFns.radio(imgui, session, alias, opts)
     opts = opts or {}
-    local current = NormalizeChoiceValue(opts, uiState.view[alias])
+    local current = NormalizeChoiceValue(opts, session.read(alias))
     local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
     local optionEntries = {}
 
@@ -109,7 +109,7 @@ function WidgetFns.radio(imgui, uiState, alias, opts)
             selected = current == value,
             onSelect = function()
                 if current ~= value then
-                    uiState.set(alias, value)
+                    session.write(alias, value)
                     current = value
                     return true
                 end
@@ -129,16 +129,16 @@ function WidgetFns.radio(imgui, uiState, alias, opts)
 end
 
 ---@param imgui table
----@param uiState UiState
+---@param session Session
 ---@param alias string
 ---@param opts MappedRadioOpts|nil
 ---@return boolean
-function WidgetFns.mappedRadio(imgui, uiState, alias, opts)
+function WidgetFns.mappedRadio(imgui, session, alias, opts)
     opts = opts or {}
-    local current = uiState.view[alias]
+    local current = session.read(alias)
     local optionEntries = {}
 
-    for _, option in ipairs(type(opts.getOptions) == "function" and (opts.getOptions(uiState.view) or {}) or {}) do
+    for _, option in ipairs(type(opts.getOptions) == "function" and (opts.getOptions(session.view) or {}) or {}) do
         local label = type(option) == "table" and tostring(option.label or option.value or "") or tostring(option)
         local color = type(option) == "table" and option.color or nil
         local selected = type(option) == "table" and option.selected == true or current == option
@@ -148,11 +148,11 @@ function WidgetFns.mappedRadio(imgui, uiState, alias, opts)
             selected = selected,
             onSelect = function()
                 if type(option) == "table" and type(option.onSelect) == "function" then
-                    return option.onSelect(option, uiState) == true
+                    return option.onSelect(option, session) == true
                 end
                 local nextValue = type(option) == "table" and option.value or option
                 if nextValue ~= current then
-                    uiState.set(alias, nextValue)
+                    session.write(alias, nextValue)
                     current = nextValue
                     return true
                 end
@@ -172,21 +172,21 @@ function WidgetFns.mappedRadio(imgui, uiState, alias, opts)
 end
 
 ---@param imgui table
----@param uiState UiState
+---@param session Session
 ---@param alias string
 ---@param store ManagedStore|nil
 ---@param opts PackedRadioOpts|nil
 ---@return boolean
-function WidgetFns.packedRadio(imgui, uiState, alias, store, opts)
+function WidgetFns.packedRadio(imgui, session, alias, store, opts)
     opts = opts or {}
-    local children = ResolvePackedChildren(uiState, alias, store)
-    local selection = ClassifyPackedChoice(opts, children)
+    local children = ResolvePackedChildren(session, alias, store)
     local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
     local optionEntries = {
         {
             label = tostring(opts.noneLabel or "None"),
-            selected = selection.state == "none",
+            selected = ClassifyPackedChoice(opts, children).state == "none",
             onSelect = function()
+                local selection = ClassifyPackedChoice(opts, children)
                 return ClearPackedChoiceSelection(children, selection) == true
             end,
         },
@@ -196,8 +196,12 @@ function WidgetFns.packedRadio(imgui, uiState, alias, store, opts)
         optionEntries[#optionEntries + 1] = {
             label = GetPackedChoiceLabel(opts, child),
             color = valueColors and valueColors[child.alias] or nil,
-            selected = selection.selectedChild and selection.selectedChild.alias == child.alias or false,
+            selected = (function()
+                local selection = ClassifyPackedChoice(opts, children)
+                return selection.selectedChild and selection.selectedChild.alias == child.alias or false
+            end)(),
             onSelect = function()
+                local selection = ClassifyPackedChoice(opts, children)
                 return ApplyPackedChoiceSelection(children, child.alias, selection) == true
             end,
         }

@@ -2,20 +2,20 @@
 
 This is the current public Lib surface.
 
-Preferred usage is namespaced:
-- `lib.store.*`
-- `lib.storage.*`
+Preferred usage uses top-level module authoring helpers plus namespaces for specialized APIs:
+- `lib.createStore(...)`
+- `lib.standaloneHost(...)`
+- `lib.isModuleEnabled(...)`
+- `lib.isModuleCoordinated(...)`
+- `lib.resetStorageToDefaults(...)`
+- `lib.hashing.*`
 - `lib.mutation.*`
-- `lib.host.*`
-- `lib.coordinator.*`
+- `lib.lifecycle.*`
 - `lib.logging.*`
 - `lib.widgets.*`
 - `lib.nav.*`
 
-Old flat `lib.*` names should be treated as obsolete compatibility only.
-
-The one top-level non-namespaced export that still matters is:
-- `lib.config`
+The top-level `lib.config` export also exposes Lib's Chalk config.
 
 ## Core Model
 
@@ -31,8 +31,8 @@ Modules now declare:
   - `revert`
 
 Modules render UI directly:
-- `public.DrawTab(ui, uiState)`
-- optional `public.DrawQuickContent(ui, uiState)`
+- `public.DrawTab(ui, session)`
+- optional `public.DrawQuickContent(ui, session)`
 
 There is no supported new authoring based on:
 - `definition.ui`
@@ -48,9 +48,9 @@ Live Lib config loaded from Chalk.
 Current meaningful field:
 - `lib.config.DebugMode`
 
-## `lib.store`
+## Store And Session
 
-### `lib.store.create(config, definition, dataDefaults?)`
+### `lib.createStore(config, definition, dataDefaults?)`
 
 Creates the managed store facade around persisted module config.
 
@@ -58,76 +58,80 @@ What it does:
 - warns on malformed top-level definition fields
 - seeds missing storage defaults from `dataDefaults`
 - validates and prepares `definition.storage`
-- creates `store.uiState`
-- exposes persisted read/write helpers
+- returns a separate `session` for staged UI state
+- exposes persisted read helpers
 
 Typical use:
 
 ```lua
-public.store = lib.store.create(config, public.definition, dataDefaults)
+public.store, public.session = lib.createStore(config, public.definition, dataDefaults)
 store = public.store
 ```
 
 Returned surface:
 - `store.read(keyOrAlias)`
-- `store.write(keyOrAlias, value)`
-- `store.readBits(configKey, offset, width)`
-- `store.writeBits(configKey, offset, width, value)`
-- `store.getPackedAliases(alias)`
-- `store.storage`
-- `store.uiState`
+
+Store instances do not expose write helpers directly. Persisted writes happen through semantic helpers or session flushes:
+
+```lua
+lib.lifecycle.setEnabled(def, store, enabled)
+lib.lifecycle.setDebugMode(store, enabled)
+```
+
+Use `setEnabled` for module enabled toggles. It persists the `Enabled` flag and applies/reverts mutation state as needed. Use `setDebugMode` for module debug toggles. Use `session.write(...)` plus `session.flushToConfig()` for arbitrary storage value changes such as profile/hash import. Do not use store helpers for ordinary draw-code edits.
 
 Rules:
-- widgets and draw code should usually read staged values from `store.uiState.view`
+- widgets and draw code should usually read staged values from `session.view`
 - runtime/gameplay code should read persisted values through `store.read(...)`
+- enabled toggles should write through `lib.lifecycle.setEnabled(def, store, enabled)`
+- debug toggles should write through `lib.lifecycle.setDebugMode(store, enabled)`
+- profile/hash plumbing should stage values through `session.write(...)` and flush them through `session.flushToConfig()`
 - transient aliases are not readable through `store.read(...)`
-- transient aliases are not writable through `store.write(...)`
-- both cases warn and should be treated as draw/UI-state mistakes
+- transient aliases are not persisted by `session.flushToConfig()`
 
-### `store.uiState`
+### `session`
 
 Managed staged UI state for the module.
 
 Useful surface:
-- `uiState.view`
-- `uiState.get(alias)`
-- `uiState.set(alias, value)`
-- `uiState.update(alias, fn)`
-- `uiState.toggle(alias)`
-- `uiState.reset(alias)`
-- `uiState.isDirty()`
-- `uiState.flushToConfig()`
-- `uiState.reloadFromConfig()`
-- `uiState.collectConfigMismatches()`
-- `uiState.getAliasNode(alias)`
+- `session.view`
+- `session.read(alias)`
+- `session.write(alias, value)`
+- `session.reset(alias)`
+- `session.isDirty()`
+- `session.flushToConfig()`
+- `session.auditMismatches()`
 
 Behavior:
-- persisted aliases stage in `uiState` and only hit config on flush/commit
-- transient aliases live only in `uiState`
+- persisted aliases stage in `session` and only hit config on flush/commit
+- transient aliases live only in `session`
 - packed child aliases re-encode their owning packed root automatically
 
-`uiState.get(alias)` returns:
+`session.read(alias)` returns:
 - current staged value
-- alias node metadata
 
-## `lib.storage`
+## Reset Helpers
 
-### `lib.storage.validate(storage, label)`
+### `lib.resetStorageToDefaults(storage, session, opts?)`
 
-Validates and prepares a storage declaration table in place.
+Resets changed persistent storage roots back to their defaults in the staged `session`.
 
-Validation covers:
-- alias uniqueness
-- persistent root key uniqueness
-- packed bit overlap
-- lifetime rules
-- storage-type-specific validation
+Returns:
+- `changed`
+- `count`
 
-### `lib.storage.getRoots(storage)`
+Options:
+- `exclude = { Alias = true }` skips specific root aliases.
 
-Returns prepared persisted root nodes.
+## `lib.hashing`
 
-### `lib.storage.getAliases(storage)`
+Hash/profile serialization and packed-bit helpers.
+
+### `lib.hashing.getRoots(storage)`
+
+Returns prepared persisted root nodes for hash/profile serialization.
+
+### `lib.hashing.getAliases(storage)`
 
 Returns the prepared alias map.
 
@@ -136,43 +140,31 @@ Includes:
 - transient root aliases
 - packed child aliases
 
-### `lib.storage.getPackWidth(node)`
+### `lib.hashing.valuesEqual(node, a, b)`
+
+Storage-aware equality helper for comparing persisted/hash values.
+
+### `lib.hashing.getPackWidth(node)`
 
 Returns the derived pack width for a node type that supports packing.
 
-### `lib.storage.valuesEqual(node, a, b)`
-
-Storage-aware equality helper.
-
-### `lib.storage.toHash(node, value)`
+### `lib.hashing.toHash(node, value)`
 
 Encodes one storage value for hash/profile serialization.
 
-### `lib.storage.fromHash(node, str)`
+### `lib.hashing.fromHash(node, str)`
 
 Decodes one storage value from hash/profile serialization.
 
-### `lib.storage.readPackedBits(packed, offset, width)`
+### `lib.hashing.readPackedBits(packed, offset, width)`
 
 Raw numeric bit extraction helper.
 
-### `lib.storage.writePackedBits(packed, offset, width, value)`
+### `lib.hashing.writePackedBits(packed, offset, width, value)`
 
 Raw numeric bit write helper.
 
 ## `lib.mutation`
-
-### `lib.mutation.inferShape(def)`
-
-Infers the mutation lifecycle shape:
-- `patch`
-- `manual`
-- `hybrid`
-- or `nil`
-
-### `lib.mutation.mutatesRunData(def)`
-
-Returns whether `def.affectsRunData == true`.
 
 ### `lib.mutation.createBackup()`
 
@@ -195,47 +187,69 @@ Creates a reversible mutation plan with:
 - `plan:apply()`
 - `plan:revert()`
 
-### `lib.mutation.apply(def, store)`
 
-Applies the module’s mutation lifecycle.
+## `lib.lifecycle`
 
-### `lib.mutation.revert(def, store)`
+Framework/host-facing helpers for module lifecycle orchestration, built-in module controls, and staged session commits.
 
-Reverts the module’s mutation lifecycle.
+### `lib.lifecycle.inferMutation(def)`
 
-### `lib.mutation.reapply(def, store)`
+Infers the mutation lifecycle shape:
+- `patch`
+- `manual`
+- `hybrid`
+- or `nil`
 
-Reverts and reapplies the module’s mutation lifecycle.
+### `lib.lifecycle.registerCoordinator(packId, config)`
 
-### `lib.mutation.setEnabled(def, store, enabled)`
+Registers coordinator config for a pack. Framework uses this during coordinator initialization.
+
+### `lib.lifecycle.setEnabled(def, store, enabled)`
 
 Transitions persisted enabled state and applies/reverts mutation state as needed.
 
-## `lib.host`
+### `lib.lifecycle.setDebugMode(store, enabled)`
 
-### `lib.host.runDerivedText(uiState, entries, cache?)`
+Writes the persisted debug-mode flag for a module store.
 
-Recomputes derived transient text aliases from staged UI state.
+### `lib.lifecycle.mutatesRunData(def)`
 
-Use this only when it actually helps readability.
-Most current module UI should compute strings directly at draw time.
+Returns whether the module definition opts into live run-data mutation behavior.
 
-### `lib.host.auditAndResyncState(name, uiState)`
+### `lib.lifecycle.applyMutation(def, store)`
+
+Applies the module's mutation lifecycle.
+
+### `lib.lifecycle.revertMutation(def, store)`
+
+Reverts the module's mutation lifecycle.
+
+### `lib.lifecycle.reapplyMutation(def, store)`
+
+Reverts and reapplies the module's mutation lifecycle.
+
+### `lib.lifecycle.applyOnLoad(def, store)`
+
+Syncs live mutation state to the module's effective enabled state on load. Framework calls this for coordinated modules; `lib.standaloneHost(...)` calls it for standalone modules.
+
+### `lib.lifecycle.resyncSession(def, store, session)`
 
 Audits staged state against persisted config, logs drift, then reloads staged values from config.
 
-### `lib.host.commitState(def, store, uiState)`
+### `lib.lifecycle.commitSession(def, store, session)`
 
-Transactional commit helper for staged `uiState`.
+Transactional commit helper for staged `session`.
 
 Behavior:
 - flushes staged persisted values to config
 - if the module is enabled and `affectsRunData`, reapplies mutation state
-- on failure, restores the previous config snapshot and reloads `uiState`
+- on failure, restores the previous config snapshot and reloads `session`
 
-### `lib.host.standaloneUI(def, store, uiState?, opts?)`
+## Standalone Host
 
-Creates a standalone window/menu-bar runtime for a module.
+### `lib.standaloneHost(def, store, session, opts?)`
+
+Initializes standalone module hosting and returns window/menu-bar renderers.
 
 Useful when the module is not framework-hosted.
 
@@ -244,30 +258,27 @@ Returned surface:
 - `runtime.addMenuBar()`
 
 Behavior:
+- applies on-load lifecycle state for non-coordinated modules
 - suppresses the standalone window/menu when the module is coordinated
 - renders built-in controls for:
   - `Enabled`
   - `Debug Mode`
-  - `Audit + Resync UI State`
+  - `Resync Session`
 - then calls the configured `DrawTab`
-- commits dirty `uiState` through `lib.host.commitState(...)`
+- commits dirty `session` through `lib.lifecycle.commitSession(...)`
 
 Current optional hooks in `opts`:
 - `getDrawTab`
 - `drawTab`
 - `windowTitle`
 
-## `lib.coordinator`
+## Module Coordination Queries
 
-### `lib.coordinator.register(packId, config)`
-
-Registers coordinator config for a pack.
-
-### `lib.coordinator.isCoordinated(packId)`
+### `lib.isModuleCoordinated(packId)`
 
 Returns whether a pack id is registered.
 
-### `lib.coordinator.isEnabled(store, packId?)`
+### `lib.isModuleEnabled(store, packId?)`
 
 Returns whether a module should currently be treated as enabled, taking pack-level coordination into account when present.
 
@@ -294,17 +305,17 @@ Current built-ins:
 - `lib.widgets.text(imgui, text, opts?)`
 - `lib.widgets.button(imgui, label, opts?)`
 - `lib.widgets.confirmButton(imgui, id, label, opts?)`
-- `lib.widgets.inputText(imgui, uiState, alias, opts?)`
-- `lib.widgets.dropdown(imgui, uiState, alias, opts?)`
-- `lib.widgets.mappedDropdown(imgui, uiState, alias, opts?)`
-- `lib.widgets.packedDropdown(imgui, uiState, alias, store, opts?)`
-- `lib.widgets.radio(imgui, uiState, alias, opts?)`
-- `lib.widgets.mappedRadio(imgui, uiState, alias, opts?)`
-- `lib.widgets.packedRadio(imgui, uiState, alias, store, opts?)`
-- `lib.widgets.stepper(imgui, uiState, alias, opts?)`
-- `lib.widgets.steppedRange(imgui, uiState, minAlias, maxAlias, opts?)`
-- `lib.widgets.checkbox(imgui, uiState, alias, opts?)`
-- `lib.widgets.packedCheckboxList(imgui, uiState, alias, store, opts?)`
+- `lib.widgets.inputText(imgui, session, alias, opts?)`
+- `lib.widgets.dropdown(imgui, session, alias, opts?)`
+- `lib.widgets.mappedDropdown(imgui, session, alias, opts?)`
+- `lib.widgets.packedDropdown(imgui, session, alias, store, opts?)`
+- `lib.widgets.radio(imgui, session, alias, opts?)`
+- `lib.widgets.mappedRadio(imgui, session, alias, opts?)`
+- `lib.widgets.packedRadio(imgui, session, alias, store, opts?)`
+- `lib.widgets.stepper(imgui, session, alias, opts?)`
+- `lib.widgets.steppedRange(imgui, session, minAlias, maxAlias, opts?)`
+- `lib.widgets.checkbox(imgui, session, alias, opts?)`
+- `lib.widgets.packedCheckboxList(imgui, session, alias, store, opts?)`
 
 These are direct immediate-mode helpers, not declarative node renderers.
 
@@ -330,11 +341,18 @@ Each tab entry may include:
 Returns:
 - next `activeKey`
 
-### `lib.nav.isVisible(uiState, condition)`
+### `lib.nav.isVisible(session, condition)`
 
-Evaluates a `visibleIf`-style condition against `uiState.view`.
+Evaluates a `visibleIf`-style condition against `session.view`.
 
 Supported forms:
 - `"AliasName"`
 - `{ alias = "AliasName", value = ... }`
 - `{ alias = "AliasName", anyOf = { ... } }`
+
+
+
+
+
+
+

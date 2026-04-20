@@ -50,11 +50,7 @@ function nav.verticalTabs(imgui, opts)
             if currentGroup ~= nil then
                 imgui.Separator()
             end
-            if type(imgui.TextDisabled) == "function" then
-                imgui.TextDisabled(group)
-            else
-                imgui.Text(group)
-            end
+            imgui.TextDisabled(group)
             imgui.Separator()
             currentGroup = group
         end
@@ -75,16 +71,15 @@ function nav.verticalTabs(imgui, opts)
     return activeKey
 end
 
----@param uiState UiState|nil
+---@param session Session|nil
 ---@param condition string|VisibilityCondition|nil
 ---@return boolean
-function nav.isVisible(uiState, condition)
+function nav.isVisible(session, condition)
     if condition == nil then
         return true
     end
-    local view = uiState and uiState.view or nil
     if type(condition) == "string" then
-        return view and view[condition] == true or false
+        return session and session.read(condition) == true or false
     end
     if type(condition) ~= "table" then
         return true
@@ -95,7 +90,7 @@ function nav.isVisible(uiState, condition)
         return false
     end
 
-    local value = view and view[alias]
+    local value = session and session.read(alias) or nil
     if condition.value ~= nil then
         return value == condition.value
     end

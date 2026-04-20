@@ -4,9 +4,9 @@ This guide describes the current supported module contract in Lib.
 
 It is written for the live surface:
 - namespaced public API
-- managed storage and `uiState`
+- managed storage and explicit `session`
 - immediate-mode widgets
-- direct `DrawTab(ui, uiState)` authoring
+- direct `DrawTab(ui, session)` authoring
 
 It does not document the old declarative `definition.ui` model.
 
@@ -14,18 +14,18 @@ It does not document the old declarative `definition.ui` model.
 
 New module code should use:
 - `lib.config`
-- `lib.store.create(...)`
-- `lib.storage.*`
+- `lib.createStore(...)`
+- `lib.standaloneHost(...)`
+- `lib.isModuleEnabled(...)`
+- `lib.isModuleCoordinated(...)`
+- `lib.resetStorageToDefaults(...)`
+- `lib.hashing.*`
 - `lib.mutation.*`
-- `lib.host.*`
-- `lib.coordinator.*`
+- `lib.lifecycle.*`
 - `lib.widgets.*`
 - `lib.nav.*`
 
-Flat `lib.*` aliases should not be used for new code.
-
-The only top-level non-namespaced export that still matters is:
-- `lib.config`
+Old flat compatibility aliases should not be used for new code.
 
 ## Basic Module Shape
 
@@ -48,23 +48,24 @@ public.definition = {
     },
 }
 
-public.store = lib.store.create(config, public.definition, dataDefaults)
+public.store, public.session = lib.createStore(config, public.definition, dataDefaults)
 store = public.store
+session = public.session
 
-function internal.DrawTab(ui, uiState)
-    lib.widgets.checkbox(ui, uiState, "EnabledFlag", {
+function internal.DrawTab(ui, session)
+    lib.widgets.checkbox(ui, session, "EnabledFlag", {
         label = "Enabled",
     })
 
-    lib.widgets.dropdown(ui, uiState, "Mode", {
+    lib.widgets.dropdown(ui, session, "Mode", {
         label = "Mode",
         values = { "Vanilla", "Chaos" },
         controlWidth = 180,
     })
 end
 
-function internal.DrawQuickContent(ui, uiState)
-    lib.widgets.dropdown(ui, uiState, "Mode", {
+function internal.DrawQuickContent(ui, session)
+    lib.widgets.dropdown(ui, session, "Mode", {
         label = "Mode",
         values = { "Vanilla", "Chaos" },
         controlWidth = 140,
@@ -117,23 +118,31 @@ Under the current framework contract:
 ## Store and State Rules
 
 After store creation:
-- use `store.read(alias)` and `store.write(alias, value)` for persisted runtime state
-- use `store.uiState` for staged UI state
+- use `store.read(alias)` for persisted runtime state
+- use the explicit `session` return for staged UI state
 - keep raw Chalk config local to `main.lua`
 
 Draw code should usually read from:
-- `uiState.view`
+- `session.view`
 
 Runtime/gameplay code should usually read from:
 - `store.read(...)`
 
-Do not write schema-backed persisted values directly from draw code through raw config.
+Lifecycle/framework plumbing can persist built-in host state through:
+- `lib.lifecycle.setEnabled(def, store, enabled)`
+- `lib.lifecycle.setDebugMode(store, enabled)`
+
+Hash/profile plumbing should stage arbitrary decoded aliases through:
+- `session.write(alias, value)`
+- `session.flushToConfig()`
+
+Do not write schema-backed persisted values directly from draw code through raw config or `lib.lifecycle.*` helpers.
 
 Also avoid:
 - `store.read(...)` for transient aliases
-- `store.write(...)` for transient aliases
+- direct persisted writes from draw code
 
-Use `uiState` for those instead.
+Use `session` for those instead.
 
 ## Storage Authoring
 
@@ -199,7 +208,7 @@ Lib widgets are helpers, not a full layout runtime.
 
 Framework Quick Setup now reads only:
 - coordinator `renderQuickSetup(ctx)`
-- module `DrawQuickContent(ui, uiState)`
+- module `DrawQuickContent(ui, session)`
 
 There is no quick-node discovery from `definition.ui`.
 Standalone host does not consume `DrawQuickContent`.
@@ -223,16 +232,17 @@ end
 ```
 
 Lib helpers:
-- `lib.mutation.apply(def, store)`
-- `lib.mutation.revert(def, store)`
-- `lib.mutation.reapply(def, store)`
-- `lib.mutation.setEnabled(def, store, enabled)`
+- `lib.lifecycle.setEnabled(def, store, enabled)`
+- `lib.lifecycle.applyMutation(def, store)`
+- `lib.lifecycle.revertMutation(def, store)`
+- `lib.lifecycle.reapplyMutation(def, store)`
 
 ## Coordinated Modules
 
 Framework-hosted modules should export:
 - `public.definition`
 - `public.store`
+- `public.session`
 - `public.DrawTab`
 - optional `public.DrawQuickContent`
 
@@ -242,6 +252,7 @@ Framework discovery requires:
 - `definition.name`
 - `definition.storage`
 - public `store`
+- public `session`
 - public `DrawTab`
 
 Framework behavior:
@@ -254,10 +265,10 @@ Framework behavior:
 For non-framework hosting, use:
 
 ```lua
-local runtime = lib.host.standaloneUI(
+local runtime = lib.standaloneHost(
     public.definition,
     public.store,
-    public.store.uiState,
+    public.session,
     {
         getDrawTab = function() return public.DrawTab end,
     }
@@ -268,11 +279,12 @@ rom.gui.add_to_menu_bar(runtime.addMenuBar)
 ```
 
 Notes:
-- `lib.host.standaloneUI(...)` suppresses its window/menu when the module is coordinated
+- `lib.standaloneHost(...)` suppresses its window/menu when the module is coordinated
+- `lib.standaloneHost(...)` applies startup lifecycle state for non-coordinated modules
 - the standalone window includes built-in:
   - `Enabled`
   - `Debug Mode`
-  - `Audit + Resync UI State`
+  - `Resync Session`
 - the host only calls `DrawTab`; it does not use `DrawQuickContent`
 
 ## Complete Example
@@ -330,35 +342,37 @@ public.definition = {
 }
 
 public.store = nil
+public.session = nil
 store = nil
+session = nil
 internal.standaloneUi = nil
 
-function internal.DrawTab(ui, uiState)
-    lib.widgets.checkbox(ui, uiState, "FeatureEnabled", {
+function internal.DrawTab(ui, session)
+    lib.widgets.checkbox(ui, session, "FeatureEnabled", {
         label = "Enable Feature",
         tooltip = "Turns the feature logic on for this module.",
     })
 
-    lib.widgets.dropdown(ui, uiState, "Mode", {
+    lib.widgets.dropdown(ui, session, "Mode", {
         label = "Mode",
         values = { "Vanilla", "Chaos", "Custom" },
         controlWidth = 180,
     })
 
-    lib.widgets.inputText(ui, uiState, "FilterText", {
+    lib.widgets.inputText(ui, session, "FilterText", {
         label = "Filter",
         controlWidth = 180,
     })
 
     ui.Separator()
     lib.widgets.text(ui, "Packed Flags")
-    lib.widgets.packedCheckboxList(ui, uiState, "PackedFlags", store, {
+    lib.widgets.packedCheckboxList(ui, session, "PackedFlags", store, {
         optionsPerLine = 2,
     })
 end
 
-function internal.DrawQuickContent(ui, uiState)
-    lib.widgets.dropdown(ui, uiState, "Mode", {
+function internal.DrawQuickContent(ui, session)
+    lib.widgets.dropdown(ui, session, "Mode", {
         label = "Mode",
         values = { "Vanilla", "Chaos", "Custom" },
         controlWidth = 140,
@@ -373,14 +387,16 @@ end
 local function init()
     import_as_fallback(rom.game)
 
-    public.store = lib.store.create(config, public.definition, dataDefaults)
+    public.store, public.session = lib.createStore(config, public.definition, dataDefaults)
     store = public.store
+    session = public.session
+    internal.session = public.session
     registerHooks()
 
-    internal.standaloneUi = lib.host.standaloneUI(
+    internal.standaloneUi = lib.standaloneHost(
         public.definition,
         store,
-        store.uiState,
+        internal.session,
         {
             getDrawTab = function()
                 return public.DrawTab
@@ -414,3 +430,8 @@ Notes on the example:
 - `DrawTab` uses raw ImGui for structure and `lib.widgets.*` for controls
 - `DrawQuickContent` is optional
 - packed widgets need the module `store`
+
+
+
+
+

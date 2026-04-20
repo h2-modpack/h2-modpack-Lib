@@ -11,7 +11,7 @@ function TestDefinitionContract:tearDown()
 end
 
 function TestDefinitionContract:testCreateStoreWarnsOnUnknownTopLevelDefinitionKey()
-    lib.store.create({}, {
+    lib.createStore({}, {
         id = "Example",
         name = "Example",
         storage = {
@@ -28,7 +28,7 @@ function TestDefinitionContract:testCreateStoreWarnsOnUnknownTopLevelDefinitionK
 end
 
 function TestDefinitionContract:testValidateDefinitionWarnsOnOldVocabularyKeysAsUnknown()
-    lib.store.create({}, {
+    lib.createStore({}, {
         modpack = "test-pack",
         id = "ExampleSpecial",
         name = "Example Special",
@@ -48,7 +48,7 @@ function TestDefinitionContract:testValidateDefinitionWarnsOnOldVocabularyKeysAs
 end
 
 function TestDefinitionContract:testValidateDefinitionWarnsOnIncompleteLifecycle()
-    lib.store.create({}, {
+    lib.createStore({}, {
         id = "Example",
         name = "Example",
         affectsRunData = true,
@@ -59,3 +59,4 @@ function TestDefinitionContract:testValidateDefinitionWarnsOnIncompleteLifecycle
     lu.assertStrContains(Warnings[1], "manual lifecycle requires both definition.apply and definition.revert")
     lu.assertStrContains(Warnings[2], "affectsRunData=true")
 end
+

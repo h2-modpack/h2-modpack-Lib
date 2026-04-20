@@ -1,184 +1,154 @@
 local internal = AdamantModpackLib_Internal
 local _coordinators = internal.coordinators
-public.host = public.host or {}
-local host = public.host
-
----@class DerivedTextEntry
----@field alias string
----@field compute fun(uiState: UiState): string|number|boolean|nil
----@field signature fun(uiState: UiState): any|nil
-
----@class DerivedTextCacheEntry
----@field signature any
----@field value string
 
 ---@class StandaloneOpts
 ---@field windowTitle string|nil
----@field drawTab fun(imgui: table, uiState: UiState|nil)|nil
----@field getDrawTab fun(): fun(imgui: table, uiState: UiState|nil)|nil|nil
 
 ---@class StandaloneRuntime
 ---@field renderWindow fun()
 ---@field addMenuBar fun()
 
---- Recomputes derived text aliases for a UI state and optionally caches computed signatures and values.
----@param uiState UiState UI state used to read view data and write derived aliases.
----@param entries DerivedTextEntry[] Ordered list of derived-text descriptors with `alias`, `compute`, and optional `signature`.
----@param cache table<string, DerivedTextCacheEntry>|nil Optional cache table keyed by alias.
----@return boolean changed True when any derived alias value changed.
-function host.runDerivedText(uiState, entries, cache)
-    if not uiState or type(uiState.set) ~= "function" or type(uiState.view) ~= "table" then
-        if internal.logging and internal.logging.warnIf then
-            internal.logging.warnIf("runDerivedText: uiState is missing or malformed; pass skipped")
-        end
-        return false
-    end
-    if type(entries) ~= "table" then
-        return false
-    end
+---@class ModuleHostOpts
+---@field definition ModuleDefinition
+---@field store ManagedStore
+---@field session Session
+---@field drawTab fun(imgui: table, session: Session)|nil
+---@field drawQuickContent fun(imgui: table, session: Session)|nil
 
-    local changed = false
-    local derivedCache = type(cache) == "table" and cache or nil
+--- Creates a behavior-only host object for Framework and standalone hosting.
+--- The host closes over store/session without exposing those state handles publicly.
+---@param opts ModuleHostOpts
+---@return table host Module host behavior contract.
+function public.createModuleHost(opts)
+    assert(type(opts) == "table", "createModuleHost: opts must be a table")
+    local def = opts.definition
+    local store = opts.store
+    local session = opts.session
+    assert(type(def) == "table", "createModuleHost: definition is required")
+    assert(store and type(store.read) == "function", "createModuleHost: store is required")
+    assert(session and type(session.isDirty) == "function" and type(session.write) == "function",
+        "createModuleHost: session is required")
 
-    for index, entry in ipairs(entries) do
-        local alias = type(entry) == "table" and entry.alias or nil
-        local compute = type(entry) == "table" and entry.compute or nil
-        if type(alias) ~= "string" or alias == "" then
-            if internal.logging and internal.logging.warnIf then
-                internal.logging.warnIf("runDerivedText: entries[%d].alias must be a non-empty string", index)
-            end
-        elseif type(compute) ~= "function" then
-            if internal.logging and internal.logging.warnIf then
-                internal.logging.warnIf("runDerivedText: entries[%d].compute must be a function", index)
-            end
-        else
-            local cached = derivedCache and derivedCache[alias] or nil
-            local currentValue = uiState.view[alias]
-            local signatureFn = entry.signature
-            local signature = nil
-            local useCachedValue = false
+    local drawTab = opts.drawTab
+    local drawQuickContent = opts.drawQuickContent
 
-            if type(signatureFn) == "function" then
-                signature = signatureFn(uiState)
-                if cached and cached.signature == signature then
-                    useCachedValue = true
-                end
-            end
-
-            local nextValue
-            if useCachedValue then
-                nextValue = cached.value
-            else
-                nextValue = tostring(compute(uiState) or "")
-            end
-
-            if currentValue ~= nextValue then
-                uiState.set(alias, nextValue)
-                changed = true
-            end
-
-            if derivedCache then
-                derivedCache[alias] = {
-                    signature = signature,
-                    value = nextValue,
-                }
-            end
+    local function onStateFlushed()
+        if public.lifecycle.mutatesRunData(def) and store.read("Enabled") == true then
+            rom.game.SetupRunData()
         end
     end
 
-    return changed
-end
+    local host = {}
 
---- Audits staged UI state against persisted config values and reloads staged values from config.
----@param name string Label used when printing mismatch diagnostics.
----@param uiState UiState UI state exposing config mismatch and reload helpers.
----@return table mismatches List of alias names whose staged values drifted from persisted config.
-function host.auditAndResyncState(name, uiState)
-    if not uiState or type(uiState.collectConfigMismatches) ~= "function" or type(uiState.reloadFromConfig) ~= "function" then
-        return {}
+    function host.getDefinition()
+        return def
     end
 
-    local mismatches = uiState.collectConfigMismatches()
-    if #mismatches > 0 then
-        print("[" .. tostring(name) .. "] UI state drift detected; reloading staged values for: " .. table.concat(mismatches, ", "))
-    end
-    uiState.reloadFromConfig()
-    return mismatches
-end
-
---- Commits staged UI state back to config and reapplies live mutations when required.
----@param def ModuleDefinition Module definition declaring mutation behavior.
----@param store ManagedStore Managed module store associated with the definition.
----@param uiState UiState UI state exposing transactional flush and reload helpers.
----@return boolean ok True when the commit completed successfully.
----@return string|nil err Error message when the commit or rollback path fails.
-function host.commitState(def, store, uiState)
-    if not uiState or type(uiState.isDirty) ~= "function" or type(uiState.flushToConfig) ~= "function"
-        or type(uiState.reloadFromConfig) ~= "function"
-        or type(uiState._captureDirtyConfigSnapshot) ~= "function"
-        or type(uiState._restoreConfigSnapshot) ~= "function" then
-        return false, "uiState is missing transactional commit helpers"
+    function host.read(aliasOrKey)
+        return store.read(aliasOrKey)
     end
 
-    if not uiState.isDirty() then
-        return true, nil
+    function host.writeAndFlush(aliasOrKey, value)
+        session.write(aliasOrKey, value)
+        session.flushToConfig()
+        return true
     end
 
-    local snapshot = uiState._captureDirtyConfigSnapshot()
-    uiState.flushToConfig()
-
-    local shouldReapply = public.mutation.mutatesRunData(def)
-        and store
-        and type(store.read) == "function"
-        and store.read("Enabled") == true
-
-    if not shouldReapply then
-        return true, nil
+    function host.stage(aliasOrKey, value)
+        session.write(aliasOrKey, value)
+        return true
     end
 
-    local ok, err = public.mutation.reapply(def, store)
-    if ok then
-        return true, nil
+    function host.flush()
+        session.flushToConfig()
+        return true
     end
 
-    uiState._restoreConfigSnapshot(snapshot)
-    uiState.reloadFromConfig()
+    function host.reloadFromConfig()
+        session._reloadFromConfig()
+    end
 
-    local rollbackOk, rollbackErr = public.mutation.reapply(def, store)
-    if not rollbackOk then
-        if internal.logging and internal.logging.warn then
-            internal.logging.warn("%s: uiState rollback reapply failed: %s",
-                tostring(def.name or def.id or "module"),
-                tostring(rollbackErr))
+    function host.resync()
+        return public.lifecycle.resyncSession(def, store, session)
+    end
+
+    function host.commitIfDirty()
+        if not session.isDirty() then
+            return true, nil
         end
-        return false, tostring(err) .. " (rollback reapply failed: " .. tostring(rollbackErr) .. ")"
+        local ok, err = public.lifecycle.commitSession(def, store, session)
+        if ok then
+            onStateFlushed()
+        end
+        return ok, err
     end
 
-    return false, err
+    function host.isEnabled()
+        return public.isModuleEnabled(store, def.modpack)
+    end
+
+    function host.setEnabled(enabled)
+        return public.lifecycle.setEnabled(def, store, enabled)
+    end
+
+    function host.setDebugMode(enabled)
+        return public.lifecycle.setDebugMode(store, enabled)
+    end
+
+    function host.applyOnLoad()
+        return public.lifecycle.applyOnLoad(def, store)
+    end
+
+    function host.applyMutation()
+        return public.lifecycle.applyMutation(def, store)
+    end
+
+    function host.revertMutation()
+        return public.lifecycle.revertMutation(def, store)
+    end
+
+    function host.hasDrawTab()
+        return type(drawTab) == "function"
+    end
+
+    function host.drawTab(imgui)
+        if type(drawTab) == "function" then
+            return drawTab(imgui, session)
+        end
+    end
+
+    function host.hasQuickContent()
+        return type(drawQuickContent) == "function"
+    end
+
+    function host.drawQuickContent(imgui)
+        if type(drawQuickContent) == "function" then
+            return drawQuickContent(imgui, session)
+        end
+    end
+
+    return host
 end
 
---- Creates standalone window and menu-bar renderers for a module.
----@param def ModuleDefinition Module definition declaring UI and mutation behavior.
----@param store ManagedStore Managed module store associated with the definition.
----@param uiState UiState|nil Optional UI state override; defaults to `store.uiState`.
+--- Initializes standalone module hosting and returns window/menu-bar renderers.
+---@param moduleHost table Behavior host returned by `lib.createModuleHost`.
 ---@param opts StandaloneOpts|nil Optional standalone rendering hooks and window settings.
 ---@return StandaloneRuntime runtime Standalone runtime with `renderWindow` and `addMenuBar` callbacks.
-function host.standaloneUI(def, store, uiState, opts)
+function public.standaloneHost(moduleHost, opts)
+    assert(type(moduleHost) == "table", "standaloneHost: moduleHost is required")
+
     opts = opts or {}
-    uiState = uiState or (store and store.uiState) or nil
+    local def = opts.definition or moduleHost.getDefinition()
+    assert(type(def) == "table", "standaloneHost: moduleHost definition is required")
     local DEFAULT_WINDOW_WIDTH = 960
     local DEFAULT_WINDOW_HEIGHT = 720
 
-    local function getDrawTab()
-        if type(opts.getDrawTab) == "function" then
-            return opts.getDrawTab()
-        end
-        return opts.drawTab
-    end
-
-    local function onStateFlushed()
-        if public.mutation.mutatesRunData(def) and store.read("Enabled") == true then
-            rom.game.SetupRunData()
+    if not (def.modpack and _coordinators[def.modpack]) then
+        local ok, err = moduleHost.applyOnLoad()
+        if not ok then
+            internal.logging.warn("%s startup lifecycle failed: %s",
+                tostring(def.name or def.id or "module"),
+                tostring(err))
         end
     end
 
@@ -201,44 +171,36 @@ function host.standaloneUI(def, store, uiState, opts)
         local title = (opts.windowTitle or def.name) .. "###" .. tostring(def.id)
         seedWindowSize(imgui)
         if imgui.Begin(title) then
-            local enabled = store.read("Enabled") == true
+            local enabled = moduleHost.read("Enabled") == true
             local enabledValue, enabledChanged = imgui.Checkbox("Enabled", enabled)
             if enabledChanged then
-                local ok, err = public.mutation.setEnabled(def, store, enabledValue)
+                local ok, err = moduleHost.setEnabled(enabledValue)
                 if ok then
-                    if public.mutation.mutatesRunData(def) then
+                    if public.lifecycle.mutatesRunData(def) then
                         rom.game.SetupRunData()
                     end
                 else
-                    if internal.logging and internal.logging.warn then
-                        internal.logging.warn("%s %s failed: %s",
-                            tostring(def.name or def.id or "module"),
-                            enabledValue and "enable" or "disable",
-                            tostring(err))
-                    end
+                    internal.logging.warn("%s %s failed: %s",
+                        tostring(def.name or def.id or "module"),
+                        enabledValue and "enable" or "disable",
+                        tostring(err))
                 end
             end
 
-            local debugValue, debugChanged = imgui.Checkbox("Debug Mode", store.read("DebugMode") == true)
+            local debugValue, debugChanged = imgui.Checkbox("Debug Mode", moduleHost.read("DebugMode") == true)
             if debugChanged then
-                store.write("DebugMode", debugValue)
+                moduleHost.setDebugMode(debugValue)
             end
 
-            if uiState and imgui.Button("Audit + Resync UI State") then
-                host.auditAndResyncState(def.name or def.id or "module", uiState)
+            if imgui.Button("Resync Session") then
+                moduleHost.resync()
             end
 
-            local drawTab = getDrawTab()
-            if drawTab then
+            if moduleHost.hasDrawTab() then
                 imgui.Separator()
                 imgui.Spacing()
-                drawTab(imgui, uiState)
-                if uiState and uiState.isDirty() then
-                    local ok = host.commitState(def, store, uiState)
-                    if ok then
-                        onStateFlushed()
-                    end
-                end
+                moduleHost.drawTab(imgui)
+                moduleHost.commitIfDirty()
             end
 
             imgui.End()
@@ -262,3 +224,4 @@ function host.standaloneUI(def, store, uiState, opts)
         addMenuBar = addMenuBar,
     }
 end
+

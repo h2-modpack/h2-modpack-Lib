@@ -3,16 +3,16 @@
 Reference for writing or auditing module draw code without re-deriving render-path performance analysis from scratch.
 
 This guidance applies to the current lean module contract:
-- `DrawTab(ui, uiState)`
-- optional `DrawQuickContent(ui, uiState)`
+- `DrawTab(ui, session)`
+- optional `DrawQuickContent(ui, session)`
 - `lib.widgets.*`
 - raw ImGui for structure
 
 ## Why Draw Paths Need Care
 
 Current module UI is immediate-mode:
-- `DrawTab(ui, uiState)`
-- optional `DrawQuickContent(ui, uiState)`
+- `DrawTab(ui, session)`
+- optional `DrawQuickContent(ui, session)`
 
 These run every imgui frame.
 Any unnecessary allocation or repeated C-boundary call inside those paths shows up immediately.
@@ -21,11 +21,13 @@ Any unnecessary allocation or repeated C-boundary call inside those paths shows 
 
 This document assumes:
 - raw `config` stays local to `main.lua`
-- `public.store = lib.store.create(config, public.definition, dataDefaults)` is the storage boundary
-- draw code reads staged values from `uiState.view`
+- `public.store, public.session = lib.createStore(config, public.definition, dataDefaults)` is the storage/session boundary
+- draw code reads staged values from `session.view`
 - runtime/gameplay code reads persisted values through `store.read(...)`
-- framework/host own `uiState` commit timing
-- standalone UI goes through `lib.host.standaloneUI(...)`
+- debug toggles write persisted values through `lib.lifecycle.setDebugMode(store, ...)`
+- hash/profile plumbing stages arbitrary values through `session.write(...)` and flushes with `session.flushToConfig()`
+- framework/host own `session` commit timing
+- standalone UI goes through `lib.standaloneHost(...)`
 
 ## Per-Frame Checklist
 
@@ -84,10 +86,10 @@ Do the same for:
 - `GetFrameHeight()`
 - `GetStyle().ItemSpacing.x` if you are already using it repeatedly in one function
 
-### 4. Default to `uiState.view` for reads
+### 4. Default to `session.view` for reads
 
 Use:
-- `uiState.view.SomeAlias`
+- `session.view.SomeAlias`
 
 Prefer this over raw mutable staging values unless you have a concrete reason not to.
 
@@ -97,11 +99,11 @@ Do not hand-roll flush logic inside draw code.
 
 Current ownership:
 - framework-hosted modules commit after `DrawTab` / `DrawQuickContent`
-- standalone modules should go through `lib.host.standaloneUI(...)`
+- standalone modules should go through `lib.standaloneHost(...)`
 
 The module’s job is:
-- render from `uiState`
-- stage edits into `uiState`
+- render from `session`
+- stage edits into `session`
 
 Not:
 - custom flush timing
@@ -141,5 +143,10 @@ Do not rebuild the same large option table multiple times in the same frame.
 - caching abstractions that only survive one frame
 - reintroducing retained/prepared UI layers for simple screens
 - splitting one draw flow into extra lifecycle phases without a real need
-- calling `store.read(...)` repeatedly inside draw code for values already present in `uiState.view`
-- doing config writes directly from draw code instead of staging through `uiState`
+- calling `store.read(...)` repeatedly inside draw code for values already present in `session.view`
+- doing config writes directly from draw code instead of staging through `session`
+- using `lib.lifecycle.setDebugMode(...)` from draw code for normal widget edits
+
+
+
+
