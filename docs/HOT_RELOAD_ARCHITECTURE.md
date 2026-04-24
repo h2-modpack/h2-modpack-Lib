@@ -24,6 +24,34 @@ Important consequences:
 
 The stack relies on that persistence for stable internal registries.
 
+## Persistent Internal Globals
+
+The stack deliberately stores reload-sensitive state on `_G` tables:
+
+- `AdamantModpackLib_Internal`
+- `AdamantModpackFramework_Internal`
+- each module's `RunDirector*_Internal` table
+
+These tables are initialized with `X = X or {}` so they survive a file reload in the same game process.
+
+Safe to rebuild on every module `init`:
+- `definition`
+- `store`
+- `session`
+- `public.host`
+- UI draw closures
+- lookup tables derived from current imports
+
+Expected to persist across reloads:
+- Lib coordinator registrations
+- Lib mutation runtime state
+- Lib hook registries keyed by persistent hook owner tables
+- Framework pack registry and stable GUI callbacks
+- Framework generation counter
+- module-local hook owner tables
+
+Do not replace an entire persistent `*_Internal` table during reload. Mutate fields on the existing table instead. Replacing the table breaks hook ownership, mutation tracking, and any live closures that intentionally point at the persistent owner.
+
 ## Layer Responsibilities
 
 ### Core
@@ -115,6 +143,16 @@ Framework rebuilds the pack when:
 - Framework reloaded and its generation changed
 
 The rebuild path reruns `Framework.init(pack.initParams)` and refreshes discovery, HUD, hash, and UI state from the latest framework surfaces.
+
+The re-entry is intentional. Core registers GUI callbacks once, and those callback closures remain valid across reloads. Before drawing, the callback asks Framework whether the pack object was created by the current Framework generation. If not, Framework calls the latest `rom.mods["adamant-ModpackFramework"].init(...)` using the remembered `initParams`.
+
+The invariant is:
+- stable callbacks survive reloads
+- pack objects are generation-scoped
+- the latest Framework code is always reached through `rom.mods`
+- ordinary coordinated module reloads do not require a pack rebuild
+
+This keeps Core from accumulating duplicate GUI callbacks while still letting Framework code changes rebuild pack-level state.
 
 ## Hook Model
 
