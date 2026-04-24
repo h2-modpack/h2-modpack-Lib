@@ -11,6 +11,7 @@ Preferred usage uses top-level module authoring helpers plus namespaces for spec
 - `lib.resetStorageToDefaults(...)`
 - `lib.hashing.*`
 - `lib.hooks.*`
+- `lib.integrations.*`
 - `lib.mutation.*`
 - `lib.lifecycle.*`
 - `lib.logging.*`
@@ -48,6 +49,50 @@ Live Lib config loaded from Chalk.
 
 Meaningful field:
 - `lib.config.DebugMode`
+
+## `lib.integrations`
+
+Small registry for optional cross-module cooperation. Modules can publish a
+domain-named integration API, and consumers can use it when present while
+remaining fully functional when absent.
+
+Typical provider:
+
+```lua
+lib.integrations.register("run-director.god-availability", public.definition.id, {
+    isActive = function()
+        return lib.isModuleEnabled(store, public.definition.modpack)
+    end,
+    isAvailable = function(godKey)
+        return true
+    end,
+})
+```
+
+Typical consumer:
+
+```lua
+local active = lib.integrations.invoke("run-director.god-availability", "isActive", false)
+if active then
+    return lib.integrations.invoke("run-director.god-availability", "isAvailable", true, godKey) ~= false
+end
+return true
+```
+
+Surface:
+- `lib.integrations.register(id, providerId, api)`
+- `lib.integrations.unregister(id, providerId)`
+- `lib.integrations.unregisterProvider(providerId)`
+- `lib.integrations.invoke(id, methodName, fallback, ...)`
+- `lib.integrations.get(id)`
+- `lib.integrations.list(id)`
+
+Rules:
+- integration ids should describe domain behavior, not consumer names
+- absence means the optional enhancement is inactive
+- provider APIs should be safe to call when their module is disabled
+- consumers should prefer `invoke(...)` so Lib resolves current provider behavior at call time
+- when multiple providers exist, `get(id)` returns the most recently registered provider
 
 ## Store And Session
 
@@ -465,7 +510,5 @@ Supported forms:
 - `"AliasName"`
 - `{ alias = "AliasName", value = ... }`
 - `{ alias = "AliasName", anyOf = { ... } }`
-
-
 
 

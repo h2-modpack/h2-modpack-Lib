@@ -59,6 +59,7 @@ public.host = lib.createModuleHost({
 - `lib.mutation`
 - `lib.hashing`
 - `lib.hooks`
+- `lib.integrations`
 - `lib.widgets`
 - `lib.nav`
 

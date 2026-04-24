@@ -11,6 +11,7 @@ import 'core/host.lua'
 import('core/mutations.lua', nil, mutationPlan)
 import('core/internal/mutations.lua', nil, mutationPlan)
 import 'core/hashing.lua'
+import 'core/integrations.lua'
 import 'core/imgui_helpers.lua'
 import 'core/store.lua'
 import 'core/lifecycle.lua'

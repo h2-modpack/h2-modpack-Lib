@@ -36,6 +36,7 @@ local fallbackHud = import 'core/private/fallback_hud.lua'
 ---@field hashing table
 ---@field imguiHelpers table
 ---@field hooks table
+---@field integrations table
 ---@field widgets table
 ---@field nav table
 
