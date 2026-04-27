@@ -44,7 +44,6 @@ function TestHost:testStandaloneHostWarnsWhenSessionCommitFails()
     }
 
     local moduleHost = lib.createModuleHost({
-        moduleName = "standalone-test-host",
         definition = definition,
         store = store,
         session = session,
@@ -56,7 +55,7 @@ function TestHost:testStandaloneHostWarnsWhenSessionCommitFails()
         return false, "commit boom", false
     end
 
-    local runtime = lib.standaloneHost("standalone-pack", "StandaloneTest")
+    local runtime = lib.standaloneHost()
     runtime.addMenuBar()
     runtime.renderWindow()
 
@@ -64,7 +63,7 @@ function TestHost:testStandaloneHostWarnsWhenSessionCommitFails()
     lu.assertEquals(#Warnings, 1)
     lu.assertStrContains(Warnings[1], "Standalone Test session commit failed")
     lu.assertStrContains(Warnings[1], "commit boom")
-    lu.assertEquals(lib.getLiveModuleHostById("standalone-pack", "StandaloneTest"), moduleHost)
+    lu.assertEquals(lib.getLiveModuleHost(_PLUGIN.guid), moduleHost)
 end
 
 function TestHost:testStandaloneHostCanResolveCurrentModuleHostFromLibRegistry()

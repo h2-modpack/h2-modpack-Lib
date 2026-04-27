@@ -487,7 +487,7 @@ Behavior:
 - when a coordinator is already registered for `definition.modpack`, host creation immediately syncs the module's live mutation state through `host.applyOnLoad()`
 - otherwise startup sync is owned by Framework or standalone hosting
 
-### `lib.standaloneHost(packId?, moduleIdOrOpts?, opts?)`
+### `lib.standaloneHost()`
 
 Initializes standalone module hosting and returns window/menu-bar renderers.
 
@@ -498,8 +498,7 @@ Returned surface:
 - `runtime.addMenuBar()`
 
 Behavior:
-- with `packId, moduleId`, resolves the live host from Lib using author-facing module identity
-- with no identity args, resolves the current module through `_PLUGIN.guid`
+- resolves the current module's live host through `_PLUGIN.guid`
 - applies on-load lifecycle state for non-coordinated modules
 - suppresses the standalone window/menu when the module is coordinated
 - renders built-in controls for:
@@ -508,9 +507,6 @@ Behavior:
   - `Resync Session`
 - then calls `moduleHost.drawTab(...)`
 - commits dirty staged state through `moduleHost.commitIfDirty()`
-
-Optional settings in `opts`:
-- `windowTitle`
 
 ## Module Coordination Queries
 
