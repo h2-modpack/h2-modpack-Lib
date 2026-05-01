@@ -274,6 +274,19 @@ function TestPrepareDefinition:testCreateStoreRejectsRawDefinition()
         end)
 end
 
+function TestPrepareDefinition:testCreateStoreRequiresStorage()
+    local definition = lib.prepareDefinition({}, {
+        id = "NoStorage",
+        name = "No Storage",
+    })
+
+    lu.assertErrorMsgContains(
+        "createStore expects definition.storage to be a table",
+        function()
+            lib.createStore({}, definition)
+        end)
+end
+
 function TestPrepareDefinition:testPrepareDefinitionPreservesHashGroupPlan()
     local owner = {}
     local prepared = lib.prepareDefinition(owner, {

@@ -2,7 +2,6 @@ local internal = AdamantModpackLib_Internal
 internal.storage = internal.storage or {}
 
 local storage = internal.storage
-local libWarn = internal.logging.warnIf
 local StorageTypes = {}
 
 storage.types = StorageTypes
@@ -72,7 +71,7 @@ StorageTypes.bool = {
     valueKind = "bool",
     validate = function(node, prefix)
         if node.default ~= nil and type(node.default) ~= "boolean" then
-            libWarn("%s: bool default must be boolean, got %s", prefix, type(node.default))
+            internal.libWarnIf("%s: bool default must be boolean, got %s", prefix, type(node.default))
         end
     end,
     normalize = function(_, value)
@@ -93,19 +92,19 @@ StorageTypes.int = {
     valueKind = "int",
     validate = function(node, prefix)
         if node.default ~= nil and type(node.default) ~= "number" then
-            libWarn("%s: int default must be number, got %s", prefix, type(node.default))
+            internal.libWarnIf("%s: int default must be number, got %s", prefix, type(node.default))
         end
         if node.min ~= nil and type(node.min) ~= "number" then
-            libWarn("%s: int min must be number, got %s", prefix, type(node.min))
+            internal.libWarnIf("%s: int min must be number, got %s", prefix, type(node.min))
         end
         if node.max ~= nil and type(node.max) ~= "number" then
-            libWarn("%s: int max must be number, got %s", prefix, type(node.max))
+            internal.libWarnIf("%s: int max must be number, got %s", prefix, type(node.max))
         end
         if type(node.min) == "number" and type(node.max) == "number" and node.min > node.max then
-            libWarn("%s: int min cannot exceed max", prefix)
+            internal.libWarnIf("%s: int min cannot exceed max", prefix)
         end
         if node.width ~= nil and (type(node.width) ~= "number" or node.width < 1) then
-            libWarn("%s: int width must be a positive number", prefix)
+            internal.libWarnIf("%s: int width must be a positive number", prefix)
         end
     end,
     normalize = function(node, value)
@@ -134,10 +133,10 @@ StorageTypes.string = {
     valueKind = "string",
     validate = function(node, prefix)
         if node.default ~= nil and type(node.default) ~= "string" then
-            libWarn("%s: string default must be string, got %s", prefix, type(node.default))
+            internal.libWarnIf("%s: string default must be string, got %s", prefix, type(node.default))
         end
         if node.maxLen ~= nil and (type(node.maxLen) ~= "number" or node.maxLen < 1) then
-            libWarn("%s: string maxLen must be a positive number", prefix)
+            internal.libWarnIf("%s: string maxLen must be a positive number", prefix)
         end
         node._maxLen = math.floor(tonumber(node.maxLen) or 256)
         if node._maxLen < 1 then node._maxLen = 256 end
@@ -157,13 +156,13 @@ StorageTypes.packedInt = {
     valueKind = "int",
     validate = function(node, prefix)
         if node.default ~= nil and type(node.default) ~= "number" then
-            libWarn("%s: packedInt default must be number, got %s", prefix, type(node.default))
+            internal.libWarnIf("%s: packedInt default must be number, got %s", prefix, type(node.default))
         end
         if node.width ~= nil and (type(node.width) ~= "number" or node.width < 1 or node.width > 32) then
-            libWarn("%s: packedInt width must be a positive number no greater than 32", prefix)
+            internal.libWarnIf("%s: packedInt width must be a positive number no greater than 32", prefix)
         end
         if type(node.bits) ~= "table" or #node.bits == 0 then
-            libWarn("%s: packedInt bits must be a non-empty list", prefix)
+            internal.libWarnIf("%s: packedInt bits must be a non-empty list", prefix)
         end
     end,
     normalize = function(node, value)

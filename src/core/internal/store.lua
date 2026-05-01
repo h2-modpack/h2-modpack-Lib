@@ -2,39 +2,13 @@ local internal = AdamantModpackLib_Internal
 
 internal.store = internal.store or {}
 local storeInternal = internal.store
+local values = internal.values
 
 local StoreState = setmetatable({}, { __mode = "k" })
 
-function storeInternal.readNestedPath(tbl, key)
-    if type(key) == "table" then
-        if #key == 0 then return nil, nil, nil end
-        for i = 1, #key - 1 do
-            tbl = tbl[key[i]]
-            if not tbl then return nil, nil, nil end
-        end
-        return tbl[key[#key]], tbl, key[#key]
-    end
-    return tbl[key], tbl, key
-end
-
-function storeInternal.writeNestedPath(tbl, key, value)
-    if type(key) == "table" then
-        for i = 1, #key - 1 do
-            tbl[key[i]] = tbl[key[i]] or {}
-            tbl = tbl[key[i]]
-        end
-        tbl[key[#key]] = value
-        return
-    end
-    tbl[key] = value
-end
-
-function storeInternal.ClonePersistedValue(value)
-    if type(value) == "table" then
-        return rom.game.DeepCopyTable(value)
-    end
-    return value
-end
+storeInternal.readNestedPath = values.readPath
+storeInternal.writeNestedPath = values.writePath
+storeInternal.ClonePersistedValue = values.deepCopy
 
 --- Registers internal callbacks for a managed store object.
 ---@param store ManagedStore

@@ -239,25 +239,35 @@ function WidgetFns.packedDropdown(imgui, session, alias, store, opts)
             return false
         end
         local changed = false
-        local currentSelection = helpers.ClassifyPackedChoice(opts, children)
+        local currentSelection = selection
         if imgui.Selectable(
             helpers.MakeSelectableId(tostring(opts.noneLabel or "None"), "none"),
             currentSelection.state == "none"
         ) then
             changed = helpers.ClearPackedChoiceSelection(children, currentSelection) or changed
+            currentSelection = {
+                state = "none",
+                selectedChild = nil,
+                mode = currentSelection.mode,
+                noneValue = currentSelection.noneValue,
+            }
         end
         for _, child in ipairs(children) do
             local childLabel = helpers.GetPackedChoiceLabel(opts, child)
             local childColor = valueColors and valueColors[child.alias] or nil
             local clicked = helpers.DrawWithValueColor(imgui, childColor, function()
-                local currentSelectionForChild = helpers.ClassifyPackedChoice(opts, children)
-                local isSelected = currentSelectionForChild.selectedChild ~= nil
-                    and currentSelectionForChild.selectedChild.alias == child.alias
+                local isSelected = currentSelection.selectedChild ~= nil
+                    and currentSelection.selectedChild.alias == child.alias
                 return imgui.Selectable(helpers.MakeSelectableId(childLabel, child.alias), isSelected)
             end)
             if clicked then
                 changed = helpers.ApplyPackedChoiceSelection(children, child.alias, currentSelection) or changed
-                currentSelection = helpers.ClassifyPackedChoice(opts, children)
+                currentSelection = {
+                    state = "single",
+                    selectedChild = child,
+                    mode = currentSelection.mode,
+                    noneValue = currentSelection.noneValue,
+                }
             end
         end
         imgui.EndCombo()

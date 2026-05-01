@@ -18,6 +18,7 @@ Preferred usage uses top-level module authoring helpers plus namespaces for spec
 - `lib.logging.*`
 - `lib.widgets.*`
 - `lib.nav.*`
+- `lib.imguiHelpers.*`
 
 The top-level `lib.config` export also exposes Lib's Chalk config.
 
@@ -554,6 +555,18 @@ Built-ins:
 - `lib.widgets.packedCheckboxList(imgui, session, alias, store, opts?)`
 
 These are direct immediate-mode helpers.
+
+## `lib.imguiHelpers`
+
+Low-level ImGui binding helpers used by Lib widgets and available to module UI code.
+
+Exports:
+- `lib.imguiHelpers.ImGuiComboFlags`
+- `lib.imguiHelpers.ImGuiCol`
+- `lib.imguiHelpers.ImGuiTreeNodeFlags`
+- `lib.imguiHelpers.unpackColor(color)`
+
+The enum tables normalize ReturnOfModding ImGui constants that are passed as raw integers in Lua.
 
 ## `lib.nav`
 

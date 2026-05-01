@@ -165,12 +165,12 @@ function WidgetFns.packedRadio(imgui, session, alias, store, opts)
     opts = opts or {}
     local children = helpers.ResolvePackedChildren(session, alias, store)
     local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
+    local selection = helpers.ClassifyPackedChoice(opts, children)
     local optionEntries = {
         {
             label = tostring(opts.noneLabel or "None"),
-            selected = helpers.ClassifyPackedChoice(opts, children).state == "none",
+            selected = selection.state == "none",
             onSelect = function()
-                local selection = helpers.ClassifyPackedChoice(opts, children)
                 return helpers.ClearPackedChoiceSelection(children, selection) == true
             end,
         },
@@ -180,12 +180,8 @@ function WidgetFns.packedRadio(imgui, session, alias, store, opts)
         optionEntries[#optionEntries + 1] = {
             label = helpers.GetPackedChoiceLabel(opts, child),
             color = valueColors and valueColors[child.alias] or nil,
-            selected = (function()
-                local selection = helpers.ClassifyPackedChoice(opts, children)
-                return selection.selectedChild and selection.selectedChild.alias == child.alias or false
-            end)(),
+            selected = selection.selectedChild and selection.selectedChild.alias == child.alias or false,
             onSelect = function()
-                local selection = helpers.ClassifyPackedChoice(opts, children)
                 return helpers.ApplyPackedChoiceSelection(children, child.alias, selection) == true
             end,
         }

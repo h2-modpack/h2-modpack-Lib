@@ -6,8 +6,6 @@ local hooks = public.hooks
 local internalHooks = AdamantModpackLib_Internal.hooks
 local REGISTRY_KEY = "__adamantHooks"
 
-hooks.Refresh = nil
-
 local function getModUtil()
     local resolved = modutil
     if not resolved and rom and rom.mods then

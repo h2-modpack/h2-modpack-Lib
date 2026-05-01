@@ -213,7 +213,7 @@ function public.createModuleHost(opts)
         and public.isModuleCoordinated(packId) then
         local ok, err = host.applyOnLoad()
         if not ok then
-            internal.logging.warn("%s coordinated runtime sync failed: %s",
+            internal.libWarn("%s coordinated runtime sync failed: %s",
                 tostring(meta.name or identity.id or "module"),
                 tostring(err))
         end
@@ -222,7 +222,7 @@ function public.createModuleHost(opts)
         if requested then
             internal.pendingCoordinatorRebuilds[def] = nil
         else
-            internal.logging.warn("%s structural definition changed during hot reload; full reload required",
+            internal.libWarn("%s structural definition changed during hot reload; full reload required",
                 tostring(meta.name or identity.id or "module"))
         end
     end
@@ -257,7 +257,7 @@ function public.standaloneHost()
     if not (getIdentity().modpack and internal.coordinators[getIdentity().modpack]) then
         local ok, err = moduleHost.applyOnLoad()
         if not ok then
-            internal.logging.warn("%s startup lifecycle failed: %s",
+            internal.libWarn("%s startup lifecycle failed: %s",
                 tostring(getMeta().name or getIdentity().id or "module"),
                 tostring(err))
         end
@@ -307,7 +307,7 @@ function public.standaloneHost()
                 if ok then
                     markRunDataDirty()
                 else
-                    internal.logging.warn("%s %s failed: %s",
+                    internal.libWarn("%s %s failed: %s",
                         tostring(meta.name or identity.id or "module"),
                         enabledValue and "enable" or "disable",
                         tostring(err))
@@ -330,7 +330,7 @@ function public.standaloneHost()
             if ok and committed and moduleHost.read("Enabled") == true then
                 markRunDataDirty()
             elseif ok == false then
-                internal.logging.warn("%s session commit failed; restored previous config where possible: %s",
+                internal.libWarn("%s session commit failed; restored previous config where possible: %s",
                     tostring(meta.name or identity.id or "module"),
                     tostring(err))
             end

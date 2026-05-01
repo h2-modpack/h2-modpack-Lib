@@ -1,28 +1,8 @@
 local mutationPlan = {}
+local values = AdamantModpackLib_Internal.values
 
 local function CloneMutationValue(value)
-    if type(value) == "table" then
-        return rom.game.DeepCopyTable(value)
-    end
-    return value
-end
-
-local function MutationDeepEqual(a, b)
-    if a == b then return true end
-    if type(a) ~= type(b) then return false end
-    if type(a) ~= "table" then return false end
-
-    for key, value in pairs(a) do
-        if not MutationDeepEqual(value, b[key]) then
-            return false
-        end
-    end
-    for key in pairs(b) do
-        if a[key] == nil then
-            return false
-        end
-    end
-    return true
+    return values.deepCopy(value)
 end
 
 function mutationPlan.createBackup()
@@ -36,7 +16,7 @@ function mutationPlan.createBackup()
             local key = select(i, ...)
             if saved[key] == nil then
                 local v = tbl[key]
-                saved[key] = (v == nil) and NIL or (type(v) == "table" and rom.game.DeepCopyTable(v) or v)
+                saved[key] = (v == nil) and NIL or values.deepCopy(v)
             end
         end
     end
@@ -47,7 +27,7 @@ function mutationPlan.createBackup()
                 if v == NIL then
                     tbl[key] = nil
                 elseif type(v) == "table" then
-                    tbl[key] = rom.game.DeepCopyTable(v)
+                    tbl[key] = values.deepCopy(v)
                 else
                     tbl[key] = v
                 end
@@ -110,7 +90,7 @@ function mutationPlan.createPlan()
             tbl = tbl,
             key = key,
             value = CloneMutationValue(value),
-            equivalentFn = equivalentFn or MutationDeepEqual,
+            equivalentFn = equivalentFn or values.deepEqual,
         })
     end
 
@@ -120,7 +100,7 @@ function mutationPlan.createPlan()
             tbl = tbl,
             key = key,
             value = CloneMutationValue(value),
-            equivalentFn = equivalentFn or MutationDeepEqual,
+            equivalentFn = equivalentFn or values.deepEqual,
         })
     end
 
@@ -131,7 +111,7 @@ function mutationPlan.createPlan()
             key = key,
             oldValue = CloneMutationValue(oldValue),
             newValue = CloneMutationValue(newValue),
-            equivalentFn = equivalentFn or MutationDeepEqual,
+            equivalentFn = equivalentFn or values.deepEqual,
         })
     end
 

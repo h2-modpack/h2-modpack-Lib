@@ -1,4 +1,5 @@
 import 'core/internal/logging.lua'
+import 'core/internal/values.lua'
 import 'core/internal/storage_types.lua'
 import 'core/internal/storage.lua'
 import 'core/internal/store.lua'

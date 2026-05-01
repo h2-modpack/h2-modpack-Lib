@@ -39,7 +39,7 @@ local NormalizeStorageValue = storageInternal.NormalizeStorageValue
 ---@field default boolean|nil
 ---@field affectsRunData boolean|nil
 ---@field storage StorageSchema|nil
----@field hashGroups table|nil
+---@field hashGroupPlan table|nil
 ---@field patchPlan fun(store: ManagedStore): table|nil
 ---@field apply fun(store: ManagedStore)|nil
 ---@field revert fun(store: ManagedStore)|nil
@@ -147,15 +147,15 @@ function public.createStore(modConfig, definition)
         "createStore expects a prepared definition; call lib.prepareDefinition(...) first")
     local backend = GetConfigBackend(modConfig)
     local store = {}
-    local storage = type(definition.storage) == "table" and definition.storage or nil
+    assert(type(definition.storage) == "table",
+        "createStore expects definition.storage to be a table")
+    local storage = definition.storage
     local label = tostring(definition.name or definition.id or _PLUGIN.guid or "module")
 
-    if storage then
-        storageInternal.validate(storage, label)
-    end
+    storageInternal.validate(storage, label)
 
-    local aliasNodes = storage and storageInternal.getAliases(storage) or {}
-    local rootByKey = storage and (rawget(storage, "_rootByKey") or {}) or {}
+    local aliasNodes = storageInternal.getAliases(storage)
+    local rootByKey = rawget(storage, "_rootByKey") or {}
 
     local function readRaw(configKey)
         local raw
@@ -195,7 +195,7 @@ function public.createStore(modConfig, definition)
             local node = aliasNodes[keyOrAlias]
                 if node then
                     if node._lifetime == "transient" then
-                        internal.logging.warn(
+                        internal.libWarn(
                             "store.read: alias '%s' is transient; use session for UI-only state",
                             tostring(keyOrAlias))
                         return nil
@@ -224,7 +224,7 @@ function public.createStore(modConfig, definition)
             local node = aliasNodes[keyOrAlias]
             if node then
                 if node._lifetime == "transient" then
-                    internal.logging.warn(
+                    internal.libWarn(
                         "internal.store.writePersisted: alias '%s' is transient; use session for UI-only state",
                         tostring(keyOrAlias))
                     return
@@ -272,10 +272,7 @@ function public.createStore(modConfig, definition)
         getPackedAliases = getPackedAliases,
     })
 
-    local session = nil
-    if storage then
-        session = internal.store.createSession(modConfig, backend, storage)
-    end
+    local session = internal.store.createSession(modConfig, backend, storage)
 
     return store, session
 end

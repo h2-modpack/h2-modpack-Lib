@@ -1,9 +1,8 @@
 local internal = AdamantModpackLib_Internal
-local loggingInternal = internal.logging
 
 public.logging = public.logging or {}
 local logging = public.logging
-local FormatMessage = loggingInternal.formatMessage
+local FormatMessage = internal.formatLogMessage
 
 ---@alias LogName string
 

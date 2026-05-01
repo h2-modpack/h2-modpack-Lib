@@ -143,7 +143,7 @@ function lifecycleApi.resyncSession(def, session)
     local mismatches = session.auditMismatches()
     if #mismatches > 0 then
         local name = def and (def.name or def.id) or "module"
-        internal.logging.warn("%s: session drift detected; reloading staged values for: %s",
+        internal.libWarn("%s: session drift detected; reloading staged values for: %s",
             tostring(name),
             table.concat(mismatches, ", "))
         session._reloadFromConfig()
@@ -182,7 +182,7 @@ function lifecycleApi.commitSession(def, store, session)
 
     local rollbackOk, rollbackErr = lifecycleApi.reapplyMutation(def, store)
     if not rollbackOk then
-        internal.logging.warn("%s: session rollback reapply failed: %s",
+        internal.libWarn("%s: session rollback reapply failed: %s",
             tostring(def.name or def.id or "module"),
             tostring(rollbackErr))
         return false, tostring(err) .. " (rollback reapply failed: " .. tostring(rollbackErr) .. ")"

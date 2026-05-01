@@ -3,6 +3,7 @@ internal.definition = internal.definition or {}
 local definitionInternal = internal.definition
 local storageInternal = internal.storage
 local mutationInternal = internal.mutation
+local values = internal.values
 
 local KnownDefinitionKeys = {
     modpack = true,
@@ -19,24 +20,6 @@ local KnownDefinitionKeys = {
 }
 
 definitionInternal.KnownKeys = KnownDefinitionKeys
-
-local function DeepCopyValue(value, seen)
-    if type(value) ~= "table" then
-        return value
-    end
-
-    seen = seen or {}
-    if seen[value] then
-        return seen[value]
-    end
-
-    local copy = {}
-    seen[value] = copy
-    for key, child in pairs(value) do
-        copy[DeepCopyValue(key, seen)] = DeepCopyValue(child, seen)
-    end
-    return copy
-end
 
 local function CompareKeys(a, b)
     local typeA = type(a)
@@ -129,7 +112,7 @@ function definitionInternal.validate(definition, label)
         return
     end
 
-    local warn = internal.logging.warn
+    local warn = internal.libWarn
     local prefix = definitionInternal.getLabel(definition, label)
 
     for key in pairs(definition) do
@@ -192,7 +175,7 @@ function definitionInternal.prepare(owner, dataDefaultsOrDefinition, definitionO
     end
     assert(type(definition) == "table", "prepareDefinition: definition must be a table")
 
-    local prepared = DeepCopyValue(definition)
+    local prepared = values.deepCopy(definition)
     local label = definitionInternal.getLabel(prepared)
 
     if type(prepared.storage) == "table" then

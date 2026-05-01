@@ -2,9 +2,9 @@ local internal = AdamantModpackLib_Internal
 internal.storage = internal.storage or {}
 local storageInternal = internal.storage
 local StorageTypes = storageInternal.types
-local libWarn = internal.logging.warnIf
 local StorageKey = storageInternal.StorageKey
 local NormalizeInteger = storageInternal.NormalizeInteger
+local values = internal.values
 
 ---@alias ConfigPath string|string[]
 ---@alias StorageLifetime "'persistent'"|"'transient'"
@@ -50,41 +50,6 @@ local NormalizeInteger = storageInternal.NormalizeInteger
 ---@field _persistedAliasNodes table<string, StorageNode>|nil
 ---@field _rootByKey table<string, StorageNode>|nil
 
-local function DeepValueEqual(a, b)
-    if a == b then return true end
-    if type(a) ~= type(b) then return false end
-    if type(a) ~= "table" then return false end
-
-    for key, value in pairs(a) do
-        if not DeepValueEqual(value, b[key]) then
-            return false
-        end
-    end
-    for key in pairs(b) do
-        if a[key] == nil then
-            return false
-        end
-    end
-    return true
-end
-
-local function ReadNestedPath(source, path)
-    if type(source) ~= "table" then
-        return nil
-    end
-    if type(path) == "table" then
-        local current = source
-        for _, key in ipairs(path) do
-            if type(current) ~= "table" then
-                return nil
-            end
-            current = current[key]
-        end
-        return current
-    end
-    return source[path]
-end
-
 function storageInternal.hydrateDefaults(storage, dataDefaults)
     if type(storage) ~= "table" or type(dataDefaults) ~= "table" then
         return storage
@@ -95,7 +60,7 @@ function storageInternal.hydrateDefaults(storage, dataDefaults)
             and node.lifetime ~= "transient"
             and node.default == nil
             and node.configKey ~= nil then
-            node.default = ReadNestedPath(dataDefaults, node.configKey)
+            node.default = values.readPath(dataDefaults, node.configKey)
         end
     end
 
@@ -115,12 +80,12 @@ local function ValidateChildAlias(bitNode, root, storage, seenAliases, seenRootK
     end
 
     if seenAliases[bitNode.alias] then
-        libWarn("%s: duplicate alias '%s'", prefix, bitNode.alias)
+        internal.libWarnIf("%s: duplicate alias '%s'", prefix, bitNode.alias)
         return
     end
     local ownerKey = seenRootKeys[bitNode.alias]
     if ownerKey and ownerKey ~= root._storageKey then
-        libWarn("%s: alias '%s' conflicts with root configKey '%s'", prefix, bitNode.alias, ownerKey)
+        internal.libWarnIf("%s: alias '%s' conflicts with root configKey '%s'", prefix, bitNode.alias, ownerKey)
         return
     end
 
@@ -157,28 +122,28 @@ local function ValidatePackedBits(node, prefix)
     for index, bitNode in ipairs(node.bits or {}) do
         local bitPrefix = prefix .. " bits[" .. index .. "]"
         if type(bitNode.alias) ~= "string" or bitNode.alias == "" then
-            libWarn("%s: packed bit alias must be a non-empty string", bitPrefix)
+            internal.libWarnIf("%s: packed bit alias must be a non-empty string", bitPrefix)
         elseif seenAliases[bitNode.alias] then
-            libWarn("%s: duplicate packed bit alias '%s'", bitPrefix, bitNode.alias)
+            internal.libWarnIf("%s: duplicate packed bit alias '%s'", bitPrefix, bitNode.alias)
         else
             seenAliases[bitNode.alias] = true
         end
         if type(bitNode.offset) ~= "number" or bitNode.offset < 0 then
-            libWarn("%s: packed bit offset must be a non-negative number", bitPrefix)
+            internal.libWarnIf("%s: packed bit offset must be a non-negative number", bitPrefix)
         end
         if type(bitNode.width) ~= "number" or bitNode.width < 1 then
-            libWarn("%s: packed bit width must be a positive number", bitPrefix)
+            internal.libWarnIf("%s: packed bit width must be a positive number", bitPrefix)
         end
 
         if type(bitNode.offset) == "number" and type(bitNode.width) == "number" then
             local offset = math.floor(bitNode.offset)
             local width = math.floor(bitNode.width)
             if offset + width > 32 then
-                libWarn("%s: packed bit offset + width must stay within 32 bits", bitPrefix)
+                internal.libWarnIf("%s: packed bit offset + width must stay within 32 bits", bitPrefix)
             end
             for bit = offset, offset + width - 1 do
                 if occupiedBits[bit] then
-                    libWarn("%s: packed bit overlaps bit %d", bitPrefix, bit)
+                    internal.libWarnIf("%s: packed bit overlaps bit %d", bitPrefix, bit)
                 else
                     occupiedBits[bit] = true
                 end
@@ -189,7 +154,7 @@ local function ValidatePackedBits(node, prefix)
 
         local valueType = bitNode.type or (bitNode.width == 1 and "bool" or "int")
         if valueType ~= "bool" and valueType ~= "int" then
-            libWarn("%s: packed bit type must be 'bool' or 'int'", bitPrefix)
+            internal.libWarnIf("%s: packed bit type must be 'bool' or 'int'", bitPrefix)
             valueType = bitNode.width == 1 and "bool" or "int"
         end
         bitNode.type = valueType
@@ -218,7 +183,7 @@ storageInternal.EnsurePreparedStorage = EnsurePreparedStorage
 ---@param label string Validation label used to prefix warnings.
 function storageInternal.validate(storage, label)
     if type(storage) ~= "table" then
-        libWarn("%s: storage is not a table", label)
+        internal.libWarnIf("%s: storage is not a table", label)
         return
     end
 
@@ -234,26 +199,26 @@ function storageInternal.validate(storage, label)
     for index, node in ipairs(storage) do
         local prefix = label .. " storage #" .. index
         if type(node) ~= "table" then
-            libWarn("%s: storage entry is not a table", prefix)
+            internal.libWarnIf("%s: storage entry is not a table", prefix)
         elseif not node.type then
-            libWarn("%s: missing type", prefix)
+            internal.libWarnIf("%s: missing type", prefix)
         else
             local storageType = StorageTypes[node.type]
             local isTransient = node.lifetime == "transient"
             if not storageType then
-                libWarn("%s: unknown storage type '%s'", prefix, tostring(node.type))
+                internal.libWarnIf("%s: unknown storage type '%s'", prefix, tostring(node.type))
             elseif node.lifetime ~= nil and not isTransient then
-                libWarn("%s: unknown lifetime '%s'", prefix, tostring(node.lifetime))
+                internal.libWarnIf("%s: unknown lifetime '%s'", prefix, tostring(node.lifetime))
             elseif node.configKey ~= nil and node.lifetime ~= nil then
-                libWarn("%s: configKey and lifetime are mutually exclusive", prefix)
+                internal.libWarnIf("%s: configKey and lifetime are mutually exclusive", prefix)
             elseif node.configKey == nil and node.lifetime == nil then
-                libWarn("%s: storage root must declare configKey or lifetime = 'transient'", prefix)
+                internal.libWarnIf("%s: storage root must declare configKey or lifetime = 'transient'", prefix)
             elseif isTransient and node.type == "packedInt" then
-                libWarn("%s: transient packedInt roots are not supported", prefix)
+                internal.libWarnIf("%s: transient packedInt roots are not supported", prefix)
             elseif not isTransient and node.type == "packedInt" and node.configKey == nil then
-                libWarn("%s: packedInt is missing configKey", prefix)
+                internal.libWarnIf("%s: packedInt is missing configKey", prefix)
             elseif not isTransient and node.configKey == nil then
-                libWarn("%s: missing configKey", prefix)
+                internal.libWarnIf("%s: missing configKey", prefix)
             else
                 storageType.validate(node, prefix)
                 PrepareRootNodeMetadata(node)
@@ -264,7 +229,7 @@ function storageInternal.validate(storage, label)
 
                 if node._storageKey ~= nil then
                     if seenRootKeys[node._storageKey] then
-                        libWarn("%s: duplicate configKey '%s'", prefix, node._storageKey)
+                        internal.libWarnIf("%s: duplicate configKey '%s'", prefix, node._storageKey)
                     else
                         seenRootKeys[node._storageKey] = node._storageKey
                         storage._rootByKey[node._storageKey] = node
@@ -273,9 +238,9 @@ function storageInternal.validate(storage, label)
 
                 local aliasValid = false
                 if type(node.alias) ~= "string" or node.alias == "" then
-                    libWarn("%s: missing alias", prefix)
+                    internal.libWarnIf("%s: missing alias", prefix)
                 elseif seenAliases[node.alias] then
-                    libWarn("%s: duplicate alias '%s'", prefix, node.alias)
+                    internal.libWarnIf("%s: duplicate alias '%s'", prefix, node.alias)
                 else
                     aliasValid = true
                     seenAliases[node.alias] = true
@@ -318,7 +283,7 @@ function storageInternal.validate(storage, label)
                                     and (normalized == true and 1 or 0)
                                     or normalized
                                 if expected ~= encoded then
-                                    libWarn("%s: packed child default '%s' does not match packedInt default",
+                                    internal.libWarnIf("%s: packed child default '%s' does not match packedInt default",
                                         prefix, child.alias)
                                 end
                             end
@@ -354,7 +319,7 @@ function storageInternal.valuesEqual(node, a, b)
     if storageType and type(storageType.equals) == "function" then
         return storageType.equals(node, a, b)
     end
-    return DeepValueEqual(a, b)
+    return values.deepEqual(a, b)
 end
 
 function storageInternal.NormalizeStorageValue(node, value)

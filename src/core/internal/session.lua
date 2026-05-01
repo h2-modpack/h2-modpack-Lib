@@ -151,9 +151,7 @@ function internal.store.createSession(modConfig, configBackend, storage)
     local function writeStagingValue(alias, value)
         local node = aliasNodes[alias]
         if not node then
-            if internal.logging and internal.logging.warnIf then
-                internal.logging.warnIf("session.write: unknown alias '%s'; value will not be persisted", tostring(alias))
-            end
+            internal.libWarnIf("session.write: unknown alias '%s'; value will not be persisted", tostring(alias))
             return
         end
 
@@ -189,9 +187,7 @@ function internal.store.createSession(modConfig, configBackend, storage)
     local function resetAliasValue(alias)
         local node = aliasNodes[alias]
         if not node then
-            if internal.logging and internal.logging.warnIf then
-                internal.logging.warnIf("session.reset: unknown alias '%s'; value will not be reset", tostring(alias))
-            end
+            internal.libWarnIf("session.reset: unknown alias '%s'; value will not be reset", tostring(alias))
             return
         end
 

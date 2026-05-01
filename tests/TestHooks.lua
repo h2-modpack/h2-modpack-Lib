@@ -117,10 +117,6 @@ local function createHostWithHooks(owner, registerHooks)
     })
 end
 
-function TestHooks:testRefreshIsNotPublicModuleApi()
-    lu.assertNil(lib.hooks.Refresh)
-end
-
 function TestHooks:testWrapRegistersOnceAndUpdatesHandler()
     local counts = installPathMock()
     local owner = {}
