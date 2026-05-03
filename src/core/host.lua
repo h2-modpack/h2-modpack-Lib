@@ -13,7 +13,7 @@ local internal = AdamantModpackLib_Internal
 
 ---@class ModuleHostOpts
 ---@field definition ModuleDefinition
----@field moduleName string|nil
+---@field pluginGuid string
 ---@field store ManagedStore
 ---@field session Session
 ---@field hookOwner table|nil
@@ -44,16 +44,16 @@ local internal = AdamantModpackLib_Internal
 ---@field drawTab fun(imgui: table)
 ---@field drawQuickContent fun(imgui: table)|nil
 
-function public.getLiveModuleHost(moduleName)
-    if type(moduleName) ~= "string" or moduleName == "" then
+function public.getLiveModuleHost(pluginGuid)
+    if type(pluginGuid) ~= "string" or pluginGuid == "" then
         return nil
     end
-    return internal.liveModuleHosts[moduleName]
+    return internal.liveModuleHosts[pluginGuid]
 end
 
 --- Creates a behavior-only host object for Framework and standalone hosting.
---- Registers the created host into Lib's live-host registry under `opts.moduleName`
---- (or the current `_PLUGIN.guid`) so coordinated discovery can resolve it immediately.
+--- Registers the created host into Lib's live-host registry under `opts.pluginGuid`
+--- so coordinated discovery can resolve it immediately.
 --- The host closes over store/session without exposing those state handles publicly.
 ---@param opts ModuleHostOpts
 ---@return ModuleHost host Module host behavior contract.
@@ -71,14 +71,11 @@ function public.createModuleHost(opts)
     local drawQuickContent = opts.drawQuickContent
     local registerHooks = opts.registerHooks
     local hookOwner = opts.hookOwner
-    local moduleName = opts.moduleName
+    local pluginGuid = opts.pluginGuid
 
     assert(type(drawTab) == "function", "createModuleHost: drawTab is required")
-    if moduleName == nil and type(_PLUGIN) == "table" then
-        moduleName = _PLUGIN.guid
-    end
-    assert(type(moduleName) == "string" and moduleName ~= "",
-        "createModuleHost: moduleName is required (or _PLUGIN.guid must be available)")
+    assert(type(pluginGuid) == "string" and pluginGuid ~= "",
+        "createModuleHost: pluginGuid is required")
 
     if registerHooks ~= nil then
         assert(type(registerHooks) == "function", "createModuleHost: registerHooks must be a function")
@@ -206,7 +203,7 @@ function public.createModuleHost(opts)
     local packId = identity.modpack
     local pendingCoordinatorRebuild = internal.pendingCoordinatorRebuilds[def]
     local hasPendingCoordinatorRebuild = type(pendingCoordinatorRebuild) == "table"
-    internal.liveModuleHosts[moduleName] = host
+    internal.liveModuleHosts[pluginGuid] = host
     if not hasPendingCoordinatorRebuild
         and type(packId) == "string"
         and packId ~= ""
@@ -231,15 +228,15 @@ function public.createModuleHost(opts)
 end
 
 --- Initializes standalone module hosting and returns window/menu-bar renderers.
+---@param pluginGuid string Plugin guid used when creating the module host.
 ---@return StandaloneRuntime runtime Standalone runtime with `renderWindow` and `addMenuBar` callbacks.
-function public.standaloneHost()
-    local moduleName = type(_PLUGIN) == "table" and _PLUGIN.guid or nil
-    assert(type(moduleName) == "string" and moduleName ~= "",
-        "standaloneHost: current module guid is unavailable")
-    local moduleHost = public.getLiveModuleHost(moduleName)
+function public.standaloneHost(pluginGuid)
+    assert(type(pluginGuid) == "string" and pluginGuid ~= "",
+        "standaloneHost: pluginGuid is required")
+    local moduleHost = public.getLiveModuleHost(pluginGuid)
     assert(type(moduleHost) == "table",
         string.format("standaloneHost: no live module host is registered for current module '%s'",
-            tostring(moduleName)))
+            tostring(pluginGuid)))
 
     assert(type(moduleHost.getIdentity) == "function" and type(moduleHost.getMeta) == "function",
         "standaloneHost: moduleHost metadata accessors are required")

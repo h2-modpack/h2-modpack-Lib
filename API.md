@@ -304,7 +304,10 @@ function internal.RegisterHooks()
     end)
 end
 
+local PLUGIN_GUID = _PLUGIN.guid
+
 lib.createModuleHost({
+    pluginGuid = PLUGIN_GUID,
     definition = internal.definition,
     store = store,
     session = session,
@@ -445,6 +448,7 @@ Behavior:
 ### `lib.createModuleHost(opts)`
 
 Creates a behavior-only host object around:
+- `pluginGuid`
 - `definition`
 - `store`
 - `session`
@@ -497,18 +501,20 @@ Behavior:
 - when a coordinator is already registered for `definition.modpack`, host creation immediately syncs the module's live mutation state through `host.applyOnLoad()`
 - otherwise startup sync is owned by Framework or standalone hosting
 
-### `lib.standaloneHost()`
+### `lib.standaloneHost(pluginGuid)`
 
 Initializes standalone module hosting and returns window/menu-bar renderers.
 
 Useful when the module is not framework-hosted.
+
+`pluginGuid` must be the same plugin guid passed to `lib.createModuleHost(...)`.
 
 Returned surface:
 - `runtime.renderWindow()`
 - `runtime.addMenuBar()`
 
 Behavior:
-- resolves the current module's live host through `_PLUGIN.guid`
+- resolves the module's live host through the explicit `pluginGuid`
 - applies on-load lifecycle state for non-coordinated modules
 - suppresses the standalone window/menu when the module is coordinated
 - renders built-in controls for:

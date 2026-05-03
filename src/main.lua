@@ -32,7 +32,7 @@ local fallbackHud = import 'core/private/fallback_hud.lua'
 ---@field resetStorageToDefaults fun(storage: StorageSchema, session: Session, opts: table|nil)
 ---@field createModuleHost fun(opts: ModuleHostOpts): ModuleHost
 ---@field standaloneHost fun(): StandaloneRuntime
----@field getLiveModuleHost fun(moduleName: string|nil): ModuleHost|nil
+---@field getLiveModuleHost fun(pluginGuid: string|nil): ModuleHost|nil
 ---@field isModuleCoordinated fun(packId: string|nil): boolean
 ---@field isModuleEnabled fun(store: ManagedStore, packId: string|nil): boolean
 ---@field lifecycle table

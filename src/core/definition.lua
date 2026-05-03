@@ -207,7 +207,7 @@ function definitionInternal.prepare(owner, dataDefaultsOrDefinition, definitionO
                 internal.pendingCoordinatorRebuilds[prepared] = {
                     kind = "structural_definition_changed",
                     moduleId = prepared.id,
-                    moduleName = prepared.name,
+                    displayName = prepared.name,
                     modpack = prepared.modpack,
                 }
             else

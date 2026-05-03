@@ -91,6 +91,7 @@ end
 
 local function createHostWithHooks(owner, registerHooks)
     return lib.createModuleHost({
+        pluginGuid = "hook-test-module",
         definition = { id = "HookTest", name = "Hook Test", storage = {} },
         store = {
             read = function()
@@ -329,6 +330,7 @@ function TestHooks:testCreateModuleHostSyncsCoordinatedRuntimeImmediately()
     lib.lifecycle.registerCoordinator(packId, { ModEnabled = true })
 
     lib.createModuleHost({
+        pluginGuid = "hook-pack.Alpha",
         definition = {
             modpack = packId,
             id = "Alpha",
@@ -407,6 +409,7 @@ function TestHooks:testCreateModuleHostHotReloadReplacesCoordinatedRuntimeState(
     }
 
     lib.createModuleHost({
+        pluginGuid = "hook-reload-pack.Alpha",
         definition = {
             modpack = packId,
             id = "Alpha",
@@ -426,6 +429,7 @@ function TestHooks:testCreateModuleHostHotReloadReplacesCoordinatedRuntimeState(
     })
 
     lib.createModuleHost({
+        pluginGuid = "hook-reload-pack.Alpha",
         definition = {
             modpack = packId,
             id = "Alpha",

@@ -88,7 +88,7 @@ local lib = {}
 
 ---@class AdamantModpackLib.ModuleHostOpts
 ---@field definition AdamantModpackLib.PreparedDefinition
----@field moduleName? string Module guid; omitted uses `_PLUGIN.guid`.
+---@field pluginGuid string Plugin guid captured at module file load time.
 ---@field store AdamantModpackLib.ManagedStore
 ---@field session AdamantModpackLib.Session
 ---@field hookOwner? table Persistent table used by hot-reload-safe hooks.
@@ -728,13 +728,14 @@ end
 function lib.createModuleHost(opts)
 end
 
+---@param pluginGuid string Plugin guid used when creating the module host.
 ---@return AdamantModpackLib.StandaloneRuntime runtime
-function lib.standaloneHost()
+function lib.standaloneHost(pluginGuid)
 end
 
----@param moduleName string?
+---@param pluginGuid string?
 ---@return AdamantModpackLib.ModuleHost? host
-function lib.getLiveModuleHost(moduleName)
+function lib.getLiveModuleHost(pluginGuid)
 end
 
 ---@param packId string?

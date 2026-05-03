@@ -16,6 +16,7 @@ end
 
 function TestHost:testStandaloneHostWarnsWhenSessionCommitFails()
     local drawCalls = 0
+    local pluginGuid = "test-standalone-commit"
     local definition = lib.prepareDefinition({}, {
         modpack = "standalone-pack",
         id = "StandaloneTest",
@@ -44,6 +45,7 @@ function TestHost:testStandaloneHostWarnsWhenSessionCommitFails()
     }
 
     local moduleHost = lib.createModuleHost({
+        pluginGuid = pluginGuid,
         definition = definition,
         store = store,
         session = session,
@@ -55,7 +57,7 @@ function TestHost:testStandaloneHostWarnsWhenSessionCommitFails()
         return false, "commit boom", false
     end
 
-    local runtime = lib.standaloneHost()
+    local runtime = lib.standaloneHost(pluginGuid)
     runtime.addMenuBar()
     runtime.renderWindow()
 
@@ -63,10 +65,11 @@ function TestHost:testStandaloneHostWarnsWhenSessionCommitFails()
     lu.assertEquals(#Warnings, 1)
     lu.assertStrContains(Warnings[1], "Standalone Test session commit failed")
     lu.assertStrContains(Warnings[1], "commit boom")
-    lu.assertEquals(lib.getLiveModuleHost(_PLUGIN.guid), moduleHost)
+    lu.assertEquals(lib.getLiveModuleHost(pluginGuid), moduleHost)
 end
 
 function TestHost:testStandaloneHostCanResolveCurrentModuleHostFromLibRegistry()
+    local pluginGuid = "test-standalone-registry"
     local definition = lib.prepareDefinition({}, {
         id = "StandaloneRegistryHost",
         name = "Standalone Registry Host",
@@ -77,17 +80,18 @@ function TestHost:testStandaloneHostCanResolveCurrentModuleHostFromLibRegistry()
         DebugMode = false,
     }, definition)
     local host = lib.createModuleHost({
+        pluginGuid = pluginGuid,
         definition = definition,
         store = store,
         session = session,
         drawTab = function() end,
     })
 
-    local runtime = lib.standaloneHost()
+    local runtime = lib.standaloneHost(pluginGuid)
 
     lu.assertEquals(type(runtime.renderWindow), "function")
     lu.assertEquals(type(runtime.addMenuBar), "function")
-    lu.assertEquals(lib.getLiveModuleHost(_PLUGIN.guid), host)
+    lu.assertEquals(lib.getLiveModuleHost(pluginGuid), host)
 end
 
 function TestHost:testHostAndAuthorSessionResetToDefaultsDelegateToLibHelper()
@@ -105,6 +109,7 @@ function TestHost:testHostAndAuthorSessionResetToDefaultsDelegateToLibHelper()
         Count = 7,
     }, definition)
     local host = lib.createModuleHost({
+        pluginGuid = "test-reset-host",
         definition = definition,
         store = store,
         session = session,
@@ -156,7 +161,7 @@ function TestHost:testCreateModuleHostSkipsImmediateCoordinatedSyncWhenFramework
         EnabledFlag = false,
     }, definition)
     local host = lib.createModuleHost({
-        moduleName = "reload-pack.ReloadHost",
+        pluginGuid = "reload-pack.ReloadHost",
         definition = definition,
         store = store,
         session = session,
@@ -186,7 +191,7 @@ function TestHost:testCreateModuleHostSkipsImmediateCoordinatedSyncWhenFramework
         OtherFlag = false,
     }, prepared)
     local reloadedHost = lib.createModuleHost({
-        moduleName = "reload-pack.ReloadHost",
+        pluginGuid = "reload-pack.ReloadHost",
         definition = prepared,
         store = reloadStore,
         session = reloadSession,

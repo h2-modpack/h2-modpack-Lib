@@ -2,6 +2,8 @@ local lu = require('luaunit')
 
 TestStandaloneHost = {}
 
+local PLUGIN_GUID = "test-standalone-module"
+
 local function makeHost(opts)
     opts = opts or {}
     local calls = {
@@ -72,11 +74,11 @@ local function makeHost(opts)
 end
 
 local function installHost(host)
-    local moduleName = _PLUGIN.guid
-    local previousHost = AdamantModpackLib_Internal.liveModuleHosts[moduleName]
-    AdamantModpackLib_Internal.liveModuleHosts[moduleName] = host
+    local pluginGuid = PLUGIN_GUID
+    local previousHost = AdamantModpackLib_Internal.liveModuleHosts[pluginGuid]
+    AdamantModpackLib_Internal.liveModuleHosts[pluginGuid] = host
     return function()
-        AdamantModpackLib_Internal.liveModuleHosts[moduleName] = previousHost
+        AdamantModpackLib_Internal.liveModuleHosts[pluginGuid] = previousHost
     end
 end
 
@@ -161,11 +163,17 @@ function TestStandaloneHost:tearDown()
     RestoreWarnings()
 end
 
-function TestStandaloneHost:testErrorsWhenCurrentModuleHasNoLiveHost()
+function TestStandaloneHost:testErrorsWhenPluginGuidMissing()
+    lu.assertErrorMsgContains("pluginGuid is required", function()
+        lib.standaloneHost()
+    end)
+end
+
+function TestStandaloneHost:testErrorsWhenModuleHasNoLiveHost()
     local restoreHost = installHost(nil)
 
     lu.assertErrorMsgContains("no live module host is registered", function()
-        lib.standaloneHost()
+        lib.standaloneHost(PLUGIN_GUID)
     end)
 
     restoreHost()
@@ -176,7 +184,7 @@ function TestStandaloneHost:testAppliesOnLoadWhenModuleIsNotCoordinated()
     local restoreHost = installHost(host)
     lib.lifecycle.registerCoordinator("standalone-pack", nil)
 
-    local runtime = lib.standaloneHost()
+    local runtime = lib.standaloneHost(PLUGIN_GUID)
 
     restoreHost()
     lu.assertEquals(type(runtime.renderWindow), "function")
@@ -191,7 +199,7 @@ function TestStandaloneHost:testSkipsStandaloneLifecycleAndUiWhenCoordinated()
     local imgui, calls = makeImgui({ menuClicked = true })
     rom.ImGui = imgui
 
-    local runtime = lib.standaloneHost()
+    local runtime = lib.standaloneHost(PLUGIN_GUID)
     runtime.addMenuBar()
     runtime.renderWindow()
 
@@ -213,7 +221,7 @@ function TestStandaloneHost:testMenuTogglesWindowAndRenderDrawsControls()
     })
     rom.ImGui = imgui
 
-    local runtime = lib.standaloneHost()
+    local runtime = lib.standaloneHost(PLUGIN_GUID)
     runtime.addMenuBar()
     runtime.renderWindow()
 
@@ -249,7 +257,7 @@ function TestStandaloneHost:testCloseFlushesRunDataAfterAffectingEnabledToggle()
     })
     rom.ImGui = imgui
 
-    local runtime = lib.standaloneHost()
+    local runtime = lib.standaloneHost(PLUGIN_GUID)
     runtime.addMenuBar()
     runtime.renderWindow()
     runtime.renderWindow()
@@ -279,7 +287,7 @@ function TestStandaloneHost:testDebugToggleDoesNotMarkRunDataDirty()
     })
     rom.ImGui = imgui
 
-    local runtime = lib.standaloneHost()
+    local runtime = lib.standaloneHost(PLUGIN_GUID)
     runtime.addMenuBar()
     runtime.renderWindow()
 

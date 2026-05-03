@@ -270,7 +270,8 @@ If the module belongs to a Framework-managed pack:
 If the module is not coordinated:
 
 ```lua
-internal.standaloneUi = lib.standaloneHost()
+local PLUGIN_GUID = _PLUGIN.guid
+internal.standaloneUi = lib.standaloneHost(PLUGIN_GUID)
 ```
 
 Then wire:

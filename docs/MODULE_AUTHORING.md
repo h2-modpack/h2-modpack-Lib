@@ -292,6 +292,8 @@ Framework behavior:
 For non-framework hosting, use:
 
 ```lua
+local PLUGIN_GUID = _PLUGIN.guid
+
 local definition = lib.prepareDefinition(internal, {
     modpack = PACK_ID,
     id = "ExampleModule",
@@ -302,6 +304,7 @@ local definition = lib.prepareDefinition(internal, {
 local store, session = lib.createStore(config, definition)
 
 lib.createModuleHost({
+    pluginGuid = PLUGIN_GUID,
     definition = definition,
     store = store,
     session = session,
@@ -311,7 +314,7 @@ lib.createModuleHost({
     drawQuickContent = internal.DrawQuickContent,
 })
 
-local runtime = lib.standaloneHost()
+local runtime = lib.standaloneHost(PLUGIN_GUID)
 
 local function registerGui()
     rom.gui.add_imgui(runtime.renderWindow)
@@ -355,6 +358,7 @@ local dataDefaults = import("config.lua")
 local config = chalk.auto("config.lua")
 
 local PACK_ID = "example-pack"
+local PLUGIN_GUID = _PLUGIN.guid
 ---@class ExampleModuleInternal
 ---@field store ManagedStore|nil
 ---@field standaloneUi StandaloneRuntime|nil
@@ -400,6 +404,7 @@ local function init()
     internal.store = store
 
     lib.createModuleHost({
+        pluginGuid = PLUGIN_GUID,
         definition = definition,
         store = store,
         session = session,
@@ -409,7 +414,7 @@ local function init()
         drawQuickContent = internal.DrawQuickContent,
     })
 
-    internal.standaloneUi = lib.standaloneHost()
+    internal.standaloneUi = lib.standaloneHost(PLUGIN_GUID)
 end
 
 function internal.DrawTab(ui, session)

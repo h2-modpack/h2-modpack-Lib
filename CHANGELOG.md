@@ -24,7 +24,7 @@ All notable changes to this project will be documented in this file.
 - Coordinated modules can request a Framework rebuild when structural definition shape changes during hot reload.
 - `createModuleHost(...)` now owns live-host publication and requires `drawTab`.
 - Public module host surface was narrowed around stable host accessors and behavior calls; direct raw definition access was removed.
-- `standaloneHost()` now resolves the current module host through Lib's live-host registry instead of accepting a host argument.
+- `createModuleHost(...)` and `standaloneHost(...)` now require an explicit plugin guid captured at module load time.
 - Manual lifecycle hooks now receive the active managed store as `apply(store)` and `revert(store)`.
 - Mutation lifecycle state is tracked by stable module identity where available, making reload/reapply behavior more robust.
 - `lib.lifecycle.applyOnLoad(...)` now reverts active tracked mutation state when a module reloads disabled.

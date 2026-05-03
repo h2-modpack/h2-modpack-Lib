@@ -108,7 +108,7 @@ function TestPrepareDefinition:testCreateModuleHostRequestsCoordinatorRebuildOnS
         OtherFlag = false,
     }, prepared)
     local host = lib.createModuleHost({
-        moduleName = "test-module",
+        pluginGuid = "test-module",
         definition = prepared,
         store = store,
         session = session,
@@ -153,7 +153,7 @@ function TestPrepareDefinition:testCreateModuleHostWarnsWhenCoordinatedRebuildCa
         OtherFlag = false,
     }, prepared)
     lib.createModuleHost({
-        moduleName = "test-module",
+        pluginGuid = "test-module",
         definition = prepared,
         store = store,
         session = session,
@@ -198,7 +198,7 @@ function TestPrepareDefinition:testCreateModuleHostKeepsPendingReasonWhenRebuild
         OtherFlag = false,
     }, prepared)
     lib.createModuleHost({
-        moduleName = "test-module",
+        pluginGuid = "test-module",
         definition = prepared,
         store = store,
         session = session,
