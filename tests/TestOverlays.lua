@@ -16,10 +16,14 @@ function TestOverlays:setUp()
     self.overlayState = AdamantModpackLib_Internal.overlays
     self.previousOverlayHudText = self.overlayState.hudText
     self.previousOverlayStackedText = self.overlayState.stackedText
+    self.previousUiSuppressors = self.overlayState.uiSuppressors
+    self.previousNextUiSuppressorId = self.overlayState.nextUiSuppressorId
 
     AdamantModpackLib_Internal.__adamantHooks = nil
     self.overlayState.hudText = {}
     self.overlayState.stackedText = {}
+    self.overlayState.uiSuppressors = {}
+    self.overlayState.nextUiSuppressorId = 0
     ShowingCombatUI = true
 end
 
@@ -36,6 +40,8 @@ function TestOverlays:tearDown()
     AdamantModpackLib_Internal.__adamantHooks = self.previousHooks
     self.overlayState.hudText = self.previousOverlayHudText
     self.overlayState.stackedText = self.previousOverlayStackedText
+    self.overlayState.uiSuppressors = self.previousUiSuppressors
+    self.overlayState.nextUiSuppressorId = self.previousNextUiSuppressorId
 end
 
 function TestOverlays:testHudTextOverlayUsesRetainedHudComponent()
@@ -836,4 +842,64 @@ function TestOverlays:testHudTextUsesGlobalHudVisibilityGate()
 
     lu.assertEquals(modified[#modified].Text, "During transition")
     lu.assertEquals(alphas[#alphas].Fraction, 1.0)
+end
+
+function TestOverlays:testUiSuppressionTokenGloballyHidesAndRestoresOverlays()
+    ScreenData = {
+        HUD = {
+            ComponentData = {},
+        },
+    }
+    HUDScreen = {
+        Components = {
+            SuppressedOverlay = {
+                Id = 404,
+            },
+        },
+    }
+    local modified = {}
+    local alphas = {}
+    ModifyTextBox = function(args)
+        modified[#modified + 1] = args
+    end
+    SetAlpha = function(args)
+        alphas[#alphas + 1] = args
+    end
+
+    local text = "Initial"
+    local handle = lib.overlays.registerHudText({
+        id = "ui-suppressed",
+        componentName = "SuppressedOverlay",
+        layout = {
+            RightOffset = 80,
+            Y = 360,
+        },
+        text = function()
+            return text
+        end,
+    })
+
+    lu.assertFalse(lib.overlays.isUiSuppressed())
+    lu.assertEquals(modified[#modified].Text, "Initial")
+
+    local firstToken = lib.overlays.suppressForUi()
+    lu.assertTrue(lib.overlays.isUiSuppressed())
+    lu.assertEquals(alphas[#alphas].Fraction, 0.0)
+
+    local secondToken = lib.overlays.suppressForUi()
+    text = "Hidden update"
+    handle.refresh()
+    lu.assertEquals(modified[#modified].Text, "Hidden update")
+    lu.assertEquals(alphas[#alphas].Fraction, 0.0)
+
+    firstToken.release()
+    lu.assertTrue(lib.overlays.isUiSuppressed())
+    lu.assertEquals(alphas[#alphas].Fraction, 0.0)
+
+    secondToken.release()
+    lu.assertFalse(lib.overlays.isUiSuppressed())
+    lu.assertEquals(alphas[#alphas].Fraction, 1.0)
+
+    secondToken.release()
+    lu.assertFalse(lib.overlays.isUiSuppressed())
 end

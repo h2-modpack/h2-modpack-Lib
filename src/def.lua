@@ -555,6 +555,9 @@ end
 ---@type AdamantModpackLib.OverlaysApi
 lib.overlays = {}
 
+---@class AdamantModpackLib.UiSuppressionToken
+---@field release fun()
+
 ---@param opts AdamantModpackLib.HudTextOverlayOpts
 ---@return AdamantModpackLib.HudTextOverlayHandle handle
 function lib.overlays.registerHudText(opts)
@@ -575,6 +578,14 @@ end
 
 ---@param regionName? string Optional stack region to refresh.
 function lib.overlays.refreshStackedText(regionName)
+end
+
+---@return boolean suppressed
+function lib.overlays.isUiSuppressed()
+end
+
+---@return AdamantModpackLib.UiSuppressionToken token
+function lib.overlays.suppressForUi()
 end
 
 ---@class AdamantModpackLib.HashingApi

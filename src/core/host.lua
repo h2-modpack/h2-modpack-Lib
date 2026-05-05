@@ -266,6 +266,7 @@ function public.standaloneHost(pluginGuid)
     local showWindow = false
     local didSeedWindowSize = false
     local runDataDirty = false
+    local uiSuppressionToken = nil
 
     local function markRunDataDirty()
         if moduleHost.affectsRunData() then
@@ -279,6 +280,26 @@ function public.standaloneHost(pluginGuid)
         end
         rom.game.SetupRunData()
         runDataDirty = false
+    end
+
+    local function setWindowOpen(open)
+        open = open == true
+        if showWindow == open then
+            return
+        end
+
+        if open then
+            showWindow = true
+            uiSuppressionToken = public.overlays.suppressForUi()
+            return
+        end
+
+        flushPendingRunData()
+        showWindow = false
+        if uiSuppressionToken then
+            uiSuppressionToken.release()
+            uiSuppressionToken = nil
+        end
     end
 
     local function seedWindowSize(imgui)
@@ -341,8 +362,7 @@ function public.standaloneHost(pluginGuid)
         end
         imgui.End()
         if open == false then
-            flushPendingRunData()
-            showWindow = false
+            setWindowOpen(false)
         end
     end
 
@@ -352,10 +372,7 @@ function public.standaloneHost(pluginGuid)
         if identity.modpack and internal.coordinators[identity.modpack] then return end
         if rom.ImGui.BeginMenu(meta.name) then
             if rom.ImGui.MenuItem(meta.name) then
-                if showWindow then
-                    flushPendingRunData()
-                end
-                showWindow = not showWindow
+                setWindowOpen(not showWindow)
             end
             rom.ImGui.EndMenu()
         end

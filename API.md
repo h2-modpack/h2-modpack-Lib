@@ -385,8 +385,13 @@ Retained HUD text helpers for shared overlay placement.
 Overlay visibility has two layers:
 - Lib applies a global game-HUD gate, currently based on `ShowingCombatUI`.
 - Each overlay can also provide its own `visible` boolean or callback.
+- Lib-hosted ImGui configuration windows acquire a UI suppression token while
+  open. Any active token hides the entire overlay layer until released.
 
 When the global gate is closed, lib hides all retained overlay components even if their own `visible` callback returns true. Text callbacks may still be refreshed so the display is current when the game HUD returns.
+
+Framework and standalone module UIs use this gate so configuration UI and
+gameplay overlays are mutually exclusive on screen.
 
 Current managed region:
 - `middleRightStack`: a right-anchored vertical stack used for framework markers and module status text.
@@ -438,6 +443,20 @@ lib.overlays.registerStackedRow({
 Stacked handles expose two refresh paths:
 - `refresh()` recomputes region layout, visibility, and text.
 - `refreshText()` updates retained text only and is intended for hot paths where row visibility/order is known to be stable.
+
+### `lib.overlays.suppressForUi()`
+
+Temporarily hides all Lib overlays while a foreground ImGui configuration UI is open.
+
+Returns a token:
+- `token.release()`
+
+Suppression is reference-counted by active tokens. Overlays are refreshed when the
+first token is acquired and when the final token is released.
+
+### `lib.overlays.isUiSuppressed()`
+
+Returns whether any UI suppression token is currently active.
 
 ## `lib.hashing`
 

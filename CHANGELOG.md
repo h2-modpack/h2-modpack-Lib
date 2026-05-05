@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - Added optional cross-module integration registration through `lib.integrations.*`.
 - Added `lib.imguiHelpers.*` enum/value helpers for low-level ImGui binding use.
 - Added `lib.overlays.*` retained HUD overlay helpers with managed `middleRightStack` layout, stacked text, stacked rows, and framework/module/debug order bands.
+- Added token-based `lib.overlays.suppressForUi()` overlay suppression for foreground ImGui configuration windows.
 - Added `lib.gameObject.*` helpers for namespaced runtime state attached to live game object tables.
 - Added runtime-only persisted storage aliases through `runtime = true` plus `store.getRuntimeState()`.
 - Added `definition.onSettingsCommitted(store)` as a post-commit observer for rebuilding derived runtime/UI structures after staged config commits.
@@ -36,6 +37,7 @@ All notable changes to this project will be documented in this file.
 - Runtime-only storage aliases are excluded from session staging, profile/hash surfaces, and reset-to-defaults flows.
 - Host `writeAndFlush(...)`, `flush()`, and lifecycle `commitSession(...)` now notify `onSettingsCommitted` after successful dirty commits.
 - The fallback HUD marker now participates in the shared overlay layout instead of owning a separate HUD placement path.
+- Standalone module UI now suppresses Lib overlays while open and restores them on close after pending runtime flushes.
 - Internal helper duplication was consolidated into shared internal value/store utilities.
 - Widget packed dropdown/radio helpers avoid repeated packed-choice classification work per frame.
 - Long-form guides and reference docs now live under `docs/`.

@@ -15,6 +15,8 @@ internal.overlays = internal.overlays or {
 
 local state = internal.overlays
 local values = internal.values
+state.uiSuppressors = state.uiSuppressors or {}
+state.nextUiSuppressorId = state.nextUiSuppressorId or 0
 
 local REGIONS = {
     middleRightStack = {
@@ -75,7 +77,7 @@ local function isGameHudVisible()
 end
 
 local function isVisible(entry)
-    return isGameHudVisible() and isEntryVisible(entry)
+    return isGameHudVisible() and not overlays.isUiSuppressed() and isEntryVisible(entry)
 end
 
 local function resolveText(entry)
@@ -344,6 +346,39 @@ function overlays.refreshStackedText(regionName)
         end
         refreshStackedEntry(entry, true)
     end
+end
+
+local function refreshAllOverlays()
+    overlays.refreshStackedText()
+    overlays.refreshHudText(true)
+end
+
+function overlays.isUiSuppressed()
+    return next(state.uiSuppressors) ~= nil
+end
+
+function overlays.suppressForUi()
+    state.nextUiSuppressorId = state.nextUiSuppressorId + 1
+    local id = state.nextUiSuppressorId
+    local wasSuppressed = overlays.isUiSuppressed()
+    state.uiSuppressors[id] = true
+    if not wasSuppressed then
+        refreshAllOverlays()
+    end
+
+    local released = false
+    return {
+        release = function()
+            if released then
+                return
+            end
+            released = true
+            state.uiSuppressors[id] = nil
+            if not overlays.isUiSuppressed() then
+                refreshAllOverlays()
+            end
+        end,
+    }
 end
 
 local function refreshOverlayVisibility()

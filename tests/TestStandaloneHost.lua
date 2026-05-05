@@ -151,6 +151,7 @@ function TestStandaloneHost:setUp()
     self.previousImGui = rom.ImGui
     self.previousImGuiCond = rom.ImGuiCond
     self.previousSetupRunData = rom.game.SetupRunData
+    self.previousSuppressForUi = lib.overlays.suppressForUi
     self.previousCoordinator = AdamantModpackLib_Internal.coordinators["standalone-pack"]
     rom.ImGuiCond = { FirstUseEver = 1 }
 end
@@ -159,6 +160,7 @@ function TestStandaloneHost:tearDown()
     rom.ImGui = self.previousImGui
     rom.ImGuiCond = self.previousImGuiCond
     rom.game.SetupRunData = self.previousSetupRunData
+    lib.overlays.suppressForUi = self.previousSuppressForUi
     lib.lifecycle.registerCoordinator("standalone-pack", self.previousCoordinator)
     RestoreWarnings()
 end
@@ -294,4 +296,34 @@ function TestStandaloneHost:testDebugToggleDoesNotMarkRunDataDirty()
     restoreHost()
     lu.assertEquals(host.calls.setDebugMode, { true })
     lu.assertEquals(setupCalls, 0)
+end
+
+function TestStandaloneHost:testStandaloneWindowSuppressesOverlaysUntilClose()
+    local suppressCalls = 0
+    local releaseCalls = 0
+    lib.overlays.suppressForUi = function()
+        suppressCalls = suppressCalls + 1
+        return {
+            release = function()
+                releaseCalls = releaseCalls + 1
+            end,
+        }
+    end
+
+    local host = makeHost({ modpack = "standalone-pack" })
+    local restoreHost = installHost(host)
+    lib.lifecycle.registerCoordinator("standalone-pack", nil)
+    local imgui = makeImgui({
+        menuClicked = true,
+        open = false,
+    })
+    rom.ImGui = imgui
+
+    local runtime = lib.standaloneHost(PLUGIN_GUID)
+    runtime.addMenuBar()
+    runtime.renderWindow()
+
+    restoreHost()
+    lu.assertEquals(suppressCalls, 1)
+    lu.assertEquals(releaseCalls, 1)
 end
