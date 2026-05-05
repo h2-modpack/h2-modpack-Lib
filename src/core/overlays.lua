@@ -11,7 +11,6 @@ overlays.order = overlays.order or {
 internal.overlays = internal.overlays or {
     hudText = {},
     stackedText = {},
-    suppressedOwners = {},
 }
 
 local state = internal.overlays
@@ -66,21 +65,7 @@ local function resolveValue(value)
     return value
 end
 
-local function normalizeOwner(owner)
-    if type(owner) == "string" and owner ~= "" then
-        return owner
-    end
-    return nil
-end
-
-local function isOwnerSuppressed(entry)
-    return entry.owner ~= nil and state.suppressedOwners[entry.owner] == true
-end
-
 local function isEntryVisible(entry)
-    if isOwnerSuppressed(entry) then
-        return false
-    end
     local visible = resolveValue(entry.visible)
     return visible ~= false
 end
@@ -361,22 +346,6 @@ function overlays.refreshStackedText(regionName)
     end
 end
 
-function overlays.setOwnerSuppressed(owner, suppressed)
-    owner = normalizeOwner(owner)
-    if not owner then
-        return
-    end
-
-    local nextSuppressed = suppressed == true
-    if (state.suppressedOwners[owner] == true) == nextSuppressed then
-        return
-    end
-
-    state.suppressedOwners[owner] = nextSuppressed or nil
-    overlays.refreshStackedText()
-    overlays.refreshHudText(true)
-end
-
 local function refreshOverlayVisibility()
     overlays.refreshHudText(true)
 end
@@ -460,7 +429,6 @@ function overlays.registerHudText(opts)
     local entry = {
         id = opts.id,
         componentName = opts.componentName or sanitizeComponentName(opts.id),
-        owner = normalizeOwner(opts.owner),
         layout = opts.layout or {},
         textArgs = opts.textArgs or {},
         text = opts.text or "",
@@ -495,7 +463,6 @@ function overlays.registerStackedText(opts)
     local handle = overlays.registerHudText({
         id = stackedHandleId(region, opts.id),
         componentName = opts.componentName,
-        owner = normalizeOwner(opts.owner),
         layout = {},
         textArgs = sanitizeStackedTextArgs(opts.textArgs),
         text = opts.text,
@@ -510,7 +477,6 @@ function overlays.registerStackedText(opts)
     entry = {
         id = opts.id,
         region = region,
-        owner = normalizeOwner(opts.owner),
         order = tonumber(opts.order) or overlays.order.module,
         text = opts.text or "",
         visible = opts.visible,
@@ -585,7 +551,6 @@ function overlays.registerStackedRow(opts)
             handle = overlays.registerHudText({
                 id = stackedHandleId(region, opts.id .. ":" .. tostring(column.key or index)),
                 componentName = column.componentName or columnComponentName(componentBase, column, index),
-                owner = normalizeOwner(opts.owner),
                 layout = {},
                 textArgs = sanitizeStackedTextArgs(column.textArgs),
                 text = column.text,
@@ -601,7 +566,6 @@ function overlays.registerStackedRow(opts)
     local entry = {
         id = opts.id,
         region = region,
-        owner = normalizeOwner(opts.owner),
         order = tonumber(opts.order) or overlays.order.module,
         visible = opts.visible,
         columns = columns,

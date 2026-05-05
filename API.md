@@ -385,7 +385,6 @@ Retained HUD text helpers for shared overlay placement.
 Overlay visibility has two layers:
 - Lib applies a global game-HUD gate, currently based on `ShowingCombatUI`.
 - Each overlay can also provide its own `visible` boolean or callback.
-- Overlays can declare an `owner`; callers can suppress that owner while its configuration UI is being drawn.
 
 When the global gate is closed, lib hides all retained overlay components even if their own `visible` callback returns true. Text callbacks may still be refreshed so the display is current when the game HUD returns.
 
@@ -412,7 +411,6 @@ Columns are declared left-to-right:
 ```lua
 lib.overlays.registerStackedRow({
     id = "example.timer",
-    owner = PLUGIN_GUID,
     region = "middleRightStack",
     order = lib.overlays.order.module,
     columnGap = 6,
@@ -440,12 +438,6 @@ lib.overlays.registerStackedRow({
 Stacked handles expose two refresh paths:
 - `refresh()` recomputes region layout, visibility, and text.
 - `refreshText()` updates retained text only and is intended for hot paths where row visibility/order is known to be stable.
-
-### `lib.overlays.setOwnerSuppressed(owner, suppressed)`
-
-Hides or restores every overlay registered with `owner = owner`. Suppressed overlays are also removed from managed stack layout, so remaining entries close the gap.
-
-Framework uses this to hide a module's runtime overlay while that module's `drawTab` or `drawQuickContent` surface is being drawn.
 
 ## `lib.hashing`
 

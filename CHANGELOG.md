@@ -13,7 +13,7 @@ All notable changes to this project will be documented in this file.
 - Added coordinated pack rebuild callbacks through `lib.lifecycle.registerCoordinatorRebuild(...)` and `lib.lifecycle.requestCoordinatorRebuild(...)`.
 - Added optional cross-module integration registration through `lib.integrations.*`.
 - Added `lib.imguiHelpers.*` enum/value helpers for low-level ImGui binding use.
-- Added `lib.overlays.*` retained HUD overlay helpers with managed `middleRightStack` layout, stacked text, stacked rows, owner suppression, and framework/module/debug order bands.
+- Added `lib.overlays.*` retained HUD overlay helpers with managed `middleRightStack` layout, stacked text, stacked rows, and framework/module/debug order bands.
 - Added `lib.gameObject.*` helpers for namespaced runtime state attached to live game object tables.
 - Added runtime-only persisted storage aliases through `runtime = true` plus `store.getRuntimeState()`.
 - Added `definition.onSettingsCommitted(store)` as a post-commit observer for rebuilding derived runtime/UI structures after staged config commits.

@@ -506,7 +506,6 @@ end
 
 ---@class AdamantModpackLib.HudTextOverlayOpts
 ---@field id string Stable overlay id.
----@field owner? string Optional module/plugin owner id used for scoped UI suppression.
 ---@field componentName? string Explicit retained HUD component name.
 ---@field layout? table Hades II HUD component layout fields such as `RightOffset`, `BottomOffset`, `X`, and `Y`.
 ---@field textArgs? table Text format overrides.
@@ -544,7 +543,6 @@ end
 
 ---@class AdamantModpackLib.StackedRowOverlayOpts
 ---@field id string Stable overlay row id.
----@field owner? string Optional module/plugin owner id used for scoped UI suppression.
 ---@field componentName? string Base retained HUD component name.
 ---@field region? string Stack region name. Defaults to `middleRightStack`.
 ---@field order? integer Sort key within the region.
@@ -577,11 +575,6 @@ end
 
 ---@param regionName? string Optional stack region to refresh.
 function lib.overlays.refreshStackedText(regionName)
-end
-
----@param owner string Module/plugin owner id.
----@param suppressed boolean Whether overlays owned by `owner` should be hidden and removed from managed stack layout.
-function lib.overlays.setOwnerSuppressed(owner, suppressed)
 end
 
 ---@class AdamantModpackLib.HashingApi

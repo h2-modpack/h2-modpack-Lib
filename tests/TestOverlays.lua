@@ -16,12 +16,10 @@ function TestOverlays:setUp()
     self.overlayState = AdamantModpackLib_Internal.overlays
     self.previousOverlayHudText = self.overlayState.hudText
     self.previousOverlayStackedText = self.overlayState.stackedText
-    self.previousOverlaySuppressedOwners = self.overlayState.suppressedOwners
 
     AdamantModpackLib_Internal.__adamantHooks = nil
     self.overlayState.hudText = {}
     self.overlayState.stackedText = {}
-    self.overlayState.suppressedOwners = {}
     ShowingCombatUI = true
 end
 
@@ -38,7 +36,6 @@ function TestOverlays:tearDown()
     AdamantModpackLib_Internal.__adamantHooks = self.previousHooks
     self.overlayState.hudText = self.previousOverlayHudText
     self.overlayState.stackedText = self.previousOverlayStackedText
-    self.overlayState.suppressedOwners = self.previousOverlaySuppressedOwners
 end
 
 function TestOverlays:testHudTextOverlayUsesRetainedHudComponent()
@@ -839,53 +836,4 @@ function TestOverlays:testHudTextUsesGlobalHudVisibilityGate()
 
     lu.assertEquals(modified[#modified].Text, "During transition")
     lu.assertEquals(alphas[#alphas].Fraction, 1.0)
-end
-
-function TestOverlays:testOwnerSuppressionHidesOwnedStackedRowsOnly()
-    ScreenData = {
-        HUD = {
-            ComponentData = {},
-        },
-    }
-    HUDScreen = {
-        Components = {
-            OwnedOverlay = {
-                Id = 501,
-            },
-            OtherOverlay = {
-                Id = 502,
-            },
-        },
-    }
-    ModifyTextBox = function() end
-
-    lib.overlays.registerStackedText({
-        id = "owned",
-        componentName = "OwnedOverlay",
-        owner = "test-owner",
-        region = "middleRightStack",
-        order = 10,
-        text = "Owned",
-    })
-    lib.overlays.registerStackedText({
-        id = "other",
-        componentName = "OtherOverlay",
-        region = "middleRightStack",
-        order = 20,
-        text = "Other",
-    })
-
-    lu.assertEquals(ScreenData.HUD.ComponentData.OwnedOverlay.Y, 200)
-    lu.assertEquals(ScreenData.HUD.ComponentData.OtherOverlay.Y, 232)
-
-    lib.overlays.setOwnerSuppressed("test-owner", true)
-
-    lu.assertTrue(AdamantModpackLib_Internal.overlays.suppressedOwners["test-owner"])
-    lu.assertEquals(ScreenData.HUD.ComponentData.OtherOverlay.Y, 200)
-
-    lib.overlays.setOwnerSuppressed("test-owner", false)
-
-    lu.assertNil(AdamantModpackLib_Internal.overlays.suppressedOwners["test-owner"])
-    lu.assertEquals(ScreenData.HUD.ComponentData.OwnedOverlay.Y, 200)
-    lu.assertEquals(ScreenData.HUD.ComponentData.OtherOverlay.Y, 232)
 end
