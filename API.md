@@ -203,7 +203,7 @@ Rules:
 
 Creates the managed store facade around persisted module config.
 What it does:
-- warns on malformed top-level definition fields
+- validates prepared storage contracts before managed state is created
 - validates and prepares `definition.storage`
 - returns a separate `session` for staged UI state
 - exposes persisted read helpers
@@ -327,7 +327,7 @@ Storage axis defaults:
 | `stage = false, hash = false` | yes | no | no |
 | `hash = false` | yes | yes | no |
 
-Invalid combinations currently warn during storage validation:
+Invalid storage combinations fail during storage validation:
 - `hash = true` requires `persist = true`
 - `hash = true` requires `stage = true`
 

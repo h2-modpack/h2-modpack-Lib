@@ -92,11 +92,9 @@ function TestStore:testCreateStoreReadsAndWritesScalarAliases()
 
     lu.assertFalse(store.read("Enabled"))
     lu.assertEquals(store.read("MaxGods"), 4)
-    CaptureWarnings()
-    lu.assertNil(store.read("MaxGodsPerRun"))
-    lu.assertEquals(#Warnings, 1)
-    lu.assertStrContains(Warnings[1], "unknown storage alias 'MaxGodsPerRun'")
-    RestoreWarnings()
+    lu.assertErrorMsgContains("store.unknown_read_alias", function()
+        store.read("MaxGodsPerRun")
+    end)
 
     session.write("Enabled", true)
     session.write("MaxGods", 12)
@@ -127,22 +125,13 @@ function TestStore:testPackedAliasReadWriteUpdatesOwningRoot()
 end
 
 function TestStore:testTransientAliasesAreNotReadableThroughStore()
-    CaptureWarnings()
     local config = { Enabled = false }
     local store, session = lib.createStore(config, makeTransientDefinition())
 
-    lu.assertNil(store.read("FilterText"))
+    lu.assertErrorMsgContains("store.invalid_read_surface", function()
+        store.read("FilterText")
+    end)
     lu.assertEquals(session.view.FilterText, "")
-
-    local sawReadWarning = false
-    for _, warning in ipairs(Warnings) do
-        if string.find(warning, "store.read: alias 'FilterText' is staged-only", 1, true) then
-            sawReadWarning = true
-        end
-    end
-    RestoreWarnings()
-
-    lu.assertTrue(sawReadWarning)
 end
 
 function TestStore:testRuntimeAliasesUseNarrowStoreAccessor()
@@ -152,7 +141,9 @@ function TestStore:testRuntimeAliasesUseNarrowStoreAccessor()
     lu.assertTrue(store.read("Enabled"))
     lu.assertFalse(store.read("RecordingArmed"))
     lu.assertEquals(store.read("RunMarker"), 2)
-    lu.assertNil(session.read("RecordingArmed"))
+    lu.assertErrorMsgContains("session.invalid_read_surface", function()
+        session.read("RecordingArmed")
+    end)
 
     store.writeUnstaged("RecordingArmed", true)
     store.writeUnstaged("RunMarker", 120)
@@ -388,10 +379,32 @@ end
 function TestSession:testTableStorageDoesNotLeakRowAliasesGlobally()
     local _, session = lib.createStore({}, makeTableDefinition())
 
-    CaptureWarnings()
     lu.assertNil(session.read("Limit"))
     lu.assertNil(session.read("ChoiceA"))
-    RestoreWarnings()
+end
+
+function TestSession:testSessionWriteUnknownAliasFails()
+    local _, session = lib.createStore({}, makeScalarDefinition())
+
+    lu.assertErrorMsgContains("unknown alias 'Nope'", function()
+        session.write("Nope", true)
+    end)
+end
+
+function TestSession:testSessionResetUnknownAliasFails()
+    local _, session = lib.createStore({}, makeScalarDefinition())
+
+    lu.assertErrorMsgContains("unknown alias 'Nope'", function()
+        session.reset("Nope")
+    end)
+end
+
+function TestSession:testSessionTableWrongAliasFails()
+    local _, session = lib.createStore({}, makeScalarDefinition())
+
+    lu.assertErrorMsgContains("is not table storage", function()
+        session.table("Enabled")
+    end)
 end
 
 function TestSession:testReadonlyViewDoesNotExposeMutableTableRoot()
@@ -422,4 +435,3 @@ function TestSession:testTableStorageHashRoundTripsRows()
     lu.assertEquals(decoded[2].Limit, 1)
     lu.assertEquals(decoded[2].PackedChoices, 4)
 end
-

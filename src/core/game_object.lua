@@ -1,17 +1,18 @@
 public.gameObject = public.gameObject or {}
+local internal = AdamantModpackLib_Internal
 local gameObject = public.gameObject
 
 local ROOT_KEY = "_AdamantModpackLibGameObject"
 
 local function assertNonEmptyString(value, name)
     if type(value) ~= "string" or value == "" then
-        error(string.format("lib.gameObject %s must be a non-empty string", name), 3)
+        internal.violate("game_object.invalid_args", "lib.gameObject %s must be a non-empty string", name)
     end
 end
 
 local function assertObject(object)
     if type(object) ~= "table" then
-        error("lib.gameObject object must be a table", 3)
+        internal.violate("game_object.invalid_args", "lib.gameObject object must be a table")
     end
 end
 
@@ -32,7 +33,7 @@ local function getModuleBucket(object, packId, moduleId, key, create)
     end
     if type(root) ~= "table" then
         if create then
-            error("lib.gameObject root bucket is not a table", 3)
+            internal.violate("game_object.invalid_bucket", "lib.gameObject root bucket is not a table")
         end
         return nil
     end
@@ -44,7 +45,7 @@ local function getModuleBucket(object, packId, moduleId, key, create)
     end
     if type(packBucket) ~= "table" then
         if create then
-            error("lib.gameObject pack bucket is not a table", 3)
+            internal.violate("game_object.invalid_bucket", "lib.gameObject pack bucket is not a table")
         end
         return nil
     end
@@ -56,7 +57,7 @@ local function getModuleBucket(object, packId, moduleId, key, create)
     end
     if type(moduleBucket) ~= "table" then
         if create then
-            error("lib.gameObject module bucket is not a table", 3)
+            internal.violate("game_object.invalid_bucket", "lib.gameObject module bucket is not a table")
         end
         return nil
     end
@@ -77,7 +78,7 @@ function gameObject.get(object, packId, moduleId, key, factory)
     if state == nil then
         if factory ~= nil then
             if type(factory) ~= "function" then
-                error("lib.gameObject.get factory must be a function", 2)
+                internal.violate("game_object.invalid_factory", "lib.gameObject.get factory must be a function")
             end
             state = factory()
         end
@@ -85,12 +86,12 @@ function gameObject.get(object, packId, moduleId, key, factory)
             state = {}
         end
         if type(state) ~= "table" then
-            error("lib.gameObject.get factory must return a table", 2)
+            internal.violate("game_object.invalid_factory", "lib.gameObject.get factory must return a table")
         end
         moduleBucket[key] = state
     end
     if type(state) ~= "table" then
-        error("lib.gameObject state bucket is not a table", 2)
+        internal.violate("game_object.invalid_bucket", "lib.gameObject state bucket is not a table")
     end
     return state
 end

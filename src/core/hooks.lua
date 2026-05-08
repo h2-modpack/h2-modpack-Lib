@@ -2,8 +2,9 @@ public.hooks = public.hooks or {}
 public.hooks.Context = public.hooks.Context or {}
 AdamantModpackLib_Internal.hooks = AdamantModpackLib_Internal.hooks or {}
 
+local internal = AdamantModpackLib_Internal
 local hooks = public.hooks
-local internalHooks = AdamantModpackLib_Internal.hooks
+local internalHooks = internal.hooks
 local REGISTRY_KEY = "__adamantHooks"
 
 local function getModUtil()
@@ -11,13 +12,16 @@ local function getModUtil()
     if not resolved and rom and rom.mods then
         resolved = rom.mods["SGG_Modding-ModUtil"]
     end
-    assert(resolved and resolved.mod and resolved.mod.Path,
-        "lib.hooks: SGG_Modding-ModUtil is not available")
+    if not (resolved and resolved.mod and resolved.mod.Path) then
+        internal.violate("hooks.modutil_unavailable", "lib.hooks: SGG_Modding-ModUtil is not available")
+    end
     return resolved
 end
 
 local function getRegistry(owner)
-    assert(type(owner) == "table", "lib.hooks: owner must be a persistent table")
+    if type(owner) ~= "table" then
+        internal.violate("hooks.invalid_registration", "lib.hooks: owner must be a persistent table")
+    end
 
     local registry = owner[REGISTRY_KEY]
     if not registry then
@@ -32,9 +36,13 @@ local function getRegistry(owner)
 end
 
 local function parseRegistrationArgs(path, keyOrValue, maybeValue, valueName)
-    assert(type(path) == "string" and path ~= "", "lib.hooks: path must be a non-empty string")
+    if type(path) ~= "string" or path == "" then
+        internal.violate("hooks.invalid_registration", "lib.hooks: path must be a non-empty string")
+    end
     if maybeValue == nil then
-        assert(keyOrValue ~= nil, "lib.hooks: " .. valueName .. " is required")
+        if keyOrValue == nil then
+            internal.violate("hooks.invalid_registration", "lib.hooks: %s is required", valueName)
+        end
         return path, keyOrValue
     end
     return tostring(keyOrValue), maybeValue
@@ -95,7 +103,9 @@ local function applyOverrideState(state)
         if not state.registered then
             getModUtil().mod.Path.Override(state.path, function(...)
                 local current = state.replacement
-                assert(type(current) == "function", "lib.hooks.Override: function replacement is inactive")
+                if type(current) ~= "function" then
+                    internal.violate("hooks.inactive_override", "lib.hooks.Override: function replacement is inactive")
+                end
                 return current(...)
             end)
             state.registered = true
@@ -105,7 +115,9 @@ local function applyOverrideState(state)
             resolvedModUtil.mod.Path.Restore(state.path)
             resolvedModUtil.mod.Path.Override(state.path, function(...)
                 local current = state.replacement
-                assert(type(current) == "function", "lib.hooks.Override: function replacement is inactive")
+                if type(current) ~= "function" then
+                    internal.violate("hooks.inactive_override", "lib.hooks.Override: function replacement is inactive")
+                end
                 return current(...)
             end)
             state.usesDispatcher = true
@@ -165,7 +177,9 @@ end
 ---@param maybeHandler function|nil Handler when an explicit key is supplied.
 function hooks.Wrap(owner, path, keyOrHandler, maybeHandler)
     local key, handler = parseRegistrationArgs(path, keyOrHandler, maybeHandler, "handler")
-    assert(type(handler) == "function", "lib.hooks.Wrap: handler must be a function")
+    if type(handler) ~= "function" then
+        internal.violate("hooks.invalid_registration", "lib.hooks.Wrap: handler must be a function")
+    end
 
     local state, registry = getSlot(owner, "wrap", path, key)
     if registry.refreshing then
@@ -205,7 +219,9 @@ end
 ---@param maybeContext function|nil Context function when an explicit key is supplied.
 function hooks.Context.Wrap(owner, path, keyOrContext, maybeContext)
     local key, context = parseRegistrationArgs(path, keyOrContext, maybeContext, "context")
-    assert(type(context) == "function", "lib.hooks.Context.Wrap: context must be a function")
+    if type(context) ~= "function" then
+        internal.violate("hooks.invalid_registration", "lib.hooks.Context.Wrap: context must be a function")
+    end
 
     local state, registry = getSlot(owner, "contextWrap", path, key)
     if registry.refreshing then
@@ -222,7 +238,9 @@ end
 ---@param owner table Persistent module/framework internal table.
 ---@param register fun()
 function internalHooks.refresh(owner, register)
-    assert(type(register) == "function", "internal.hooks.refresh: register must be a function")
+    if type(register) ~= "function" then
+        internal.violate("hooks.invalid_registration", "internal.hooks.refresh: register must be a function")
+    end
 
     local registry = getRegistry(owner)
     registry.generation = registry.generation + 1

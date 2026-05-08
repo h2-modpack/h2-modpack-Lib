@@ -102,6 +102,15 @@ function TestRegisterCoordinator:testMultiplePacksIndependent()
     lu.assertFalse(lib.isModuleEnabled(makeStore(true), "pack-b"))
 end
 
+function TestRegisterCoordinator:testRegisterCoordinatorRejectsInvalidConfig()
+    lu.assertErrorMsgContains("packId must be a non-empty string", function()
+        lib.lifecycle.registerCoordinator("", { ModEnabled = true })
+    end)
+    lu.assertErrorMsgContains("config.ModEnabled must be a boolean", function()
+        lib.lifecycle.registerCoordinator("bad-pack", {})
+    end)
+end
+
 function TestRegisterCoordinator:testCoordinatorRegistrySurvivesLibReload()
     lib.lifecycle.registerCoordinator("pack-a", { ModEnabled = false })
     lib.lifecycle.registerCoordinatorRebuild("pack-a", function()

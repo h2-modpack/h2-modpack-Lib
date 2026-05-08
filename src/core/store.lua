@@ -157,12 +157,17 @@ end
 ---@return ManagedStore store Managed store instance for config and mutation lifecycle.
 ---@return Session session Staged UI/session state for storage-backed controls.
 function public.createStore(modConfig, definition)
-    assert(type(definition) == "table" and definition._preparedDefinition == true,
-        "createStore expects a prepared definition; call lib.prepareDefinition(...) first")
+    if type(definition) ~= "table" or definition._preparedDefinition ~= true then
+        internal.violate(
+            "store.invalid_create_args",
+            "createStore expects a prepared definition; call lib.prepareDefinition(...) first"
+        )
+    end
     local backend = GetConfigBackend(modConfig)
     local store = {}
     local storage = definition.storage
     local label = tostring(definition.name or definition.id or _PLUGIN.guid or "module")
+    local runtimeValues = {}
 
     storageInternal.validate(storage, label)
     storageInternal.assertPersistedDefaults(storage, label)
@@ -195,7 +200,7 @@ function public.createStore(modConfig, definition)
 
     local function readRootNode(root)
         if not root._persist then
-            local raw = rawget(root, "_runtimeValue")
+            local raw = runtimeValues[root]
             if raw == nil then
                 raw = ClonePersistedValue(root.default)
             end
@@ -213,7 +218,7 @@ function public.createStore(modConfig, definition)
         if root._persist then
             writeRaw(root._storageKey, NormalizeStorageValue(root, value))
         else
-            root._runtimeValue = NormalizeStorageValue(root, value)
+            runtimeValues[root] = NormalizeStorageValue(root, value)
         end
     end
 
@@ -240,7 +245,8 @@ function public.createStore(modConfig, definition)
         readRoot = readRootNode,
         canRead = function(node, alias)
             if not node._persist and node._stage then
-                internal.libWarn(
+                internal.violate(
+                    "store.invalid_read_surface",
                     "store.read: alias '%s' is staged-only; use session for UI-only state",
                     tostring(alias))
                 return false
@@ -248,7 +254,7 @@ function public.createStore(modConfig, definition)
             return true
         end,
         onUnknownRead = function(alias)
-            internal.libWarn("store.read: unknown storage alias '%s'", tostring(alias))
+            internal.violate("store.unknown_read_alias", "store.read: unknown storage alias '%s'", tostring(alias))
         end,
     }
 
@@ -260,7 +266,8 @@ function public.createStore(modConfig, definition)
         end,
         canWrite = function(node, alias)
             if not node._persist and node._stage then
-                internal.libWarn(
+                internal.violate(
+                    "store.invalid_write_surface",
                     "internal.store.writePersisted: alias '%s' is staged-only; use session for UI-only state",
                     tostring(alias))
                 return false
@@ -268,7 +275,7 @@ function public.createStore(modConfig, definition)
             return true
         end,
         onUnknownWrite = function(alias)
-            internal.libWarn("internal.store.writePersisted: unknown storage alias '%s'", tostring(alias))
+            internal.violate("store.unknown_write_alias", "internal.store.writePersisted: unknown storage alias '%s'", tostring(alias))
         end,
     }
 
@@ -285,16 +292,13 @@ function public.createStore(modConfig, definition)
     function store.table(alias)
         local node = type(alias) == "string" and aliasNodes[alias] or nil
         if not node then
-            internal.libWarn("store.table: unknown storage alias '%s'", tostring(alias))
-            return nil
+            internal.violate("store.unknown_table_alias", "store.table: unknown storage alias '%s'", tostring(alias))
         end
         if node.type ~= "table" or node._isBitAlias then
-            internal.libWarn("store.table: alias '%s' is not table storage", tostring(alias))
-            return nil
+            internal.violate("store.invalid_table_alias", "store.table: alias '%s' is not table storage", tostring(alias))
         end
         if not node._persist and node._stage then
-            internal.libWarn("store.table: alias '%s' is staged-only; use session.table()", tostring(alias))
-            return nil
+            internal.violate("store.invalid_table_surface", "store.table: alias '%s' is staged-only; use session.table()", tostring(alias))
         end
         return storageInternal.CreateTableHandle(node, {
             readRoot = readRootNode,
@@ -309,10 +313,11 @@ function public.createStore(modConfig, definition)
     local function assertUnstagedAlias(alias)
         local node = unstagedAliases[alias]
         if not node then
-            error(string.format(
+            internal.violate(
+                "store.invalid_unstaged_write",
                 "store.writeUnstaged: alias '%s' is not declared with stage = false",
                 tostring(alias)
-            ), 3)
+            )
         end
         return node
     end

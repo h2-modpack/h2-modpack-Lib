@@ -74,19 +74,21 @@ local function PrepareTableNode(node, prefix)
     for index, rowNode in ipairs(node.row) do
         local rowPrefix = prefix .. " row[" .. index .. "]"
         if type(rowNode) == "table" then
-            assert(rowNode.type ~= "table",
-                string.format("%s: nested table storage is not supported", rowPrefix))
+            if rowNode.type == "table" then
+                internal.violate("storage.invalid_table_row", "%s: nested table storage is not supported", rowPrefix)
+            end
             if rowNode.persist ~= nil then
-                internal.libWarnIf("%s: row storage cannot declare persist; table root owns persistence", rowPrefix)
-                rowNode.persist = nil
+                internal.violate(
+                    "storage.invalid_table_row",
+                    "%s: row storage cannot declare persist; table root owns persistence",
+                    rowPrefix
+                )
             end
             if rowNode.stage ~= nil then
-                internal.libWarnIf("%s: row storage cannot declare stage; table root owns staging", rowPrefix)
-                rowNode.stage = nil
+                internal.violate("storage.invalid_table_row", "%s: row storage cannot declare stage; table root owns staging", rowPrefix)
             end
             if rowNode.hash ~= nil then
-                internal.libWarnIf("%s: row storage cannot declare hash; table root owns hashing", rowPrefix)
-                rowNode.hash = nil
+                internal.violate("storage.invalid_table_row", "%s: row storage cannot declare hash; table root owns hashing", rowPrefix)
             end
         end
     end
@@ -101,6 +103,7 @@ local function PrepareTableNode(node, prefix)
     end
     node.defaultRows = ClampRowCount(node, node.defaultRows or node.minRows or 0)
     node.default = storageInternal.NormalizeTableValue(node, nil)
+    node._tableDefaultPrepared = true
 end
 
 local function ValidateChildAlias(bitNode, root, storage, seenAliases, seenRootKeys, prefix)
@@ -109,13 +112,11 @@ local function ValidateChildAlias(bitNode, root, storage, seenAliases, seenRootK
     end
 
     if seenAliases[bitNode.alias] then
-        internal.libWarnIf("%s: duplicate alias '%s'", prefix, bitNode.alias)
-        return
+        internal.violate("storage.duplicate_alias", "%s: duplicate alias '%s'", prefix, bitNode.alias)
     end
     local ownerKey = seenRootKeys[bitNode.alias]
     if ownerKey and ownerKey ~= root._storageKey then
-        internal.libWarnIf("%s: alias '%s' conflicts with root alias '%s'", prefix, bitNode.alias, ownerKey)
-        return
+        internal.violate("storage.duplicate_alias", "%s: alias '%s' conflicts with root alias '%s'", prefix, bitNode.alias, ownerKey)
     end
 
     local storageType = StorageTypes[bitNode.type]
@@ -154,28 +155,28 @@ local function ValidatePackedBits(node, prefix)
     for index, bitNode in ipairs(node.bits or {}) do
         local bitPrefix = prefix .. " bits[" .. index .. "]"
         if type(bitNode.alias) ~= "string" or bitNode.alias == "" then
-            internal.libWarnIf("%s: packed bit alias must be a non-empty string", bitPrefix)
+            internal.violate("storage.invalid_packed_bit", "%s: packed bit alias must be a non-empty string", bitPrefix)
         elseif seenAliases[bitNode.alias] then
-            internal.libWarnIf("%s: duplicate packed bit alias '%s'", bitPrefix, bitNode.alias)
+            internal.violate("storage.duplicate_alias", "%s: duplicate packed bit alias '%s'", bitPrefix, bitNode.alias)
         else
             seenAliases[bitNode.alias] = true
         end
         if type(bitNode.offset) ~= "number" or bitNode.offset < 0 then
-            internal.libWarnIf("%s: packed bit offset must be a non-negative number", bitPrefix)
+            internal.violate("storage.invalid_packed_bit", "%s: packed bit offset must be a non-negative number", bitPrefix)
         end
         if type(bitNode.width) ~= "number" or bitNode.width < 1 then
-            internal.libWarnIf("%s: packed bit width must be a positive number", bitPrefix)
+            internal.violate("storage.invalid_packed_bit", "%s: packed bit width must be a positive number", bitPrefix)
         end
 
         if type(bitNode.offset) == "number" and type(bitNode.width) == "number" then
             local offset = math.floor(bitNode.offset)
             local width = math.floor(bitNode.width)
             if offset + width > 32 then
-                internal.libWarnIf("%s: packed bit offset + width must stay within 32 bits", bitPrefix)
+                internal.violate("storage.invalid_packed_bit", "%s: packed bit offset + width must stay within 32 bits", bitPrefix)
             end
             for bit = offset, offset + width - 1 do
                 if occupiedBits[bit] then
-                    internal.libWarnIf("%s: packed bit overlaps bit %d", bitPrefix, bit)
+                    internal.violate("storage.invalid_packed_bit", "%s: packed bit overlaps bit %d", bitPrefix, bit)
                 else
                     occupiedBits[bit] = true
                 end
@@ -186,8 +187,7 @@ local function ValidatePackedBits(node, prefix)
 
         local valueType = bitNode.type or (bitNode.width == 1 and "bool" or "int")
         if valueType ~= "bool" and valueType ~= "int" then
-            internal.libWarnIf("%s: packed bit type must be 'bool' or 'int'", bitPrefix)
-            valueType = bitNode.width == 1 and "bool" or "int"
+            internal.violate("storage.invalid_packed_bit", "%s: packed bit type must be 'bool' or 'int'", bitPrefix)
         end
         bitNode.type = valueType
         local storageType = StorageTypes[valueType]
@@ -215,8 +215,7 @@ storageInternal.EnsurePreparedStorage = EnsurePreparedStorage
 ---@param label string Validation label used to prefix warnings.
 function storageInternal.validate(storage, label)
     if type(storage) ~= "table" then
-        internal.libWarnIf("%s: storage is not a table", label)
-        return
+        internal.violate("storage.invalid_schema", "%s: storage is not a table", label)
     end
 
     storage._rootNodes = {}
@@ -231,30 +230,30 @@ function storageInternal.validate(storage, label)
     for index, node in ipairs(storage) do
         local prefix = label .. " storage #" .. index
         if type(node) ~= "table" then
-            internal.libWarnIf("%s: storage entry is not a table", prefix)
+            internal.violate("storage.invalid_node", "%s: storage entry is not a table", prefix)
         elseif not node.type then
-            internal.libWarnIf("%s: missing type", prefix)
+            internal.violate("storage.invalid_node", "%s: missing type", prefix)
         else
             local storageType = StorageTypes[node.type]
             local persist = node.persist ~= false
             local stage = node.stage ~= false
             local hash = node.hash ~= false
             if not storageType then
-                internal.libWarnIf("%s: unknown storage type '%s'", prefix, tostring(node.type))
+                internal.violate("storage.invalid_node", "%s: unknown storage type '%s'", prefix, tostring(node.type))
             elseif node.persist ~= nil and type(node.persist) ~= "boolean" then
-                internal.libWarnIf("%s: persist must be boolean when provided", prefix)
+                internal.violate("storage.invalid_axis_type", "%s: persist must be boolean when provided", prefix)
             elseif node.stage ~= nil and type(node.stage) ~= "boolean" then
-                internal.libWarnIf("%s: stage must be boolean when provided", prefix)
+                internal.violate("storage.invalid_axis_type", "%s: stage must be boolean when provided", prefix)
             elseif node.hash ~= nil and type(node.hash) ~= "boolean" then
-                internal.libWarnIf("%s: hash must be boolean when provided", prefix)
+                internal.violate("storage.invalid_axis_type", "%s: hash must be boolean when provided", prefix)
             elseif type(node.alias) ~= "string" or node.alias == "" then
-                internal.libWarnIf("%s: missing alias", prefix)
+                internal.violate("storage.invalid_node", "%s: missing alias", prefix)
             elseif hash and not persist then
-                internal.libWarnIf("%s: hash=true requires persist=true", prefix)
+                internal.violate("storage.hash_requires_persist", "%s: hash=true requires persist=true", prefix)
             elseif hash and not stage then
-                internal.libWarnIf("%s: hash=true requires stage=true", prefix)
+                internal.violate("storage.hash_requires_stage", "%s: hash=true requires stage=true", prefix)
             elseif not stage and node.type == "packedInt" then
-                internal.libWarnIf("%s: stage=false packedInt roots are not supported", prefix)
+                internal.violate("storage.packed_requires_stage", "%s: stage=false packedInt roots are not supported", prefix)
             else
                 storageType.validate(node, prefix)
                 PrepareRootNodeMetadata(node)
@@ -273,7 +272,7 @@ function storageInternal.validate(storage, label)
 
                 local aliasValid = false
                 if seenAliases[node.alias] then
-                    internal.libWarnIf("%s: duplicate alias '%s'", prefix, node.alias)
+                    internal.violate("storage.duplicate_alias", "%s: duplicate alias '%s'", prefix, node.alias)
                 else
                     aliasValid = true
                     seenAliases[node.alias] = true
@@ -313,7 +312,9 @@ function storageInternal.validate(storage, label)
                                     and (normalized == true and 1 or 0)
                                     or normalized
                                 if expected ~= encoded then
-                                    internal.libWarnIf("%s: packed child default '%s' does not match packedInt default",
+                                    internal.violate(
+                                        "storage.packed_child_default_mismatch",
+                                        "%s: packed child default '%s' does not match packedInt default",
                                         prefix, child.alias)
                                 end
                             end
@@ -345,11 +346,14 @@ end
 function storageInternal.assertPersistedDefaults(storage, label)
     local prefix = label or "storage"
     for _, root in ipairs(storageInternal.getPersistRoots(storage) or {}) do
-        assert(root.default ~= nil, string.format(
-            "%s: persisted storage alias '%s' must declare an effective default",
-            prefix,
-            tostring(root.alias or "<unknown>")
-        ))
+        if root.default == nil then
+            internal.violate(
+                "storage.missing_persisted_default",
+                "%s: persisted storage alias '%s' must declare an effective default",
+                prefix,
+                tostring(root.alias or "<unknown>")
+            )
+        end
     end
 end
 
@@ -552,7 +556,7 @@ function storageInternal.CreateTableHandle(node, opts)
 
     local function writeRows(rows)
         if type(opts.writeRoot) ~= "function" then
-            error("table storage handle is read-only", 3)
+            internal.violate("storage.readonly_table_handle", "table storage handle is read-only")
         end
         return opts.writeRoot(node, storageInternal.NormalizeTableValue(node, rows))
     end

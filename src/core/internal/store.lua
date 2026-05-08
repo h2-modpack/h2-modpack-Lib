@@ -21,7 +21,7 @@ end
 function storeInternal.writePersisted(store, alias, value)
     local state = store and StoreState[store] or nil
     if not state or type(state.write) ~= "function" then
-        error("internal.store.writePersisted expects a managed store", 2)
+        internal.violate("store.invalid_managed_store", "internal.store.writePersisted expects a managed store")
     end
     return state.write(alias, value)
 end

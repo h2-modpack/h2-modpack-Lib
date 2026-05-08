@@ -137,7 +137,7 @@ Warnings = {}
 
 function CaptureWarnings()
     Warnings = {}
-    -- Enable lib's own debug mode so libWarn() actually fires
+    -- Enable debug-severity diagnostics while print is captured.
     lib.config.DebugMode = true
     -- Override print to capture warnings
     _originalPrint = print

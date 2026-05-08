@@ -58,14 +58,21 @@ end
 ---@param opts ModuleHostOpts
 ---@return ModuleHost host Module host behavior contract.
 function public.createModuleHost(opts)
-    assert(type(opts) == "table", "createModuleHost: opts must be a table")
+    if type(opts) ~= "table" then
+        internal.violate("host.invalid_create_opts", "createModuleHost: opts must be a table")
+    end
     local def = opts.definition
     local store = opts.store
     local session = opts.session
-    assert(type(def) == "table", "createModuleHost: definition is required")
-    assert(store and type(store.read) == "function", "createModuleHost: store is required")
-    assert(session and type(session.isDirty) == "function" and type(session.write) == "function",
-        "createModuleHost: session is required")
+    if type(def) ~= "table" then
+        internal.violate("host.invalid_create_opts", "createModuleHost: definition is required")
+    end
+    if not (store and type(store.read) == "function") then
+        internal.violate("host.invalid_create_opts", "createModuleHost: store is required")
+    end
+    if not (session and type(session.isDirty) == "function" and type(session.write) == "function") then
+        internal.violate("host.invalid_create_opts", "createModuleHost: session is required")
+    end
 
     local drawTab = opts.drawTab
     local drawQuickContent = opts.drawQuickContent
@@ -73,13 +80,20 @@ function public.createModuleHost(opts)
     local hookOwner = opts.hookOwner
     local pluginGuid = opts.pluginGuid
 
-    assert(type(drawTab) == "function", "createModuleHost: drawTab is required")
-    assert(type(pluginGuid) == "string" and pluginGuid ~= "",
-        "createModuleHost: pluginGuid is required")
+    if type(drawTab) ~= "function" then
+        internal.violate("host.invalid_create_opts", "createModuleHost: drawTab is required")
+    end
+    if type(pluginGuid) ~= "string" or pluginGuid == "" then
+        internal.violate("host.invalid_create_opts", "createModuleHost: pluginGuid is required")
+    end
 
     if registerHooks ~= nil then
-        assert(type(registerHooks) == "function", "createModuleHost: registerHooks must be a function")
-        assert(type(hookOwner) == "table", "createModuleHost: hookOwner is required when registerHooks is provided")
+        if type(registerHooks) ~= "function" then
+            internal.violate("host.invalid_create_opts", "createModuleHost: registerHooks must be a function")
+        end
+        if type(hookOwner) ~= "table" then
+            internal.violate("host.invalid_create_opts", "createModuleHost: hookOwner is required when registerHooks is provided")
+        end
         internal.hooks.refresh(hookOwner, registerHooks)
     end
 
@@ -213,7 +227,7 @@ function public.createModuleHost(opts)
         and public.isModuleCoordinated(packId) then
         local ok, err = host.applyOnLoad()
         if not ok then
-            internal.libWarn("%s coordinated runtime sync failed: %s",
+            internal.violate("host.coordinated_runtime_sync_failed", "%s coordinated runtime sync failed: %s",
                 tostring(meta.name or identity.id or "module"),
                 tostring(err))
         end
@@ -222,7 +236,9 @@ function public.createModuleHost(opts)
         if requested then
             internal.pendingCoordinatorRebuilds[def] = nil
         else
-            internal.libWarn("%s structural definition changed during hot reload; full reload required",
+            internal.violate(
+                "host.structural_rebuild_unavailable",
+                "%s structural definition changed during hot reload; full reload required",
                 tostring(meta.name or identity.id or "module"))
         end
     end
@@ -234,15 +250,24 @@ end
 ---@param pluginGuid string Plugin guid used when creating the module host.
 ---@return StandaloneRuntime runtime Standalone runtime with `renderWindow` and `addMenuBar` callbacks.
 function public.standaloneHost(pluginGuid)
-    assert(type(pluginGuid) == "string" and pluginGuid ~= "",
-        "standaloneHost: pluginGuid is required")
+    if type(pluginGuid) ~= "string" or pluginGuid == "" then
+        internal.violate("host.invalid_standalone_binding", "standaloneHost: pluginGuid is required")
+    end
     local moduleHost = public.getLiveModuleHost(pluginGuid)
-    assert(type(moduleHost) == "table",
-        string.format("standaloneHost: no live module host is registered for current module '%s'",
-            tostring(pluginGuid)))
+    if type(moduleHost) ~= "table" then
+        internal.violate(
+            "host.invalid_standalone_binding",
+            "standaloneHost: no live module host is registered for current module '%s'",
+            tostring(pluginGuid)
+        )
+    end
 
-    assert(type(moduleHost.getIdentity) == "function" and type(moduleHost.getMeta) == "function",
-        "standaloneHost: moduleHost metadata accessors are required")
+    if type(moduleHost.getIdentity) ~= "function" or type(moduleHost.getMeta) ~= "function" then
+        internal.violate(
+            "host.invalid_standalone_binding",
+            "standaloneHost: moduleHost metadata accessors are required"
+        )
+    end
     local DEFAULT_WINDOW_WIDTH = 960
     local DEFAULT_WINDOW_HEIGHT = 720
 
@@ -257,7 +282,7 @@ function public.standaloneHost(pluginGuid)
     if not (getIdentity().modpack and internal.coordinators[getIdentity().modpack]) then
         local ok, err = moduleHost.applyOnLoad()
         if not ok then
-            internal.libWarn("%s startup lifecycle failed: %s",
+            internal.violate("host.standalone_startup_lifecycle_failed", "%s startup lifecycle failed: %s",
                 tostring(getMeta().name or getIdentity().id or "module"),
                 tostring(err))
         end
@@ -332,7 +357,7 @@ function public.standaloneHost(pluginGuid)
                 if ok then
                     markRunDataDirty()
                 else
-                    internal.libWarn("%s %s failed: %s",
+                    internal.violate("host.enable_transition_failed", "%s %s failed: %s",
                         tostring(meta.name or identity.id or "module"),
                         enabledValue and "enable" or "disable",
                         tostring(err))
@@ -355,7 +380,7 @@ function public.standaloneHost(pluginGuid)
             if ok and committed and moduleHost.read("Enabled") == true then
                 markRunDataDirty()
             elseif ok == false then
-                internal.libWarn("%s session commit failed; restored previous config where possible: %s",
+                internal.violate("host.session_commit_failed", "%s session commit failed; restored previous config where possible: %s",
                     tostring(meta.name or identity.id or "module"),
                     tostring(err))
             end

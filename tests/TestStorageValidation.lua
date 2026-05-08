@@ -10,14 +10,13 @@ function TestStorageValidation:tearDown()
     RestoreWarnings()
 end
 
-function TestStorageValidation:testDuplicateAliasWarns()
-    AdamantModpackLib_Internal.storage.validate({
-        { type = "bool", alias = "Flag", default = false },
-        { type = "bool", alias = "Flag", default = false },
-    }, "DuplicateAlias")
-
-    lu.assertEquals(#Warnings, 1)
-    lu.assertStrContains(Warnings[1], "duplicate alias 'Flag'")
+function TestStorageValidation:testDuplicateAliasFails()
+    lu.assertErrorMsgContains("duplicate alias 'Flag'", function()
+        AdamantModpackLib_Internal.storage.validate({
+            { type = "bool", alias = "Flag", default = false },
+            { type = "bool", alias = "Flag", default = false },
+        }, "DuplicateAlias")
+    end)
 end
 
 function TestStorageValidation:testTransientRootRegistersAliasButNotPersistedRoots()
@@ -49,13 +48,20 @@ function TestStorageValidation:testRuntimeCacheRootRegistersAliasButNotHashRoot(
     lu.assertEquals(#Warnings, 0)
 end
 
-function TestStorageValidation:testRuntimePackedIntWarns()
-    AdamantModpackLib_Internal.storage.validate({
-        { type = "packedInt", alias = "RuntimePacked", stage = false, hash = false },
-    }, "RuntimePacked")
-
-    lu.assertEquals(#Warnings, 1)
-    lu.assertStrContains(Warnings[1], "stage=false packedInt roots are not supported")
+function TestStorageValidation:testRuntimePackedIntFails()
+    lu.assertErrorMsgContains("stage=false packedInt roots are not supported", function()
+        AdamantModpackLib_Internal.storage.validate({
+            {
+                type = "packedInt",
+                alias = "RuntimePacked",
+                stage = false,
+                hash = false,
+                bits = {
+                    { alias = "Bit", offset = 0, width = 1, type = "bool", default = false },
+                },
+            },
+        }, "RuntimePacked")
+    end)
 end
 
 function TestStorageValidation:testPackedIntDerivesChildAliasesAndDefault()

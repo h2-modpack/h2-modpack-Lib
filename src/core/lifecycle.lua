@@ -11,13 +11,13 @@ function lifecycleApi.notifySettingsCommitted(def, store)
 
     local ok, result = pcall(def.onSettingsCommitted, store)
     if not ok then
-        internal.libWarn("%s: onSettingsCommitted failed: %s",
+        internal.violate("lifecycle.on_settings_committed_failed", "%s: onSettingsCommitted failed: %s",
             tostring(def.name or def.id or "module"),
             tostring(result))
         return true, nil
     end
     if result == false then
-        internal.libWarn("%s: onSettingsCommitted returned false",
+        internal.violate("lifecycle.on_settings_committed_false", "%s: onSettingsCommitted returned false",
             tostring(def.name or def.id or "module"))
     end
     return true, nil
@@ -56,6 +56,24 @@ end
 ---@param packId string Unique coordinator pack identifier.
 ---@param config CoordinatorConfig Coordinator configuration table.
 function lifecycleApi.registerCoordinator(packId, config)
+    if type(packId) ~= "string" or packId == "" then
+        internal.violate(
+            "coordinator.invalid_registration",
+            "registerCoordinator: packId must be a non-empty string"
+        )
+    end
+    if config ~= nil and type(config) ~= "table" then
+        internal.violate(
+            "coordinator.invalid_registration",
+            "registerCoordinator: config must be a table when provided"
+        )
+    end
+    if config ~= nil and type(config.ModEnabled) ~= "boolean" then
+        internal.violate(
+            "coordinator.invalid_registration",
+            "registerCoordinator: config.ModEnabled must be a boolean"
+        )
+    end
     internal.coordinators[packId] = config
 end
 
@@ -68,8 +86,12 @@ function lifecycleApi.registerCoordinatorRebuild(packId, callback)
         return
     end
 
-    assert(type(callback) == "function",
-        "registerCoordinatorRebuild: callback must be a function when provided")
+    if type(callback) ~= "function" then
+        internal.violate(
+            "coordinator.invalid_rebuild_callback",
+            "registerCoordinatorRebuild: callback must be a function when provided"
+        )
+    end
     internal.coordinatorRebuilds[packId] = callback
 end
 
@@ -163,7 +185,7 @@ function lifecycleApi.resyncSession(def, session)
     local mismatches = session.auditMismatches()
     if #mismatches > 0 then
         local name = def and (def.name or def.id) or "module"
-        internal.libWarn("%s: session drift detected; reloading staged values for: %s",
+        internal.violate("lifecycle.session_drift_detected", "%s: session drift detected; reloading staged values for: %s",
             tostring(name),
             table.concat(mismatches, ", "))
         session._reloadFromConfig()
@@ -202,7 +224,7 @@ function lifecycleApi.commitSession(def, store, session)
 
     local rollbackOk, rollbackErr = lifecycleApi.reapplyMutation(def, store)
     if not rollbackOk then
-        internal.libWarn("%s: session rollback reapply failed: %s",
+        internal.violate("lifecycle.session_rollback_reapply_failed", "%s: session rollback reapply failed: %s",
             tostring(def.name or def.id or "module"),
             tostring(rollbackErr))
         return false, tostring(err) .. " (rollback reapply failed: " .. tostring(rollbackErr) .. ")"

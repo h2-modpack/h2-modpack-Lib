@@ -208,7 +208,15 @@ function TestDataDefaults:testCreateStoreHydratesMissingConfigFromStorageDefault
             { type = "bool", alias = "MyFlag", default = true },
             { type = "int", alias = "MyCount", default = 4, min = 0, max = 10 },
             { type = "string", alias = "MyMode", default = "Auto" },
-            { type = "packedInt", alias = "PackedChoices", default = 2 },
+            {
+                type = "packedInt",
+                alias = "PackedChoices",
+                default = 2,
+                bits = {
+                    { alias = "PackedChoiceA", offset = 0, width = 1, type = "bool", default = false },
+                    { alias = "PackedChoiceB", offset = 1, width = 1, type = "bool", default = true },
+                },
+            },
         },
     }
     local store, session, config = makeStore(definition, {})

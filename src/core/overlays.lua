@@ -457,9 +457,12 @@ end
 ---@param opts table
 ---@return table handle
 function overlays.registerHudText(opts)
-    assert(type(opts) == "table", "lib.overlays.registerHudText: opts must be a table")
-    assert(type(opts.id) == "string" and opts.id ~= "",
-        "lib.overlays.registerHudText: id must be a non-empty string")
+    if type(opts) ~= "table" then
+        internal.violate("overlays.invalid_registration", "lib.overlays.registerHudText: opts must be a table")
+    end
+    if type(opts.id) ~= "string" or opts.id == "" then
+        internal.violate("overlays.invalid_registration", "lib.overlays.registerHudText: id must be a non-empty string")
+    end
 
     local entry = {
         id = opts.id,
@@ -487,13 +490,21 @@ end
 ---@param opts table
 ---@return table handle
 function overlays.registerStackedText(opts)
-    assert(type(opts) == "table", "lib.overlays.registerStackedText: opts must be a table")
-    assert(type(opts.id) == "string" and opts.id ~= "",
-        "lib.overlays.registerStackedText: id must be a non-empty string")
+    if type(opts) ~= "table" then
+        internal.violate("overlays.invalid_registration", "lib.overlays.registerStackedText: opts must be a table")
+    end
+    if type(opts.id) ~= "string" or opts.id == "" then
+        internal.violate("overlays.invalid_registration", "lib.overlays.registerStackedText: id must be a non-empty string")
+    end
 
     local region = opts.region or "middleRightStack"
-    assert(REGIONS[region] ~= nil,
-        "lib.overlays.registerStackedText: unknown region '" .. tostring(region) .. "'")
+    if REGIONS[region] == nil then
+        internal.violate(
+            "overlays.invalid_registration",
+            "lib.overlays.registerStackedText: unknown region '%s'",
+            tostring(region)
+        )
+    end
 
     local handle = overlays.registerHudText({
         id = stackedHandleId(region, opts.id),
@@ -562,21 +573,36 @@ end
 ---@param opts table
 ---@return table handle
 function overlays.registerStackedRow(opts)
-    assert(type(opts) == "table", "lib.overlays.registerStackedRow: opts must be a table")
-    assert(type(opts.id) == "string" and opts.id ~= "",
-        "lib.overlays.registerStackedRow: id must be a non-empty string")
-    assert(type(opts.columns) == "table" and #opts.columns > 0,
-        "lib.overlays.registerStackedRow: columns must be a non-empty array")
+    if type(opts) ~= "table" then
+        internal.violate("overlays.invalid_registration", "lib.overlays.registerStackedRow: opts must be a table")
+    end
+    if type(opts.id) ~= "string" or opts.id == "" then
+        internal.violate("overlays.invalid_registration", "lib.overlays.registerStackedRow: id must be a non-empty string")
+    end
+    if type(opts.columns) ~= "table" or #opts.columns == 0 then
+        internal.violate("overlays.invalid_registration", "lib.overlays.registerStackedRow: columns must be a non-empty array")
+    end
 
     local region = opts.region or "middleRightStack"
-    assert(REGIONS[region] ~= nil,
-        "lib.overlays.registerStackedRow: unknown region '" .. tostring(region) .. "'")
+    if REGIONS[region] == nil then
+        internal.violate(
+            "overlays.invalid_registration",
+            "lib.overlays.registerStackedRow: unknown region '%s'",
+            tostring(region)
+        )
+    end
 
     local componentBase = opts.componentName or opts.id
     local columnGap = tonumber(opts.columnGap) or 6
     local columns = {}
     for index, column in ipairs(opts.columns) do
-        assert(type(column) == "table", "lib.overlays.registerStackedRow: each column must be a table")
+        if type(column) ~= "table" then
+            internal.violate(
+                "overlays.invalid_registration",
+                "lib.overlays.registerStackedRow: column #%d must be a table",
+                index
+            )
+        end
         local columnEntry = {
             key = column.key or tostring(index),
             minWidth = tonumber(column.minWidth) or 0,

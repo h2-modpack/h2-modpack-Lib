@@ -157,7 +157,7 @@ function TestPrepareDefinition:testCreateModuleHostRequestsCoordinatorRebuildOnS
     lu.assertEquals(#Warnings, 0)
 end
 
-function TestPrepareDefinition:testCreateModuleHostWarnsWhenCoordinatedRebuildCallbackIsMissing()
+function TestPrepareDefinition:testCreateModuleHostErrorsWhenCoordinatedRebuildCallbackIsMissing()
     local owner = {}
 
     lib.lifecycle.registerCoordinator("test-pack", { ModEnabled = true })
@@ -185,21 +185,21 @@ function TestPrepareDefinition:testCreateModuleHostWarnsWhenCoordinatedRebuildCa
         DebugMode = false,
         OtherFlag = false,
     }, prepared)
-    lib.createModuleHost({
-        pluginGuid = "test-module",
-        definition = prepared,
-        store = store,
-        session = session,
-        drawTab = function() end,
-    })
+    lu.assertErrorMsgContains("host.structural_rebuild_unavailable", function()
+        lib.createModuleHost({
+            pluginGuid = "test-module",
+            definition = prepared,
+            store = store,
+            session = session,
+            drawTab = function() end,
+        })
+    end)
 
     lu.assertTrue(owner.requiresFullReload)
-    lu.assertEquals(#Warnings, 1)
-    lu.assertStrContains(Warnings[1], "structural definition changed during hot reload")
     lu.assertNotNil(AdamantModpackLib_Internal.pendingCoordinatorRebuilds[prepared])
 end
 
-function TestPrepareDefinition:testCreateModuleHostKeepsPendingReasonWhenRebuildRequestIsRejected()
+function TestPrepareDefinition:testCreateModuleHostErrorsAndKeepsPendingReasonWhenRebuildRequestIsRejected()
     local owner = {}
 
     lib.lifecycle.registerCoordinator("test-pack", { ModEnabled = true })
@@ -230,18 +230,18 @@ function TestPrepareDefinition:testCreateModuleHostKeepsPendingReasonWhenRebuild
         DebugMode = false,
         OtherFlag = false,
     }, prepared)
-    lib.createModuleHost({
-        pluginGuid = "test-module",
-        definition = prepared,
-        store = store,
-        session = session,
-        drawTab = function() end,
-    })
+    lu.assertErrorMsgContains("host.structural_rebuild_unavailable", function()
+        lib.createModuleHost({
+            pluginGuid = "test-module",
+            definition = prepared,
+            store = store,
+            session = session,
+            drawTab = function() end,
+        })
+    end)
 
     lu.assertTrue(owner.requiresFullReload)
     lu.assertNotNil(AdamantModpackLib_Internal.pendingCoordinatorRebuilds[prepared])
-    lu.assertEquals(#Warnings, 1)
-    lu.assertStrContains(Warnings[1], "structural definition changed during hot reload")
 end
 
 function TestPrepareDefinition:testPrepareDefinitionIgnoresBehaviorOnlyChanges()

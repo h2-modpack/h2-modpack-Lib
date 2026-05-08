@@ -10,8 +10,13 @@ internal.integrations = internal.integrations or {
 local registry = internal.integrations.registry
 
 local function assertNonEmptyString(value, label)
-    assert(type(value) == "string" and value ~= "",
-        "lib.integrations." .. label .. " must be a non-empty string")
+    if type(value) ~= "string" or value == "" then
+        internal.violate(
+            "integrations.invalid_args",
+            "lib.integrations.%s must be a non-empty string",
+            label
+        )
+    end
 end
 
 local function getBucket(id, create)
@@ -74,7 +79,9 @@ end
 function integrations.register(id, providerId, api)
     assertNonEmptyString(id, "register: id")
     assertNonEmptyString(providerId, "register: providerId")
-    assert(type(api) == "table", "lib.integrations.register: api must be a table")
+    if type(api) ~= "table" then
+        internal.violate("integrations.invalid_args", "lib.integrations.register: api must be a table")
+    end
 
     local bucket = getBucket(id, true)
     if bucket.providers[providerId] == nil then

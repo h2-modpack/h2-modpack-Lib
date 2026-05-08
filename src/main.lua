@@ -56,7 +56,7 @@ rom.gui.add_to_menu_bar(function()
         local val, chg = rom.ImGui.Checkbox("Lib Debug", libConfig.DebugMode == true)
         if chg then libConfig.DebugMode = val end
         if rom.ImGui.IsItemHovered() then
-            rom.ImGui.SetTooltip("Print lib-internal diagnostic warnings (schema errors, unknown field types)")
+            rom.ImGui.SetTooltip("Print lib-internal diagnostic warnings. Structural schema errors always fail.")
         end
         rom.ImGui.EndMenu()
     end

@@ -12,6 +12,12 @@ end
 
 function TestLogging:tearDown()
     print = self.previousPrint
+    AdamantModpackLib_Internal.violationSeverity["test.warn"] = nil
+    AdamantModpackLib_Internal.violationSeverity["test.debug"] = nil
+    AdamantModpackLib_Internal.violationSeverity["test.ignore"] = nil
+    AdamantModpackLib_Internal.violationSeverity["test.error"] = nil
+    AdamantModpackLib_Internal.violationSeverity["test.invalid"] = nil
+    lib.config.DebugMode = false
 end
 
 function TestLogging:testWarnAlwaysFormatsWithPackPrefix()
@@ -36,4 +42,50 @@ function TestLogging:testLogIfHonorsEnabledFlagAndHandlesPlainMessages()
         "[system] plain message",
         "[system] formatted message",
     })
+end
+
+function TestLogging:testViolationWarnUsesPolicyId()
+    AdamantModpackLib_Internal.violationSeverity["test.warn"] = "warn"
+
+    local severity, message = AdamantModpackLib_Internal.violate("test.warn", "hello %s", "world")
+
+    lu.assertEquals(severity, "warn")
+    lu.assertEquals(message, "[lib] test.warn: hello world")
+    lu.assertEquals(self.lines, { "[lib] test.warn: hello world" })
+end
+
+function TestLogging:testViolationDebugHonorsLibDebugMode()
+    AdamantModpackLib_Internal.violationSeverity["test.debug"] = "debug"
+
+    AdamantModpackLib_Internal.violate("test.debug", "hidden")
+    lib.config.DebugMode = true
+    AdamantModpackLib_Internal.violate("test.debug", "visible")
+
+    lu.assertEquals(self.lines, { "[lib] test.debug: visible" })
+end
+
+function TestLogging:testViolationIgnoreReturnsWithoutPrinting()
+    AdamantModpackLib_Internal.violationSeverity["test.ignore"] = "ignore"
+
+    local severity, message = AdamantModpackLib_Internal.violate("test.ignore", "ignored")
+
+    lu.assertEquals(severity, "ignore")
+    lu.assertEquals(message, "[lib] test.ignore: ignored")
+    lu.assertEquals(self.lines, {})
+end
+
+function TestLogging:testViolationErrorRaises()
+    AdamantModpackLib_Internal.violationSeverity["test.error"] = "error"
+
+    lu.assertErrorMsgContains("[lib] test.error: broken", function()
+        AdamantModpackLib_Internal.violate("test.error", "broken")
+    end)
+end
+
+function TestLogging:testViolationRejectsInvalidSeverity()
+    AdamantModpackLib_Internal.violationSeverity["test.invalid"] = "trace"
+
+    lu.assertErrorMsgContains("violation.invalid_severity", function()
+        AdamantModpackLib_Internal.violate("test.invalid", "broken")
+    end)
 end

@@ -123,42 +123,49 @@ function definitionInternal.validate(definition, label)
         return
     end
 
-    local warn = internal.libWarn
     local prefix = definitionInternal.getLabel(definition, label)
 
     for key in pairs(definition) do
         if type(key) == "string" and not KnownDefinitionKeys[key] then
-            warn("%s: unknown definition key '%s'", prefix, tostring(key))
+            internal.violate("definition.unknown_key", "%s: unknown definition key '%s'", prefix, tostring(key))
         end
     end
 
-    local function warnType(key, expected)
+    local function checkType(key, expected)
         if definition[key] ~= nil and type(definition[key]) ~= expected then
-            warn("%s: definition.%s should be %s, got %s",
+            internal.violate("definition.invalid_field_type", "%s: definition.%s should be %s, got %s",
                 prefix, key, expected, type(definition[key]))
         end
     end
 
     for _, key in ipairs({ "modpack", "id", "name", "shortName", "tooltip" }) do
-        warnType(key, "string")
+        checkType(key, "string")
     end
-    warnType("affectsRunData", "boolean")
-    warnType("storage", "table")
-    warnType("hashGroupPlan", "table")
+    checkType("affectsRunData", "boolean")
+    checkType("storage", "table")
+    checkType("hashGroupPlan", "table")
     for _, key in ipairs({ "patchPlan", "apply", "revert", "onSettingsCommitted" }) do
-        warnType(key, "function")
+        checkType(key, "function")
     end
 
     if definition.modpack ~= nil and definition.id == nil then
-        warn("%s: coordinated modules should declare definition.id", prefix)
+        internal.violate("definition.missing_coordinated_id", "%s: coordinated modules should declare definition.id", prefix)
     end
 
-    local inferred, info = mutationInternal.inferMutation(definition)
-    if info.hasApply ~= info.hasRevert then
-        warn("%s: manual lifecycle requires both definition.apply and definition.revert", prefix)
+    local inferredMutationShape, mutationInfo = mutationInternal.inferMutation(definition)
+    if definition.affectsRunData == true and not inferredMutationShape then
+        internal.violate(
+            "definition.missing_mutation",
+            "%s: affectsRunData=true requires patchPlan or apply/revert",
+            prefix
+        )
     end
-    if mutationInternal.affectsRunData(definition) and not inferred then
-        warn("%s: affectsRunData=true but module exposes neither patchPlan nor apply/revert", prefix)
+    if mutationInfo.hasApply ~= mutationInfo.hasRevert then
+        internal.violate(
+            "definition.incomplete_manual_lifecycle",
+            "%s: manual lifecycle requires both definition.apply and definition.revert",
+            prefix
+        )
     end
 end
 
@@ -179,12 +186,19 @@ local function InjectBuiltInStorage(definition, label)
     if definition.storage == nil then
         definition.storage = {}
     end
-    assert(type(definition.storage) == "table",
-        string.format("%s: definition.storage must be a table", label))
+    if type(definition.storage) ~= "table" then
+        internal.violate("definition.invalid_args", "%s: definition.storage must be a table", label)
+    end
 
     for _, node in ipairs(definition.storage) do
-        assert(not BuiltInStorageAliases[node.alias],
-            string.format("%s: storage alias '%s' is reserved by Lib", label, tostring(node.alias)))
+        if type(node) == "table" and BuiltInStorageAliases[node.alias] then
+            internal.violate(
+                "definition.reserved_storage_alias",
+                "%s: storage alias '%s' is reserved by Lib",
+                label,
+                tostring(node.alias)
+            )
+        end
     end
 
     for index = #BuiltInStorageNodes, 1, -1 do
@@ -193,27 +207,26 @@ local function InjectBuiltInStorage(definition, label)
 end
 
 function definitionInternal.prepare(owner, definition, ...)
-    assert(select("#", ...) == 0,
-        "prepareDefinition: pass storage defaults on definition.storage nodes, not as a separate argument")
-    assert(owner == nil or type(owner) == "table",
-        "prepareDefinition: owner must be a table when provided")
-    assert(type(definition) == "table", "prepareDefinition: definition must be a table")
+    if select("#", ...) ~= 0 then
+        internal.violate(
+            "definition.invalid_args",
+            "prepareDefinition: pass storage defaults on definition.storage nodes, not as a separate argument"
+        )
+    end
+    if owner ~= nil and type(owner) ~= "table" then
+        internal.violate("definition.invalid_args", "prepareDefinition: owner must be a table when provided")
+    end
+    if type(definition) ~= "table" then
+        internal.violate("definition.invalid_args", "prepareDefinition: definition must be a table")
+    end
 
     local prepared = values.deepCopy(definition)
     local label = definitionInternal.getLabel(prepared)
     InjectBuiltInStorage(prepared, label)
 
-    if internal.libConfig.DebugMode == true then
-        definitionInternal.validate(prepared, label)
-    end
+    definitionInternal.validate(prepared, label)
     storageInternal.validate(prepared.storage, label)
     storageInternal.assertPersistedDefaults(prepared.storage, label)
-
-    local inferredMutationShape, mutationInfo = mutationInternal.inferMutation(prepared)
-    assert(not (prepared.affectsRunData == true and not inferredMutationShape),
-        string.format("%s: affectsRunData=true requires patchPlan or apply/revert", label))
-    assert(mutationInfo.hasApply == mutationInfo.hasRevert,
-        string.format("%s: manual lifecycle requires both definition.apply and definition.revert", label))
 
     local fingerprint = definitionInternal.getStructuralFingerprint(prepared)
     prepared._preparedDefinition = true
