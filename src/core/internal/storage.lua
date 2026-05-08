@@ -659,6 +659,14 @@ function storageInternal.CreateTableHandle(node, opts)
                 end
                 return storageInternal.NormalizeStorageValue(root, value)
             end,
+            onUnknownRead = function(rowAlias)
+                internal.violate(
+                    "storage.unknown_table_row_alias",
+                    "table storage '%s': unknown row alias '%s'",
+                    tostring(node.alias),
+                    tostring(rowAlias)
+                )
+            end,
         }
         return storageInternal.readAlias(aliasNodes, rowBackend, alias)
     end
@@ -676,25 +684,62 @@ function storageInternal.CreateTableHandle(node, opts)
                 row[root.alias] = storageInternal.NormalizeStorageValue(root, rootValue)
                 return true
             end,
+            onUnknownWrite = function(rowAlias)
+                internal.violate(
+                    "storage.unknown_table_row_alias",
+                    "table storage '%s': unknown row alias '%s'",
+                    tostring(node.alias),
+                    tostring(rowAlias)
+                )
+            end,
         }
         return storageInternal.writeAlias(aliasNodes, rowBackend, alias, value)
     end
 
     local handle = {}
 
-    local function ShiftMethodArgs(first, second, third, fourth)
-        if first == handle then
-            return second, third, fourth
+    local function ValidateReceiver(receiver, methodName)
+        if receiver ~= handle then
+            internal.violate(
+                "storage.invalid_table_handle_args",
+                "table storage '%s': invalid receiver for %s",
+                tostring(node.alias),
+                tostring(methodName)
+            )
         end
-        return first, second, third
     end
 
-    function handle.count()
+    local function ValidateRowIndex(rowIndex, methodName)
+        if type(rowIndex) ~= "number" then
+            internal.violate(
+                "storage.invalid_table_handle_args",
+                "table storage '%s': %s expects numeric rowIndex",
+                tostring(node.alias),
+                tostring(methodName)
+            )
+        end
+    end
+
+    local function ValidateAlias(alias, methodName)
+        if type(alias) ~= "string" or alias == "" then
+            internal.violate(
+                "storage.invalid_table_handle_args",
+                "table storage '%s': %s expects non-empty row alias",
+                tostring(node.alias),
+                tostring(methodName)
+            )
+        end
+    end
+
+    function handle.count(self)
+        ValidateReceiver(self, "count")
         return #readRows()
     end
 
-    function handle.read(first, second, third)
-        local rowIndex, alias = ShiftMethodArgs(first, second, third)
+    function handle.read(self, rowIndex, alias)
+        ValidateReceiver(self, "read")
+        ValidateRowIndex(rowIndex, "read")
+        ValidateAlias(alias, "read")
         local row = readRow(readRows(), rowIndex)
         if not row then
             return nil
@@ -702,19 +747,23 @@ function storageInternal.CreateTableHandle(node, opts)
         return readRowAlias(row, alias)
     end
 
-    function handle.row(first, second)
-        local rowIndex = ShiftMethodArgs(first, second)
+    function handle.row(self, rowIndex)
+        ValidateReceiver(self, "row")
+        ValidateRowIndex(rowIndex, "row")
         local row = readRow(readRows(), rowIndex)
         return row and values.deepCopy(row) or nil
     end
 
-    function handle.rows()
+    function handle.rows(self)
+        ValidateReceiver(self, "rows")
         return values.deepCopy(readRows())
     end
 
     if type(opts.writeRoot) == "function" then
-        function handle.write(first, second, third, fourth)
-            local rowIndex, alias, value = ShiftMethodArgs(first, second, third, fourth)
+        function handle.write(self, rowIndex, alias, value)
+            ValidateReceiver(self, "write")
+            ValidateRowIndex(rowIndex, "write")
+            ValidateAlias(alias, "write")
             local rows = copyRows()
             local row = readRow(rows, rowIndex)
             if not row then
@@ -727,8 +776,10 @@ function storageInternal.CreateTableHandle(node, opts)
             return changed
         end
 
-        function handle.reset(first, second, third)
-            local rowIndex, alias = ShiftMethodArgs(first, second, third)
+        function handle.reset(self, rowIndex, alias)
+            ValidateReceiver(self, "reset")
+            ValidateRowIndex(rowIndex, "reset")
+            ValidateAlias(alias, "reset")
             local rows = copyRows()
             local row = readRow(rows, rowIndex)
             if not row then
@@ -736,7 +787,12 @@ function storageInternal.CreateTableHandle(node, opts)
             end
             local aliasNode = aliasNodes[alias]
             if not aliasNode then
-                return false
+                internal.violate(
+                    "storage.unknown_table_row_alias",
+                    "table storage '%s': unknown row alias '%s'",
+                    tostring(node.alias),
+                    tostring(alias)
+                )
             end
             local changed = writeRowAlias(row, alias, values.deepCopy(aliasNode.default))
             if changed then
@@ -745,31 +801,31 @@ function storageInternal.CreateTableHandle(node, opts)
             return changed
         end
 
-        function handle.resetRow(first, second)
-            local rowIndex = ShiftMethodArgs(first, second)
+        function handle.resetRow(self, rowIndex)
+            ValidateReceiver(self, "resetRow")
+            ValidateRowIndex(rowIndex, "resetRow")
             local rows = copyRows()
             local _, normalizedIndex = readRow(rows, rowIndex)
             if normalizedIndex < 1 or normalizedIndex > #rows then
                 return false
             end
             rows[normalizedIndex] = CreateDefaultTableRow(node)
-            writeRows(rows)
-            return true
+            return writeRows(rows) ~= false
         end
 
-        function handle.append(first, second)
-            local rowValues = ShiftMethodArgs(first, second)
+        function handle.append(self, rowValues)
+            ValidateReceiver(self, "append")
             local rows = copyRows()
             if node.maxRows ~= nil and #rows >= node.maxRows then
                 return false
             end
             rows[#rows + 1] = storageInternal.NormalizeTableRow(node, rowValues)
-            writeRows(rows)
-            return true
+            return writeRows(rows) ~= false
         end
 
-        function handle.insert(first, second, third)
-            local rowIndex, rowValues = ShiftMethodArgs(first, second, third)
+        function handle.insert(self, rowIndex, rowValues)
+            ValidateReceiver(self, "insert")
+            ValidateRowIndex(rowIndex, "insert")
             local rows = copyRows()
             if node.maxRows ~= nil and #rows >= node.maxRows then
                 return false
@@ -778,25 +834,24 @@ function storageInternal.CreateTableHandle(node, opts)
             if rowIndex < 1 then rowIndex = 1 end
             if rowIndex > #rows + 1 then rowIndex = #rows + 1 end
             table.insert(rows, rowIndex, storageInternal.NormalizeTableRow(node, rowValues))
-            writeRows(rows)
-            return true
+            return writeRows(rows) ~= false
         end
 
-        function handle.remove(first, second)
-            local rowIndex = ShiftMethodArgs(first, second)
+        function handle.remove(self, rowIndex)
+            ValidateReceiver(self, "remove")
+            ValidateRowIndex(rowIndex, "remove")
             local rows = copyRows()
             rowIndex = math.floor(tonumber(rowIndex) or 0)
             if rowIndex < 1 or rowIndex > #rows then
                 return false
             end
             table.remove(rows, rowIndex)
-            writeRows(rows)
-            return true
+            return writeRows(rows) ~= false
         end
 
-        function handle.clear()
-            writeRows({})
-            return true
+        function handle.clear(self)
+            ValidateReceiver(self, "clear")
+            return writeRows({}) ~= false
         end
     end
 

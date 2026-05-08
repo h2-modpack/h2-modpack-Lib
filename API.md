@@ -239,10 +239,11 @@ construction can use `prepareDefinition(...)`, `createStore(...)`, and
 
 ### `lib.createStore(config, definition)`
 
-Creates the managed store facade around persisted module config.
+Creates the managed store facade around persisted module config from a prepared
+definition.
 What it does:
-- validates prepared storage contracts before managed state is created
-- validates and prepares `definition.storage`
+- requires a definition returned by `lib.prepareDefinition(...)`
+- consumes the prepared `definition.storage` metadata
 - returns a separate `session` for staged UI state
 - exposes persisted read helpers
 
@@ -260,7 +261,7 @@ call with a session from another. Recreate the pair together on module reload.
 Returned surface:
 - `store.read(alias)`
 - `store.table(alias)`
-- `store.writeUnstaged(alias, value)`
+- `store.writeUnstaged(alias, value)` returns whether the write was accepted
 
 Persisted writes happen through semantic helpers or session flushes:
 
@@ -313,6 +314,8 @@ local armed = store.read("BatchRecordingArmed") == true
 ```
 
 `store.writeUnstaged(alias, value)` only accepts aliases declared with `stage = false`.
+It returns `false` without mutating state if violation policy is downgraded from
+error and the alias is rejected.
 
 Composite table storage is declared as one table root with a uniform row schema:
 
@@ -354,6 +357,7 @@ local enabled = tiers:read(1, "Enabled")
 Table handles:
 - `store.table(alias)` returns a read-only table handle
 - `session.table(alias)` returns a staged writable table handle
+- table handles are object methods; call them with colon syntax such as `tiers:read(rowIndex, alias)`
 - row aliases can address scalar row roots, packed row roots, or packed child aliases
 - table storage participates in hash/profile serialization when `hash` is true
 
@@ -573,10 +577,12 @@ Hash/profile serialization and packed-bit helpers.
 ### `lib.hashing.getRoots(storage)`
 
 Returns prepared root nodes that participate in hash/profile serialization.
+The returned nodes are read-only metadata owned by Lib storage preparation; callers must not mutate them.
 
 ### `lib.hashing.getAliases(storage)`
 
 Returns the prepared alias map.
+The returned map and nodes are read-only metadata owned by Lib storage preparation; callers must not mutate them.
 
 Includes:
 - hash/profile root aliases

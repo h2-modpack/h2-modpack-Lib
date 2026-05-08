@@ -58,6 +58,7 @@ local function makeTableDefinition()
                 row = {
                     { type = "bool", alias = "Enabled", default = true },
                     { type = "int", alias = "Limit", default = 2, min = 0, max = 5 },
+                    { type = "string", alias = "Note", default = "", maxLen = 64 },
                     {
                         type = "packedInt",
                         alias = "PackedChoices",
@@ -66,6 +67,23 @@ local function makeTableDefinition()
                             { alias = "ChoiceMode", offset = 1, width = 2, type = "int", default = 0 },
                         },
                     },
+                },
+            },
+        },
+    })
+end
+
+local function makeMinRowsTableDefinition()
+    return prepareDefinition({
+        storage = {
+            {
+                type = "table",
+                alias = "Rows",
+                minRows = 1,
+                maxRows = 2,
+                defaultRows = 1,
+                row = {
+                    { type = "int", alias = "Count", default = 0, min = 0, max = 5 },
                 },
             },
         },
@@ -397,8 +415,55 @@ function TestSession:testTableStorageMutatesRowsAsCompactList()
     tiers:resetRow(2)
     lu.assertEquals(tiers:read(2, "Limit"), 2)
 
-    tiers:clear()
+    lu.assertTrue(tiers:clear())
     lu.assertEquals(tiers:count(), 0)
+end
+
+function TestSession:testTableStorageClearReportsNoChangeWhenAlreadyDefault()
+    local _, session = lib.createStore({}, makeMinRowsTableDefinition())
+    local rows = session.table("Rows")
+
+    lu.assertEquals(rows:count(), 1)
+    lu.assertFalse(rows:clear())
+    lu.assertEquals(rows:count(), 1)
+    lu.assertFalse(session.isDirty())
+end
+
+function TestSession:testTableStorageUnknownRowAliasFails()
+    local _, session = lib.createStore({}, makeTableDefinition())
+    local tiers = session.table("Tiers")
+
+    lu.assertErrorMsgContains("storage.unknown_table_row_alias", function()
+        tiers:read(1, "MissingRowAlias")
+    end)
+    lu.assertErrorMsgContains("storage.unknown_table_row_alias", function()
+        tiers:write(1, "MissingRowAlias", true)
+    end)
+    lu.assertErrorMsgContains("storage.unknown_table_row_alias", function()
+        tiers:reset(1, "MissingRowAlias")
+    end)
+end
+
+function TestSession:testTableStorageHandleRequiresColonSyntax()
+    local _, session = lib.createStore({}, makeTableDefinition())
+    local tiers = session.table("Tiers")
+
+    lu.assertErrorMsgContains("storage.invalid_table_handle_args", function()
+        tiers.read(1, "Enabled")
+    end)
+    lu.assertErrorMsgContains("storage.invalid_table_handle_args", function()
+        tiers.count()
+    end)
+end
+
+function TestSession:testTableStorageAppendRespectsMaxRows()
+    local _, session = lib.createStore({}, makeTableDefinition())
+    local tiers = session.table("Tiers")
+
+    lu.assertTrue(tiers:append())
+    lu.assertTrue(tiers:append())
+    lu.assertFalse(tiers:append())
+    lu.assertEquals(tiers:count(), 3)
 end
 
 function TestSession:testTableStorageDoesNotLeakRowAliasesGlobally()
@@ -527,7 +592,7 @@ function TestSession:testTableStorageHashRoundTripsRows()
     local tableNode = definition.storage[3]
     local value = {
         { Enabled = false, Limit = 4, PackedChoices = 5 },
-        { Enabled = true, Limit = 1, ChoiceMode = 2 },
+        { Enabled = true, Limit = 1, ChoiceMode = 2, Note = "a|b=%c" },
     }
 
     local encoded = lib.hashing.toHash(tableNode, value)
@@ -539,5 +604,6 @@ function TestSession:testTableStorageHashRoundTripsRows()
     lu.assertEquals(decoded[1].PackedChoices, 5)
     lu.assertTrue(decoded[2].Enabled)
     lu.assertEquals(decoded[2].Limit, 1)
+    lu.assertEquals(decoded[2].Note, "a|b=%c")
     lu.assertEquals(decoded[2].PackedChoices, 4)
 end

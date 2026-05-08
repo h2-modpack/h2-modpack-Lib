@@ -235,6 +235,8 @@ local mode = tiers:read(1, "ChoiceMode")
 ```
 
 Use `store.table(alias)` for read-only runtime access and `session.table(alias)` for staged UI edits.
+Table handles are object methods, so call row operations with colon syntax:
+`tiers:read(rowIndex, alias)`, `tiers:write(rowIndex, alias, value)`, and `tiers:append(rowValues)`.
 
 ## Immediate-Mode UI
 

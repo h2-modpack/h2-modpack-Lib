@@ -23,6 +23,7 @@ Storage metadata helpers used for hash/profile work live under `lib.hashing`.
 `table` roots expose row handles through `store.table(alias)` and `session.table(alias)`.
 They do not have a generic widget yet; render table rows with ordinary Lua loops
 and the scalar/packed widgets that fit each row.
+Table handle row operations use colon method syntax, for example `rows:read(1, "Enabled")`.
 
 ## Reset Helpers
 
@@ -31,6 +32,10 @@ and the scalar/packed widgets that fit each row.
 ## Hashing
 
 Hash/profile serialization helpers live under `lib.hashing`.
+
+`getRoots(...)` and `getAliases(...)` expose prepared storage metadata for
+inspection by Framework/hash/widget plumbing. Treat the returned maps and nodes
+as read-only; storage metadata is owned by Lib preparation.
 
 Supported helpers:
 - `lib.hashing.getRoots(storage)`

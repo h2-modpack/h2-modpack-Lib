@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Lib now injects `Enabled` and `DebugMode` as built-in prepared storage aliases instead of requiring module-authored config defaults.
 - Persistent runtime-cache module state is now declared with `stage = false, hash = false`, read through `store.read(...)`, and written through `store.writeUnstaged(...)`.
 - Added first-class table storage roots with row-scoped aliases, staged table handles, read-only store table handles, packed child row access, and hash/profile serialization.
+- Table storage handles use colon method syntax, such as `tiers:read(rowIndex, alias)`.
 
 ## [1.1.0] - 2026-05-05
 

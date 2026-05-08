@@ -271,6 +271,14 @@ local DefaultViolationPolicy = {
         severity = "error",
         description = "Read-only table handles cannot perform row mutations.",
     },
+    ["storage.unknown_table_row_alias"] = {
+        severity = "error",
+        description = "Table row reads and writes only accept aliases declared by the table row schema.",
+    },
+    ["storage.invalid_table_handle_args"] = {
+        severity = "error",
+        description = "Table handle methods require a valid handle receiver and method arguments.",
+    },
 }
 
 local function FormatMessage(prefix, fmt, ...)

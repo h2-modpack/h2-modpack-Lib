@@ -36,7 +36,7 @@ If you want the script workflow and setup details, read the
 A module is built from four main pieces:
 
 - `definition`
-  Declares module identity, optional storage, and optional mutation lifecycle hooks.
+  Declares module identity, optional storage, and hash layout hints.
 - `store`
   Persisted runtime state. Read this from gameplay and hook code.
 - `session`
@@ -384,6 +384,7 @@ Table storage models compact ordered rows with one shared row schema:
 ```
 
 Use `session.table("Tiers")` for staged UI edits and `store.table("Tiers")` for read-only runtime access.
+Table handles use colon method syntax, such as `tiers:read(rowIndex, alias)`.
 
 ## Common Mistakes
 

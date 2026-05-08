@@ -53,12 +53,14 @@ local lib = {}
 
 ---@alias AdamantModpackLib.StorageSchema AdamantModpackLib.StorageNode[]
 
+---Table handles are object handles; call methods with colon syntax (`rows:read(...)`).
 ---@class AdamantModpackLib.StorageTableReadOnly
 ---@field count fun(self: AdamantModpackLib.StorageTableReadOnly): integer
 ---@field read fun(self: AdamantModpackLib.StorageTableReadOnly, rowIndex: integer, alias: string): any
 ---@field row fun(self: AdamantModpackLib.StorageTableReadOnly, rowIndex: integer): table?
 ---@field rows fun(self: AdamantModpackLib.StorageTableReadOnly): table[]
 
+---Writable table handles are object handles; call methods with colon syntax (`rows:write(...)`).
 ---@class AdamantModpackLib.StorageTableSession: AdamantModpackLib.StorageTableReadOnly
 ---@field write fun(self: AdamantModpackLib.StorageTableSession, rowIndex: integer, alias: string, value: any): boolean
 ---@field reset fun(self: AdamantModpackLib.StorageTableSession, rowIndex: integer, alias: string): boolean
@@ -71,7 +73,7 @@ local lib = {}
 ---@class AdamantModpackLib.ManagedStore
 ---@field read fun(alias: string): any
 ---@field table fun(alias: string): AdamantModpackLib.StorageTableReadOnly?
----@field writeUnstaged fun(alias: string, value: any)
+---@field writeUnstaged fun(alias: string, value: any): boolean
 
 ---@class AdamantModpackLib.Session
 ---@field view table<string, any>
@@ -643,11 +645,13 @@ end
 ---@type AdamantModpackLib.HashingApi
 lib.hashing = {}
 
+---Returns read-only prepared storage roots used for hash/profile metadata inspection.
 ---@param storage AdamantModpackLib.StorageSchema
 ---@return AdamantModpackLib.StorageNode[] roots
 function lib.hashing.getRoots(storage)
 end
 
+---Returns a read-only prepared alias map used for hash/widget metadata inspection.
 ---@param storage AdamantModpackLib.StorageSchema
 ---@return table<string, AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode> aliases
 function lib.hashing.getAliases(storage)
