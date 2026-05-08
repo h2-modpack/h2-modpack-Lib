@@ -59,7 +59,7 @@ end
 
 local function BuildMutationPlan(mutationBundle, store)
     local builder = mutationBundle and mutationBundle.patchMutation
-    if type(builder) ~= "function" then
+    if builder == nil then
         return nil
     end
 
@@ -87,7 +87,7 @@ end
 local function RevertActiveManual(def, store)
     local runtime = GetRuntimeState(def, store)
     local revertFn = runtime and runtime.manualRevert or nil
-    if type(revertFn) ~= "function" then
+    if revertFn == nil then
         return true, nil, false
     end
 

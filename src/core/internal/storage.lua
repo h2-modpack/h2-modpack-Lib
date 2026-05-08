@@ -480,7 +480,7 @@ end
 ---@return boolean equal True when the two values are considered equivalent for the storage node.
 function storageInternal.valuesEqual(node, a, b)
     local storageType = node and StorageTypes and node.type and StorageTypes[node.type] or nil
-    if storageType and type(storageType.equals) == "function" then
+    if storageType and storageType.equals ~= nil then
         return storageType.equals(node, a, b)
     end
     return values.deepEqual(a, b)
@@ -488,7 +488,7 @@ end
 
 function storageInternal.NormalizeStorageValue(node, value)
     local storageType = node and node.type and storageInternal.types[node.type] or nil
-    if storageType and type(storageType.normalize) == "function" then
+    if storageType and storageType.normalize ~= nil then
         return storageType.normalize(node, value)
     end
     return value
@@ -639,7 +639,7 @@ function storageInternal.CreateTableHandle(node, opts)
     end
 
     local function writeRows(rows)
-        if type(opts.writeRoot) ~= "function" then
+        if opts.writeRoot == nil then
             internal.violate("storage.readonly_table_handle", "table storage handle is read-only")
         end
         return opts.writeRoot(node, storageInternal.NormalizeTableValue(node, rows))
@@ -759,7 +759,7 @@ function storageInternal.CreateTableHandle(node, opts)
         return values.deepCopy(readRows())
     end
 
-    if type(opts.writeRoot) == "function" then
+    if opts.writeRoot ~= nil then
         function handle.write(self, rowIndex, alias, value)
             ValidateReceiver(self, "write")
             ValidateRowIndex(rowIndex, "write")
@@ -876,13 +876,13 @@ storageInternal.DecodePackedChild = DecodePackedChild
 function storageInternal.readAlias(aliasNodes, backend, alias)
     local node = type(alias) == "string" and aliasNodes[alias] or nil
     if not node then
-        if backend and type(backend.onUnknownRead) == "function" then
+        if backend and backend.onUnknownRead ~= nil then
             backend.onUnknownRead(alias)
         end
         return nil
     end
 
-    if backend and type(backend.canRead) == "function" and backend.canRead(node, alias) == false then
+    if backend and backend.canRead ~= nil and backend.canRead(node, alias) == false then
         return nil
     end
 
@@ -901,13 +901,13 @@ end
 function storageInternal.writeAlias(aliasNodes, backend, alias, value)
     local node = type(alias) == "string" and aliasNodes[alias] or nil
     if not node then
-        if backend and type(backend.onUnknownWrite) == "function" then
+        if backend and backend.onUnknownWrite ~= nil then
             backend.onUnknownWrite(alias)
         end
         return false
     end
 
-    if backend and type(backend.canWrite) == "function" and backend.canWrite(node, alias) == false then
+    if backend and backend.canWrite ~= nil and backend.canWrite(node, alias) == false then
         return false
     end
 
@@ -923,14 +923,14 @@ function storageInternal.writeAlias(aliasNodes, backend, alias, value)
         local encoded = node.type == "bool" and (normalized and 1 or 0) or normalized
         local nextPacked = storageInternal.writePackedBits(currentPacked, node.offset, node.width, encoded)
         if storageInternal.valuesEqual(parent, currentPacked, nextPacked) then
-            if type(backend.writeAliasValue) == "function" then
+            if backend.writeAliasValue ~= nil then
                 backend.writeAliasValue(node, normalized)
             end
             return false
         end
 
         local changed = backend.writeRoot(parent, nextPacked)
-        if type(backend.writeAliasValue) == "function" then
+        if backend.writeAliasValue ~= nil then
             backend.writeAliasValue(node, normalized)
         end
         return changed ~= false

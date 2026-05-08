@@ -293,7 +293,7 @@ function public.createModuleHost(opts)
     local meta = host.getMeta()
     local packId = identity.modpack
     local pendingCoordinatorRebuild = internal.pendingCoordinatorRebuilds[def]
-    local hasPendingCoordinatorRebuild = type(pendingCoordinatorRebuild) == "table"
+    local hasPendingCoordinatorRebuild = pendingCoordinatorRebuild ~= nil
     internal.liveModuleHosts[pluginGuid] = host
     if registerIntegrations then
         registerIntegrations(authorHost)
@@ -339,12 +339,6 @@ function public.standaloneHost(pluginGuid)
         )
     end
 
-    if type(moduleHost.getIdentity) ~= "function" or type(moduleHost.getMeta) ~= "function" then
-        internal.violate(
-            "host.invalid_standalone_binding",
-            "standaloneHost: moduleHost metadata accessors are required"
-        )
-    end
     local DEFAULT_WINDOW_WIDTH = 960
     local DEFAULT_WINDOW_HEIGHT = 720
 

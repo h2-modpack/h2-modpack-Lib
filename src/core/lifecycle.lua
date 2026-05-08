@@ -5,7 +5,7 @@ local lifecycleApi = public.lifecycle
 local mutationInternal = internal.mutation
 
 function lifecycleApi.notifySettingsCommitted(def, settingsObserver, store)
-    if type(settingsObserver) ~= "function" then
+    if settingsObserver == nil then
         return true, nil
     end
 
@@ -101,7 +101,7 @@ end
 ---@return boolean requested True when a rebuild callback was registered and accepted the request.
 function lifecycleApi.requestCoordinatorRebuild(packId, reason)
     local callback = packId and internal.coordinatorRebuilds[packId] or nil
-    if type(callback) ~= "function" then
+    if callback == nil then
         return false
     end
 

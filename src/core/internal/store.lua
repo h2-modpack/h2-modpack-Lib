@@ -20,7 +20,7 @@ end
 ---@param value any Value to persist, normalized through the owning storage type when applicable.
 function storeInternal.writePersisted(store, alias, value)
     local state = store and StoreState[store] or nil
-    if not state or type(state.write) ~= "function" then
+    if not state then
         internal.violate("store.invalid_managed_store", "internal.store.writePersisted expects a managed store")
     end
     return state.write(alias, value)
@@ -31,7 +31,7 @@ end
 ---@return table[]
 function storeInternal.getPackedAliases(store, alias)
     local state = store and StoreState[store] or nil
-    if not state or type(state.getPackedAliases) ~= "function" then
+    if not state then
         return {}
     end
     return state.getPackedAliases(alias)
