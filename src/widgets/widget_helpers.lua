@@ -143,7 +143,7 @@ function widgetHelpers.GetPackedChoiceWriteValue(mode, isActive)
     return isActive == true
 end
 
-function widgetHelpers.ClassifyPackedChoice(node, children)
+function widgetHelpers.ClassifyPackedChoice(node, session, children)
     local mode = widgetHelpers.GetPackedChoiceMode(node)
     local noneValue = widgetHelpers.GetPackedChoiceNoneValue(mode)
     local activeCount = 0
@@ -152,7 +152,7 @@ function widgetHelpers.ClassifyPackedChoice(node, children)
 
     for _, child in ipairs(children or {}) do
         totalCount = totalCount + 1
-        local value = child.get and child.get() or noneValue
+        local value = session.read(child.alias)
         if value == nil then
             value = noneValue
         end
@@ -179,51 +179,49 @@ function widgetHelpers.ClassifyPackedChoice(node, children)
     }
 end
 
-function widgetHelpers.ApplyPackedChoiceSelection(children, selectedAlias, selection)
+function widgetHelpers.ApplyPackedChoiceSelection(session, children, selectedAlias, selection)
     local changed = false
     for _, child in ipairs(children or {}) do
         local shouldBeActive = child.alias == selectedAlias
         local nextValue = widgetHelpers.GetPackedChoiceWriteValue(selection.mode, shouldBeActive)
-        local currentValue = child.get and child.get() or selection.noneValue
+        local currentValue = session.read(child.alias)
         if currentValue == nil then
             currentValue = selection.noneValue
         end
         if currentValue ~= nextValue then
-            child.set(nextValue)
+            session.write(child.alias, nextValue)
             changed = true
         end
     end
     return changed
 end
 
-function widgetHelpers.ClearPackedChoiceSelection(children, selection)
+function widgetHelpers.ClearPackedChoiceSelection(session, children, selection)
     local changed = false
     for _, child in ipairs(children or {}) do
-        local currentValue = child.get and child.get() or selection.noneValue
+        local currentValue = session.read(child.alias)
         if currentValue == nil then
             currentValue = selection.noneValue
         end
         if currentValue ~= selection.noneValue then
-            child.set(selection.noneValue)
+            session.write(child.alias, selection.noneValue)
             changed = true
         end
     end
     return changed
 end
 
-function widgetHelpers.ResolvePackedChildren(session, alias, store)
+function widgetHelpers.ResolvePackedChildren(session, alias)
     local children = {}
-    if not store then
+    if not session or type(session.getAliasSchema) ~= "function" then
         return children
     end
 
-    local node = internal.store.getAliasNode(store, alias)
+    local node = session.getAliasSchema(alias)
     for _, child in ipairs(storageInternal.getPackedAliases(node)) do
         children[#children + 1] = {
             alias = child.alias,
             label = child.label or child.alias,
-            get = function() return session.read(child.alias) end,
-            set = function(value) session.write(child.alias, value) end,
         }
     end
     return children

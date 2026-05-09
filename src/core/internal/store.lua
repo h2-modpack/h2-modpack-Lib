@@ -25,14 +25,3 @@ function storeInternal.writePersisted(store, alias, value)
     end
     return state.write(alias, value)
 end
-
----@param store ManagedStore
----@param alias string
----@return StorageNode|PackedBitNode|nil node
-function storeInternal.getAliasNode(store, alias)
-    local state = store and StoreState[store] or nil
-    if not state then
-        return nil
-    end
-    return state.getAliasNode(alias)
-end

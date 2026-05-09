@@ -211,14 +211,13 @@ end
 ---@param imgui table
 ---@param session Session
 ---@param alias string
----@param store ManagedStore|nil
 ---@param opts PackedDropdownOpts|nil
 ---@return boolean
-function WidgetFns.packedDropdown(imgui, session, alias, store, opts)
+function WidgetFns.packedDropdown(imgui, session, alias, opts)
     opts = opts or {}
-    local children = helpers.ResolvePackedChildren(session, alias, store)
+    local children = helpers.ResolvePackedChildren(session, alias)
     local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
-    local selection = helpers.ClassifyPackedChoice(opts, children)
+    local selection = helpers.ClassifyPackedChoice(opts, session, children)
     local preview = tostring(opts.noneLabel or "None")
     local previewColor = nil
     if selection.state == "single" and selection.selectedChild then
@@ -244,7 +243,7 @@ function WidgetFns.packedDropdown(imgui, session, alias, store, opts)
             helpers.MakeSelectableId(tostring(opts.noneLabel or "None"), "none"),
             currentSelection.state == "none"
         ) then
-            changed = helpers.ClearPackedChoiceSelection(children, currentSelection) or changed
+            changed = helpers.ClearPackedChoiceSelection(session, children, currentSelection) or changed
             currentSelection = {
                 state = "none",
                 selectedChild = nil,
@@ -261,7 +260,7 @@ function WidgetFns.packedDropdown(imgui, session, alias, store, opts)
                 return imgui.Selectable(helpers.MakeSelectableId(childLabel, child.alias), isSelected)
             end)
             if clicked then
-                changed = helpers.ApplyPackedChoiceSelection(children, child.alias, currentSelection) or changed
+                changed = helpers.ApplyPackedChoiceSelection(session, children, child.alias, currentSelection) or changed
                 currentSelection = {
                     state = "single",
                     selectedChild = child,
@@ -277,12 +276,11 @@ end
 
 ---@param session Session
 ---@param alias string
----@param store ManagedStore|nil
 ---@param opts PackedDropdownOpts|PackedRadioOpts|nil
 ---@return string|nil selectedAlias
-function WidgetFns.getPackedChoiceAlias(session, alias, store, opts)
+function WidgetFns.getPackedChoiceAlias(session, alias, opts)
     opts = opts or {}
-    local children = helpers.ResolvePackedChildren(session, alias, store)
-    local selection = helpers.ClassifyPackedChoice(opts, children)
+    local children = helpers.ResolvePackedChildren(session, alias)
+    local selection = helpers.ClassifyPackedChoice(opts, session, children)
     return selection.selectedChild and selection.selectedChild.alias or nil
 end

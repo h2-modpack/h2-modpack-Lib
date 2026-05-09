@@ -103,6 +103,7 @@ local function createHostWithHooks(owner, registerHooks)
             read = function() end,
             write = function() end,
             reset = function() end,
+            getAliasSchema = function() end,
             isDirty = function()
                 return false
             end,
@@ -358,6 +359,7 @@ function TestHooks:testCreateModuleHostSyncsCoordinatedRuntimeImmediately()
             read = function() end,
             write = function() end,
             reset = function() end,
+            getAliasSchema = function() end,
             isDirty = function()
                 return false
             end,
@@ -389,6 +391,7 @@ function TestHooks:testCreateModuleHostHotReloadReplacesCoordinatedRuntimeState(
             read = function() end,
             write = function() end,
             reset = function() end,
+            getAliasSchema = function() end,
             isDirty = function()
                 return false
             end,

@@ -255,6 +255,9 @@ function internal.store.createSession(modConfig, configBackend, storage)
         table = function(alias)
             return getTableHandle(alias)
         end,
+        getAliasSchema = function(alias)
+            return aliasNodes[alias]
+        end,
         write = function(alias, value)
             writeStagingValue(alias, value)
         end,

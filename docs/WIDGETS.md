@@ -95,14 +95,14 @@ Most widgets bind to one staged session alias:
 - `mappedDropdown`
 - `radio`
 - `mappedRadio`
-- `stepper`
-
-Some bind to packed roots and therefore also need `store`:
 - `packedDropdown`
 - `packedRadio`
 - `packedCheckboxList`
+- `stepper`
 
-The `store` argument is used for packed-root metadata lookup.
+Packed widgets resolve packed child metadata through `session.getAliasSchema(alias)`.
+Draw callbacks receive this metadata accessor as part of their author-facing
+session handle.
 
 One binds to two aliases:
 - `steppedRange(minAlias, maxAlias, ...)`
@@ -289,7 +289,7 @@ lib.widgets.mappedDropdown(ui, session, "SelectedRoot", {
 })
 ```
 
-### `lib.widgets.packedDropdown(imgui, session, alias, store, opts?)`
+### `lib.widgets.packedDropdown(imgui, session, alias, opts?)`
 
 Single-choice dropdown over a packed root.
 
@@ -310,8 +310,7 @@ Options:
 - `singleDisabled`
 
 Behavior:
-- resolves packed children from store storage metadata
-- packed widgets require the `store` argument so child metadata stays out of `session`
+- resolves packed children from session storage metadata
 - classifies current packed state as:
   - none
   - single
@@ -324,7 +323,7 @@ Use when:
 Example:
 
 ```lua
-lib.widgets.packedDropdown(ui, session, "PackedForcedBoon", store, {
+lib.widgets.packedDropdown(ui, session, "PackedForcedBoon", {
     label = "Force 1",
     noneLabel = "None",
     selectionMode = "singleEnabled",
@@ -373,7 +372,7 @@ Use when:
 Note:
 - `getOptions` receives `session.view`
 
-### `lib.widgets.packedRadio(imgui, session, alias, store, opts?)`
+### `lib.widgets.packedRadio(imgui, session, alias, opts?)`
 
 Packed single-choice radio surface.
 
@@ -450,7 +449,7 @@ Behavior:
 Use when:
 - the field is a plain toggle
 
-### `lib.widgets.packedCheckboxList(imgui, session, alias, store, opts?)`
+### `lib.widgets.packedCheckboxList(imgui, session, alias, opts?)`
 
 Checkbox list over packed child aliases.
 
@@ -468,7 +467,7 @@ Options:
 - `unchecked`
 
 Behavior:
-- resolves packed children from store storage metadata
+- resolves packed children from session storage metadata
 - text filter is case-insensitive substring match on option labels
 - items are laid out inline according to `optionsPerLine`
 - rendering stops after `slotCount` matches
@@ -480,7 +479,7 @@ Use when:
 Example:
 
 ```lua
-lib.widgets.packedCheckboxList(ui, session, "PackedBannedAphrodite", store, {
+lib.widgets.packedCheckboxList(ui, session, "PackedBannedAphrodite", {
     filterText = session.view.BanFilterText,
     optionsPerLine = 2,
     valueColors = {

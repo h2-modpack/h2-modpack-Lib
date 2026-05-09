@@ -73,12 +73,14 @@ local lib = {}
 ---@class AdamantModpackLib.ManagedStore
 ---@field read fun(alias: string): any
 ---@field table fun(alias: string): AdamantModpackLib.StorageTableReadOnly?
+---@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil Read-only schema metadata.
 ---@field writeUnstaged fun(alias: string, value: any): boolean
 
 ---@class AdamantModpackLib.Session
 ---@field view table<string, any>
 ---@field read fun(alias: string): any
 ---@field table fun(alias: string): AdamantModpackLib.StorageTableSession?
+---@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil Read-only schema metadata.
 ---@field write fun(alias: string, value: any)
 ---@field reset fun(alias: string)
 ---@field _flushToConfig fun()
@@ -93,6 +95,7 @@ local lib = {}
 ---@field read fun(alias: string): any
 ---@field write fun(alias: string, value: any)
 ---@field reset fun(alias: string)
+---@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil Read-only schema metadata.
 ---@field resetToDefaults fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
 
 ---@class AdamantModpackLib.AuthorHost
@@ -802,18 +805,16 @@ end
 ---@param imgui table
 ---@param session AdamantModpackLib.Session
 ---@param alias string
----@param store AdamantModpackLib.ManagedStore?
 ---@param opts? AdamantModpackLib.PackedDropdownOpts
 ---@return boolean changed
-function lib.widgets.packedDropdown(imgui, session, alias, store, opts)
+function lib.widgets.packedDropdown(imgui, session, alias, opts)
 end
 
 ---@param session AdamantModpackLib.Session
 ---@param alias string
----@param store AdamantModpackLib.ManagedStore?
 ---@param opts? AdamantModpackLib.PackedDropdownOpts|AdamantModpackLib.PackedRadioOpts
 ---@return string? selectedAlias Selected child alias when exactly one packed choice is active; otherwise `nil`.
-function lib.widgets.getPackedChoiceAlias(session, alias, store, opts)
+function lib.widgets.getPackedChoiceAlias(session, alias, opts)
 end
 
 ---@param imgui table
@@ -835,10 +836,9 @@ end
 ---@param imgui table
 ---@param session AdamantModpackLib.Session
 ---@param alias string
----@param store AdamantModpackLib.ManagedStore?
 ---@param opts? AdamantModpackLib.PackedRadioOpts
 ---@return boolean changed
-function lib.widgets.packedRadio(imgui, session, alias, store, opts)
+function lib.widgets.packedRadio(imgui, session, alias, opts)
 end
 
 ---@param imgui table
@@ -869,10 +869,9 @@ end
 ---@param imgui table
 ---@param session AdamantModpackLib.Session
 ---@param alias string
----@param store AdamantModpackLib.ManagedStore?
 ---@param opts? AdamantModpackLib.PackedCheckboxListOpts
 ---@return boolean changed
-function lib.widgets.packedCheckboxList(imgui, session, alias, store, opts)
+function lib.widgets.packedCheckboxList(imgui, session, alias, opts)
 end
 
 ---@class AdamantModpackLib.NavApi

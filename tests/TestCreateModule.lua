@@ -14,6 +14,7 @@ function TestCreateModule:testCreateModuleRunsCanonicalPipeline()
     local owner = {}
     local callbackHost = nil
     local drawHost = nil
+    local authorSchemaNode = nil
     local config = {}
 
     local host, store = lib.createModule({
@@ -33,6 +34,7 @@ function TestCreateModule:testCreateModuleRunsCanonicalPipeline()
         end,
         drawTab = function(_, authorSession, authorHost)
             drawHost = authorHost
+            authorSchemaNode = authorSession.getAliasSchema("Flag")
             authorSession.write("Flag", true)
         end,
     })
@@ -46,6 +48,9 @@ function TestCreateModule:testCreateModuleRunsCanonicalPipeline()
     lu.assertEquals(store.read("Flag"), false)
     liveHost.flush()
     lu.assertEquals(store.read("Flag"), true)
+    lu.assertNotNil(authorSchemaNode)
+    lu.assertEquals(authorSchemaNode.alias, "Flag")
+    lu.assertEquals(store.getAliasSchema("Flag"), authorSchemaNode)
     lu.assertEquals(type(owner._definitionStructuralFingerprint), "string")
 end
 

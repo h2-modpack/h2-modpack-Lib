@@ -40,12 +40,11 @@ end
 ---@param imgui table
 ---@param session Session
 ---@param alias string
----@param store ManagedStore|nil
 ---@param opts PackedCheckboxListOpts|nil
 ---@return boolean
-function WidgetFns.packedCheckboxList(imgui, session, alias, store, opts)
+function WidgetFns.packedCheckboxList(imgui, session, alias, opts)
     opts = opts or {}
-    local children = helpers.ResolvePackedChildren(session, alias, store)
+    local children = helpers.ResolvePackedChildren(session, alias)
     local lowerFilter = type(opts.filterText) == "string" and opts.filterText:lower() or ""
     local hasFilter = lowerFilter ~= ""
     local filterMode = opts.filterMode
@@ -66,7 +65,7 @@ function WidgetFns.packedCheckboxList(imgui, session, alias, store, opts)
         if drawn >= slotCount then
             break
         end
-        local current = child.get() == true
+        local current = session.read(child.alias) == true
         local matchesText = not hasFilter or tostring(child.label):lower():find(lowerFilter, 1, true) ~= nil
         local matchesMode = filterMode == "all"
             or (filterMode == "checked" and current)
@@ -82,7 +81,7 @@ function WidgetFns.packedCheckboxList(imgui, session, alias, store, opts)
                 return imgui.Checkbox(tostring(child.label) .. "##" .. tostring(child.alias), current)
             end)
             if clicked then
-                child.set(nextValue)
+                session.write(child.alias, nextValue)
                 changed = true
             end
         end

@@ -9,6 +9,7 @@ local internal = AdamantModpackLib_Internal
 ---@field read fun(alias: string): any
 ---@field write fun(alias: string, value: any)
 ---@field reset fun(alias: string)
+---@field getAliasSchema fun(alias: string): StorageNode|PackedBitNode|nil
 ---@field resetToDefaults fun(opts: table|nil): boolean, number
 
 ---@class AuthorHost
@@ -132,7 +133,8 @@ function public.createModuleHost(opts)
     if not (store and type(store.read) == "function") then
         internal.violate("host.invalid_create_opts", "createModuleHost: store is required")
     end
-    if not (session and type(session.isDirty) == "function" and type(session.write) == "function") then
+    if not (session and type(session.isDirty) == "function" and type(session.write) == "function"
+        and type(session.getAliasSchema) == "function") then
         internal.violate("host.invalid_create_opts", "createModuleHost: session is required")
     end
 
@@ -170,6 +172,7 @@ function public.createModuleHost(opts)
         read = session.read,
         write = session.write,
         reset = session.reset,
+        getAliasSchema = session.getAliasSchema,
         resetToDefaults = function(resetOpts)
             return public.resetStorageToDefaults(def.storage, session, resetOpts)
         end,

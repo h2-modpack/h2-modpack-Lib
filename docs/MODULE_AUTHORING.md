@@ -486,7 +486,7 @@ function internal.DrawTab(ui, session)
 
     ui.Separator()
     lib.widgets.text(ui, "Packed Flags")
-    lib.widgets.packedCheckboxList(ui, session, "PackedFlags", internal.store, {
+    lib.widgets.packedCheckboxList(ui, session, "PackedFlags", {
         optionsPerLine = 2,
     })
 end

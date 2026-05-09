@@ -261,6 +261,7 @@ call with a session from another. Recreate the pair together on module reload.
 Returned surface:
 - `store.read(alias)`
 - `store.table(alias)`
+- `store.getAliasSchema(alias)`
 - `store.writeUnstaged(alias, value)` returns whether the write was accepted
 
 Persisted writes happen through semantic helpers or session flushes:
@@ -390,6 +391,7 @@ Useful surface:
 - `session.view`
 - `session.read(alias)`
 - `session.table(alias)`
+- `session.getAliasSchema(alias)`
 - `session.write(alias, value)`
 - `session.reset(alias)`
 - `session.isDirty()`
@@ -406,7 +408,13 @@ When a module is rendered through `lib.createModuleHost(...)`, draw callbacks re
 - `read(alias)`
 - `write(alias, value)`
 - `reset(alias)`
+- `getAliasSchema(alias)`
 - `resetToDefaults(opts?)`
+
+`store` and `session` expose the same prepared storage schema nodes through
+`getAliasSchema(alias)`. Values differ by surface; metadata does not. Treat the
+returned nodes as read-only metadata owned by Lib storage preparation. Widgets
+use this metadata for composite storage such as packed roots.
 
 Behavior:
 - persisted aliases stage in `session` and only hit config on flush/commit
@@ -727,6 +735,8 @@ Creates a behavior-only host object around:
 - `session.read(alias)`
 - `session.write(alias, value)`
 - `session.reset(alias)`
+- `session.getAliasSchema(alias)`
+- `session.resetToDefaults(opts?)`
 
 Commit and reload behavior stays on Lib's internal live host. Modules do not receive
 that object directly.
@@ -818,15 +828,15 @@ Built-ins:
 - `lib.widgets.inputText(imgui, session, alias, opts?)`
 - `lib.widgets.dropdown(imgui, session, alias, opts?)`
 - `lib.widgets.mappedDropdown(imgui, session, alias, opts?)`
-- `lib.widgets.packedDropdown(imgui, session, alias, store, opts?)`
-- `lib.widgets.getPackedChoiceAlias(session, alias, store, opts?)`
+- `lib.widgets.packedDropdown(imgui, session, alias, opts?)`
+- `lib.widgets.getPackedChoiceAlias(session, alias, opts?)`
 - `lib.widgets.radio(imgui, session, alias, opts?)`
 - `lib.widgets.mappedRadio(imgui, session, alias, opts?)`
-- `lib.widgets.packedRadio(imgui, session, alias, store, opts?)`
+- `lib.widgets.packedRadio(imgui, session, alias, opts?)`
 - `lib.widgets.stepper(imgui, session, alias, opts?)`
 - `lib.widgets.steppedRange(imgui, session, minAlias, maxAlias, opts?)`
 - `lib.widgets.checkbox(imgui, session, alias, opts?)`
-- `lib.widgets.packedCheckboxList(imgui, session, alias, store, opts?)`
+- `lib.widgets.packedCheckboxList(imgui, session, alias, opts?)`
 
 These are direct immediate-mode helpers.
 
