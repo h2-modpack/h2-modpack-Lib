@@ -228,7 +228,7 @@ host.activate()
 
 Returns:
 - `host`
-  Author-facing host with `activate()`, `isEnabled()`, `getIdentity()`, and `getMeta()`.
+  Author-facing host with `activate()`, `isEnabled()`, metadata getters, and module-scoped logging helpers.
 - `store`
   Runtime read surface for gameplay/hooks.
 
@@ -240,7 +240,7 @@ construction can use `prepareDefinition(...)`, `createStore(...)`,
 If `registerHooks` is provided, Lib calls it as:
 
 ```lua
-registerHooks(store, authorHost)
+registerHooks(authorHost, store)
 ```
 
 Runtime helper files should receive the needed `store` or narrowed read/access
@@ -488,7 +488,7 @@ Also supports:
 ### Typical module pattern
 
 ```lua
-function internal.RegisterHooks(store, host)
+function internal.RegisterHooks(host, store)
     lib.hooks.Wrap(internal, "GetEligibleLootNames", function(base, ...)
         local result = base(...)
         if host.isEnabled() and store.read("FeatureEnabled") then
@@ -694,21 +694,22 @@ Writes the persisted debug-mode flag for a module store.
 
 Returns whether a mutation bundle declares live run-data mutation behavior.
 
-### `lib.lifecycle.applyMutation(def, mutationBundle, store)`
+### `lib.lifecycle.applyMutation(def, mutationBundle, host, store)`
 
 Applies the module's mutation lifecycle.
-Manual lifecycle hooks receive the same store as `apply(store)`.
+Patch callbacks receive `(plan, host, store)`. Manual lifecycle hooks receive
+`(host, store)`.
 
-### `lib.lifecycle.revertMutation(def, mutationBundle, store)`
+### `lib.lifecycle.revertMutation(def, mutationBundle, host, store)`
 
 Reverts the module's mutation lifecycle.
-Manual lifecycle hooks receive the same store as `revert(store)`.
+Manual lifecycle hooks receive `(host, store)`.
 
-### `lib.lifecycle.reapplyMutation(def, mutationBundle, store)`
+### `lib.lifecycle.reapplyMutation(def, mutationBundle, host, store)`
 
 Reverts and reapplies the module's mutation lifecycle.
 
-### `lib.lifecycle.applyOnLoad(def, mutationBundle, store)`
+### `lib.lifecycle.applyOnLoad(def, mutationBundle, host, store)`
 
 Syncs live mutation state to the module's effective enabled state on load. Framework calls this for coordinated modules; `lib.standaloneHost(...)` calls it for standalone modules.
 
@@ -716,21 +717,21 @@ Syncs live mutation state to the module's effective enabled state on load. Frame
 
 Audits staged state against persisted config, logs drift, then reloads staged values from config.
 
-### `lib.lifecycle.commitSession(def, mutationBundle, settingsObserver, store, session)`
+### `lib.lifecycle.commitSession(def, mutationBundle, settingsObserver, host, store, session)`
 
 Transactional commit helper for staged `session`.
 
 Behavior:
 - flushes staged persisted values to config
 - if the module is enabled and the mutation bundle affects run data, reapplies mutation state
-- calls `settingsObserver(store)` after a successful dirty commit when present
+- calls `settingsObserver(host, store)` after a successful dirty commit when present
 - on failure, restores the previous config snapshot and reloads `session`
 
 `onSettingsCommitted` is a post-commit observer for rebuilding derived runtime/UI structures. It is not transactional; callback errors are warned and do not roll back the committed config.
 
-### `lib.lifecycle.notifySettingsCommitted(def, settingsObserver, store)`
+### `lib.lifecycle.notifySettingsCommitted(def, settingsObserver, host, store)`
 
-Runs `settingsObserver(store)` when present. Host flush paths use this after direct staged writes, so profile/hash imports and normal UI commits share the same observer boundary.
+Runs `settingsObserver(host, store)` when present. Host flush paths use this after direct staged writes, so profile/hash imports and normal UI commits share the same observer boundary.
 
 ## Standalone Host
 
@@ -771,7 +772,7 @@ should call `authorHost.activate()` instead.
 
 If `registerHooks` is provided:
 - `hookOwner` must be a persistent table
-- Lib runs `registerHooks(store, authorHost)` during activation
+- Lib runs `registerHooks(authorHost, store)` during activation
 - hook declarations made through `lib.hooks.*` are refreshed as one registration pass for that owner
 
 If `registerIntegrations` is provided, Lib runs
@@ -781,6 +782,8 @@ Returned author surface:
 - `host.isEnabled()`
 - `host.getIdentity()`
 - `host.getMeta()`
+- `host.log(fmt, ...)`
+- `host.logIf(fmt, ...)`, which prints only when the module's `DebugMode` storage is enabled
 
 `activateModuleHost(...)` is single-use for a constructed host. Calling it
 twice for the same host is a state-machine error. Side-effecting full-host

@@ -4,12 +4,12 @@ public.lifecycle = public.lifecycle or {}
 local lifecycleApi = public.lifecycle
 local mutationInternal = internal.mutation
 
-function lifecycleApi.notifySettingsCommitted(def, settingsObserver, store)
+function lifecycleApi.notifySettingsCommitted(def, settingsObserver, authorHost, store)
     if settingsObserver == nil then
         return true, nil
     end
 
-    local ok, result = pcall(settingsObserver, store)
+    local ok, result = pcall(settingsObserver, authorHost, store)
     if not ok then
         internal.violate("lifecycle.on_settings_committed_failed", "%s: onSettingsCommitted failed: %s",
             tostring(def.name or def.id or "module"),
@@ -129,8 +129,8 @@ end
 ---@param store ManagedStore|nil Managed module store associated with the definition.
 ---@return boolean ok True when the mutation lifecycle applied successfully.
 ---@return string|nil err Error message when the apply step fails.
-function lifecycleApi.applyMutation(def, mutationBundle, store)
-    return mutationInternal.apply(def, mutationBundle, store)
+function lifecycleApi.applyMutation(def, mutationBundle, authorHost, store)
+    return mutationInternal.apply(def, mutationBundle, authorHost, store)
 end
 
 --- Reverts a module's current mutation lifecycle from live run data.
@@ -139,8 +139,8 @@ end
 ---@param store ManagedStore|nil Managed module store associated with the definition.
 ---@return boolean ok True when the mutation lifecycle reverted successfully.
 ---@return string|nil err Error message when the revert step fails.
-function lifecycleApi.revertMutation(def, mutationBundle, store)
-    return mutationInternal.revert(def, mutationBundle, store)
+function lifecycleApi.revertMutation(def, mutationBundle, authorHost, store)
+    return mutationInternal.revert(def, mutationBundle, authorHost, store)
 end
 
 --- Reverts and reapplies a module's mutation lifecycle.
@@ -149,8 +149,8 @@ end
 ---@param store ManagedStore|nil Managed module store associated with the definition.
 ---@return boolean ok True when the mutation lifecycle reapplied successfully.
 ---@return string|nil err Error message when the reapply step fails.
-function lifecycleApi.reapplyMutation(def, mutationBundle, store)
-    return mutationInternal.reapply(def, mutationBundle, store)
+function lifecycleApi.reapplyMutation(def, mutationBundle, authorHost, store)
+    return mutationInternal.reapply(def, mutationBundle, authorHost, store)
 end
 
 --- Applies the current effective startup lifecycle state for a module.
@@ -160,14 +160,14 @@ end
 ---@param store ManagedStore Managed module store associated with the definition.
 ---@return boolean ok True when startup lifecycle sync completed.
 ---@return string|nil err Error message when startup mutation application fails.
-function lifecycleApi.applyOnLoad(def, mutationBundle, store)
+function lifecycleApi.applyOnLoad(def, mutationBundle, authorHost, store)
     if public.isModuleEnabled(store, def and def.modpack) then
-        local ok, err = lifecycleApi.applyMutation(def, mutationBundle, store)
+        local ok, err = lifecycleApi.applyMutation(def, mutationBundle, authorHost, store)
         if not ok then
             return false, err
         end
     else
-        local ok, err = mutationInternal.revertActive(def, store)
+        local ok, err = mutationInternal.revertActive(def, authorHost, store)
         if not ok then
             return false, err
         end
@@ -205,7 +205,7 @@ end
 ---@param session Session Session exposing transactional flush and reload helpers.
 ---@return boolean ok True when the commit completed successfully.
 ---@return string|nil err Error message when the commit or rollback path fails.
-function lifecycleApi.commitSession(def, mutationBundle, settingsObserver, store, session)
+function lifecycleApi.commitSession(def, mutationBundle, settingsObserver, authorHost, store, session)
     if not session.isDirty() then
         return true, nil
     end
@@ -217,18 +217,18 @@ function lifecycleApi.commitSession(def, mutationBundle, settingsObserver, store
         and store.read("Enabled") == true
 
     if not shouldReapply then
-        return lifecycleApi.notifySettingsCommitted(def, settingsObserver, store)
+        return lifecycleApi.notifySettingsCommitted(def, settingsObserver, authorHost, store)
     end
 
-    local ok, err = lifecycleApi.reapplyMutation(def, mutationBundle, store)
+    local ok, err = lifecycleApi.reapplyMutation(def, mutationBundle, authorHost, store)
     if ok then
-        return lifecycleApi.notifySettingsCommitted(def, settingsObserver, store)
+        return lifecycleApi.notifySettingsCommitted(def, settingsObserver, authorHost, store)
     end
 
     session._restoreConfigSnapshot(snapshot)
     session._reloadFromConfig()
 
-    local rollbackOk, rollbackErr = lifecycleApi.reapplyMutation(def, mutationBundle, store)
+    local rollbackOk, rollbackErr = lifecycleApi.reapplyMutation(def, mutationBundle, authorHost, store)
     if not rollbackOk then
         internal.violate("lifecycle.session_rollback_reapply_failed", "%s: session rollback reapply failed: %s",
             tostring(def.name or def.id or "module"),
@@ -247,17 +247,17 @@ end
 ---@param enabled boolean Desired enabled state.
 ---@return boolean ok True when the enabled state transition completed successfully.
 ---@return string|nil err Error message when the transition fails.
-function lifecycleApi.setEnabled(def, mutationBundle, store, enabled)
+function lifecycleApi.setEnabled(def, mutationBundle, authorHost, store, enabled)
     local nextEnabled = enabled == true
     local current = store.read("Enabled") == true
 
     local ok, err
     if nextEnabled and current then
-        ok, err = lifecycleApi.reapplyMutation(def, mutationBundle, store)
+        ok, err = lifecycleApi.reapplyMutation(def, mutationBundle, authorHost, store)
     elseif nextEnabled then
-        ok, err = lifecycleApi.applyMutation(def, mutationBundle, store)
+        ok, err = lifecycleApi.applyMutation(def, mutationBundle, authorHost, store)
     elseif current then
-        ok, err = lifecycleApi.revertMutation(def, mutationBundle, store)
+        ok, err = lifecycleApi.revertMutation(def, mutationBundle, authorHost, store)
     else
         ok, err = true, nil
     end

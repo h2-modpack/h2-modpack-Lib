@@ -17,6 +17,8 @@ local HostState = setmetatable({}, { __mode = "k" })
 ---@field isEnabled fun(): boolean
 ---@field getIdentity fun(): table
 ---@field getMeta fun(): table
+---@field log fun(fmt: string, ...): nil
+---@field logIf fun(fmt: string, ...): nil
 ---@field activate fun(): AuthorHost
 
 ---@class ModuleHostOpts
@@ -25,10 +27,10 @@ local HostState = setmetatable({}, { __mode = "k" })
 ---@field store ManagedStore
 ---@field session Session
 ---@field hookOwner table|nil
----@field registerHooks fun(store: ManagedStore, host: AuthorHost)|nil
----@field registerPatchMutation fun(plan: table, store: ManagedStore)|nil
+---@field registerHooks fun(host: AuthorHost, store: ManagedStore)|nil
+---@field registerPatchMutation fun(plan: table, host: AuthorHost, store: ManagedStore)|nil
 ---@field registerManualMutation table|nil
----@field onSettingsCommitted fun(store: ManagedStore)|nil
+---@field onSettingsCommitted fun(host: AuthorHost, store: ManagedStore)|nil
 ---@field registerIntegrations fun(host: AuthorHost, store: ManagedStore)|nil
 ---@field drawTab fun(imgui: table, session: AuthorSession, host: AuthorHost)
 ---@field drawQuickContent fun(imgui: table, session: AuthorSession, host: AuthorHost)|nil
@@ -180,6 +182,8 @@ function public.createModuleHost(opts)
 
     ---@type ModuleHost
     local host = {}
+    ---@type AuthorHost
+    local authorHost
 
     local function requireActivated(methodName)
         local state = HostState[host]
@@ -223,7 +227,7 @@ function public.createModuleHost(opts)
         requireActivated("writeAndFlush")
         session.write(alias, value)
         session._flushToConfig()
-        return public.lifecycle.notifySettingsCommitted(def, settingsObserver, store)
+        return public.lifecycle.notifySettingsCommitted(def, settingsObserver, authorHost, store)
     end
 
     function host.stage(alias, value)
@@ -237,7 +241,7 @@ function public.createModuleHost(opts)
             return true
         end
         session._flushToConfig()
-        return public.lifecycle.notifySettingsCommitted(def, settingsObserver, store)
+        return public.lifecycle.notifySettingsCommitted(def, settingsObserver, authorHost, store)
     end
 
     function host.reloadFromConfig()
@@ -260,7 +264,7 @@ function public.createModuleHost(opts)
         if not session.isDirty() then
             return true, nil, false
         end
-        local ok, err = public.lifecycle.commitSession(def, mutationBundle, settingsObserver, store, session)
+        local ok, err = public.lifecycle.commitSession(def, mutationBundle, settingsObserver, authorHost, store, session)
         return ok, err, ok == true
     end
 
@@ -270,7 +274,7 @@ function public.createModuleHost(opts)
 
     function host.setEnabled(enabled)
         requireActivated("setEnabled")
-        return public.lifecycle.setEnabled(def, mutationBundle, store, enabled)
+        return public.lifecycle.setEnabled(def, mutationBundle, authorHost, store, enabled)
     end
 
     function host.setDebugMode(enabled)
@@ -278,27 +282,46 @@ function public.createModuleHost(opts)
         return public.lifecycle.setDebugMode(store, enabled)
     end
 
+    local logPrefix = "[" .. tostring(def.id or pluginGuid) .. "] "
+
+    function host.log(fmt, ...)
+        print(internal.formatLogMessage(logPrefix, fmt, ...))
+    end
+
+    function host.logIf(fmt, ...)
+        if store.read("DebugMode") == true then
+            host.log(fmt, ...)
+        end
+    end
+
     function host.applyOnLoad()
         requireActivated("applyOnLoad")
-        return public.lifecycle.applyOnLoad(def, mutationBundle, store)
+        return public.lifecycle.applyOnLoad(def, mutationBundle, authorHost, store)
     end
 
     function host.applyMutation()
         requireActivated("applyMutation")
-        return public.lifecycle.applyMutation(def, mutationBundle, store)
+        return public.lifecycle.applyMutation(def, mutationBundle, authorHost, store)
     end
 
     function host.revertMutation()
         requireActivated("revertMutation")
-        return public.lifecycle.revertMutation(def, mutationBundle, store)
+        return public.lifecycle.revertMutation(def, mutationBundle, authorHost, store)
     end
 
-    ---@type AuthorHost
-    local authorHost = {
+    authorHost = {
         isEnabled = host.isEnabled,
         getIdentity = host.getIdentity,
         getMeta = host.getMeta,
     }
+
+    function authorHost.log(fmt, ...)
+        return host.log(fmt, ...)
+    end
+
+    function authorHost.logIf(fmt, ...)
+        return host.logIf(fmt, ...)
+    end
 
     function authorHost.activate()
         return public.activateModuleHost(host)
@@ -353,7 +376,7 @@ function public.activateModuleHost(host)
         internal.violate("host.already_activated", "activateModuleHost: host is already activated")
     end
     if state.activating == true then
-        internal.violate("host.already_activated", "activateModuleHost: host activation is already in progress")
+        internal.violate("host.activation_in_progress", "activateModuleHost: host activation is already in progress")
     end
     local identity = host.getIdentity()
     local meta = host.getMeta()
@@ -369,7 +392,7 @@ function public.activateModuleHost(host)
     local ok, err = pcall(function()
         if registerHooks ~= nil then
             internal.hooks.refresh(hookOwner, function()
-                return registerHooks(store, authorHost)
+                return registerHooks(authorHost, store)
             end)
         end
         if registerIntegrations then
@@ -380,7 +403,7 @@ function public.activateModuleHost(host)
             and type(packId) == "string"
             and packId ~= ""
             and public.isModuleCoordinated(packId) then
-            local syncOk, syncErr = public.lifecycle.applyOnLoad(def, state.mutationBundle, store)
+            local syncOk, syncErr = public.lifecycle.applyOnLoad(def, state.mutationBundle, authorHost, store)
             if not syncOk then
                 internal.violate("host.coordinated_runtime_sync_failed", "%s coordinated runtime sync failed: %s",
                     tostring(meta.name or identity.id or "module"),

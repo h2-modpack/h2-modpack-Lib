@@ -108,7 +108,7 @@ This code should read and write staged values through the author-facing `session
 
 Owns gameplay and mutation behavior:
 
-- `internal.RegisterHooks(store, authorHost)`
+- `internal.RegisterHooks(authorHost, store)`
 - optional `internal.BuildPatchPlan(...)`
 - optional manual mutation apply/revert callbacks
 
@@ -245,9 +245,10 @@ If the module only changes configuration/UI, `logic.lua` can stay minimal.
 If the module changes live run data:
 
 ```lua
-local function BuildPatchPlan(plan, activeStore)
-    if activeStore.read("FeatureEnabled") then
+local function BuildPatchPlan(plan, host, store)
+    if store.read("FeatureEnabled") then
         plan:set(SomeGameTable, "SomeKey", true)
+        host.logIf("Enabled SomeGameTable.SomeKey")
     end
 end
 ```
@@ -258,7 +259,7 @@ only when the mutation is not naturally expressed as reversible table edits.
 If the module installs runtime hooks, declare them through `lib.hooks.*` from `internal.RegisterHooks(...)`:
 
 ```lua
-function internal.RegisterHooks(store, host)
+function internal.RegisterHooks(host, store)
     lib.hooks.Wrap(internal, "SomeGameFunction", function(base, ...)
         local result = base(...)
 

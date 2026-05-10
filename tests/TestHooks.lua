@@ -486,5 +486,5 @@ function TestHooks:testCreateModuleHostHotReloadReplacesCoordinatedRuntimeState(
             secondRevertCalls = secondRevertCalls + 1
             end,
         },
-    }, store)
+    }, nil, store)
 end

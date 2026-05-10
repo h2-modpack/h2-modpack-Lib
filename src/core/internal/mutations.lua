@@ -57,14 +57,14 @@ local function SetActiveManualRevert(def, store, revertFn)
     SetRuntimeState(def, store, runtime)
 end
 
-local function BuildMutationPlan(mutationBundle, store)
+local function BuildMutationPlan(mutationBundle, authorHost, store)
     local builder = mutationBundle and mutationBundle.patchMutation
     if builder == nil then
         return nil
     end
 
     local plan = mutationPlan.createPlan()
-    builder(plan, store)
+    builder(plan, authorHost, store)
     return plan
 end
 
@@ -84,14 +84,14 @@ local function RevertActivePlan(def, store)
     return true, nil, true
 end
 
-local function RevertActiveManual(def, store)
+local function RevertActiveManual(def, authorHost, store)
     local runtime = GetRuntimeState(def, store)
     local revertFn = runtime and runtime.manualRevert or nil
     if revertFn == nil then
         return true, nil, false
     end
 
-    local okManual, errManual = pcall(revertFn, store)
+    local okManual, errManual = pcall(revertFn, authorHost, store)
     runtime.manualRevert = nil
     SetRuntimeState(def, store, runtime)
     if not okManual then
@@ -100,11 +100,11 @@ local function RevertActiveManual(def, store)
     return true, nil, true
 end
 
-local function RevertActiveMutation(def, store)
+local function RevertActiveMutation(def, authorHost, store)
     local firstErr = nil
     local didActive = false
 
-    local okManual, errManual, didManual = RevertActiveManual(def, store)
+    local okManual, errManual, didManual = RevertActiveManual(def, authorHost, store)
     if not okManual and not firstErr then
         firstErr = errManual
     end
@@ -164,10 +164,10 @@ end
 ---@param store ManagedStore|nil Managed module store associated with the definition.
 ---@return boolean ok True when the mutation lifecycle applied successfully.
 ---@return string|nil err Error message when the apply step fails.
-function mutationInternal.apply(def, mutationBundle, store)
+function mutationInternal.apply(def, mutationBundle, authorHost, store)
     local inferred, info = mutationInternal.inferMutation(mutationBundle)
 
-    local okActive, errActive = RevertActiveMutation(def, store)
+    local okActive, errActive = RevertActiveMutation(def, authorHost, store)
     if not okActive then
         return false, errActive
     end
@@ -181,7 +181,7 @@ function mutationInternal.apply(def, mutationBundle, store)
 
     local builtPlan = nil
     if info.hasPatch then
-        local okBuild, result = pcall(BuildMutationPlan, mutationBundle, store)
+        local okBuild, result = pcall(BuildMutationPlan, mutationBundle, authorHost, store)
         if not okBuild then
             return false, result
         end
@@ -197,7 +197,7 @@ function mutationInternal.apply(def, mutationBundle, store)
 
     if info.hasManual then
         local manual = mutationBundle.manualMutation
-        local okManual, errManual = pcall(manual.apply, store)
+        local okManual, errManual = pcall(manual.apply, authorHost, store)
         if not okManual then
             if builtPlan then
                 pcall(builtPlan.revert, builtPlan)
@@ -216,8 +216,8 @@ end
 ---@param store ManagedStore|nil Managed module store associated with the definition.
 ---@return boolean ok True when active mutation state was absent or reverted successfully.
 ---@return string|nil err Error message when active cleanup fails.
-function mutationInternal.revertActive(def, store)
-    local ok, err = RevertActiveMutation(def, store)
+function mutationInternal.revertActive(def, authorHost, store)
+    local ok, err = RevertActiveMutation(def, authorHost, store)
     return ok, err
 end
 
@@ -227,10 +227,10 @@ end
 ---@param store ManagedStore|nil Managed module store associated with the definition.
 ---@return boolean ok True when the mutation lifecycle reverted successfully.
 ---@return string|nil err Error message when the revert step fails.
-function mutationInternal.revert(def, mutationBundle, store)
+function mutationInternal.revert(def, mutationBundle, authorHost, store)
     local inferred, info = mutationInternal.inferMutation(mutationBundle)
     if not inferred then
-        local okActive, errActive, didActive = RevertActiveMutation(def, store)
+        local okActive, errActive, didActive = RevertActiveMutation(def, authorHost, store)
         if not okActive then
             return false, errActive
         end
@@ -244,11 +244,11 @@ function mutationInternal.revert(def, mutationBundle, store)
 
     if info.hasManual then
         local manual = mutationBundle.manualMutation
-        local okActiveManual, errActiveManual, didActiveManual = RevertActiveManual(def, store)
+        local okActiveManual, errActiveManual, didActiveManual = RevertActiveManual(def, authorHost, store)
         if not okActiveManual and not firstErr then
             firstErr = errActiveManual
         elseif not didActiveManual then
-            local okManual, errManual = pcall(manual.revert, store)
+            local okManual, errManual = pcall(manual.revert, authorHost, store)
             if not okManual and not firstErr then
                 firstErr = errManual
             end
@@ -273,13 +273,13 @@ end
 ---@param store ManagedStore|nil Managed module store associated with the definition.
 ---@return boolean ok True when the mutation lifecycle reapplied successfully.
 ---@return string|nil err Error message when the reapply step fails.
-function mutationInternal.reapply(def, mutationBundle, store)
-    local okRevert, errRevert = mutationInternal.revert(def, mutationBundle, store)
+function mutationInternal.reapply(def, mutationBundle, authorHost, store)
+    local okRevert, errRevert = mutationInternal.revert(def, mutationBundle, authorHost, store)
     if not okRevert then
         return false, errRevert
     end
 
-    local okApply, errApply = mutationInternal.apply(def, mutationBundle, store)
+    local okApply, errApply = mutationInternal.apply(def, mutationBundle, authorHost, store)
     if not okApply then
         return false, errApply
     end

@@ -123,7 +123,7 @@ function TestHost:testHostFlushNotifiesSettingsObserver()
         definition = definition,
         store = store,
         session = session,
-        onSettingsCommitted = function(activeStore)
+        onSettingsCommitted = function(_, activeStore)
             calls = calls + 1
             observedValue = activeStore.read("Value")
         end,
@@ -138,6 +138,38 @@ function TestHost:testHostFlushNotifiesSettingsObserver()
     lu.assertNil(err)
     lu.assertEquals(calls, 1)
     lu.assertTrue(observedValue)
+end
+
+function TestHost:testPatchMutationReceivesAuthorHost()
+    local target = { Value = false }
+    local patchHost = nil
+    local patchStore = nil
+    local definition = lib.prepareDefinition({}, {
+        id = "PatchHostModule",
+        name = "Patch Host Module",
+        storage = {},
+    })
+    local store, session = lib.createStore({
+        Enabled = true,
+        DebugMode = false,
+    }, definition)
+    local host, authorHost = createActivatedHost("test-patch-host", {
+        definition = definition,
+        store = store,
+        session = session,
+        registerPatchMutation = function(plan, activeHost, activeStore)
+            patchHost = activeHost
+            patchStore = activeStore
+            plan:set(target, "Value", true)
+        end,
+        drawTab = function() end,
+    })
+    local ok, err = host.applyMutation()
+
+    lu.assertTrue(ok, tostring(err))
+    lu.assertEquals(patchHost, authorHost)
+    lu.assertEquals(patchStore, store)
+    lu.assertTrue(target.Value)
 end
 
 function TestHost:testSideEffectingHostMethodsRequireActivation()
@@ -215,7 +247,7 @@ function TestHost:testCreateModuleHostPassesAuthorHostToCallbacks()
     })
     local store, session = lib.createStore({
         Enabled = true,
-        DebugMode = false,
+        DebugMode = true,
     }, definition)
     local _, returnedHost = createActivatedHost("test-author-host", {
         definition = definition,
@@ -243,8 +275,17 @@ function TestHost:testCreateModuleHostPassesAuthorHostToCallbacks()
     lu.assertEquals(callbackHost.getIdentity().id, "AuthorHostModule")
     lu.assertEquals(callbackHost.getMeta().name, "Author Host Module")
     lu.assertTrue(callbackHost.isEnabled())
+    lu.assertEquals(type(callbackHost.log), "function")
+    lu.assertEquals(type(callbackHost.logIf), "function")
     lu.assertNil(callbackHost.read)
     lu.assertNil(callbackHost.setEnabled)
+
+    local warningCount = #Warnings
+    callbackHost.log("plain %s", "message")
+    callbackHost.logIf("debug %d", 7)
+    lu.assertEquals(Warnings[warningCount + 1], "[AuthorHostModule] plain message")
+    lu.assertEquals(Warnings[warningCount + 2], "[AuthorHostModule] debug 7")
+    lu.assertEquals(#Warnings, warningCount + 2)
 end
 
 function TestHost:testCreateModuleHostSkipsImmediateCoordinatedSyncWhenFrameworkRebuildIsPending()
@@ -395,7 +436,7 @@ function TestHost:testActivationRejectsReentrantActivateCalls()
         drawTab = function() end,
     })
 
-    lu.assertErrorMsgContains("already in progress", function()
+    lu.assertErrorMsgContains("host.activation_in_progress", function()
         authorHost.activate()
     end)
     lu.assertErrorMsgContains("host.not_activated", function()

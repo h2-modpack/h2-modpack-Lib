@@ -98,7 +98,7 @@ Modules own their local rebuild:
 - keep `chalk`, `reload`, and raw config local to `main.lua`
 - keep persisted runtime reads on `store`
 - keep staged UI edits on the author-facing `session`
-- declare runtime hooks from `internal.RegisterHooks(store, authorHost)`
+- declare runtime hooks from `internal.RegisterHooks(authorHost, store)`
 
 ## Bootstrap Pattern
 
@@ -181,7 +181,7 @@ Supported public hook entrypoints:
 
 The model is:
 - use a persistent owner table, typically the module `internal`
-- register hook sites from `internal.RegisterHooks(store, authorHost)`
+- register hook sites from `internal.RegisterHooks(authorHost, store)`
 - pass `owner` and `registerHooks` into `lib.createModule(...)`
 - call `host.activate()` after construction
 - Lib runs the full registration pass during module activation
@@ -300,7 +300,7 @@ coordinated path, use a full reload.
 - keep `chalk`, `reload`, and raw config local to `main.lua`
 - recreate `definition`, `store`, `session`, and the Lib-created live host in `init`
 - keep `session` local to `main.lua`; draw callbacks receive the restricted author session through the host
-- register runtime hooks through `internal.RegisterHooks(store, authorHost)` and `lib.hooks.*`
+- register runtime hooks through `internal.RegisterHooks(authorHost, store)` and `lib.hooks.*`
 - pass `owner` and `registerHooks` to `lib.createModule(...)` when the module owns runtime hooks
 - call `host.activate()` after construction
 - keep stable GUI callbacks outside `init`

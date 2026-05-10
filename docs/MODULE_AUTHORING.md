@@ -82,11 +82,11 @@ hot-reload tracking and hook refresh ownership.
 Call `host.activate()` after construction. That activation step publishes the
 live host, registers hooks, runs integrations, and syncs initial runtime behavior.
 When `registerHooks` is provided, Lib calls it as
-`registerHooks(store, authorHost)`. Modules that use shared runtime helper files
+`registerHooks(authorHost, store)`. Modules that use shared runtime helper files
 should pass the needed store or narrower access/read closures into those helpers:
 
 ```lua
-function internal.RegisterHooks(store, host)
+function internal.RegisterHooks(host, store)
     lib.hooks.Wrap(internal, "SomeGameFunction", function(base, ...)
         if not host.isEnabled() then
             return base(...)
@@ -300,7 +300,7 @@ Modules that register ModUtil path hooks should do that through `lib.hooks.*`.
 Typical shape:
 
 ```lua
-function internal.RegisterHooks(store, host)
+function internal.RegisterHooks(host, store)
     lib.hooks.Wrap(internal, "GetEligibleLootNames", function(base, ...)
         local result = base(...)
         if host.isEnabled() and store.read("FeatureEnabled") then
@@ -329,7 +329,7 @@ host.activate()
 
 Rules:
 - use a persistent owner table such as the module `internal`
-- declare hook sites inside `RegisterHooks(store, authorHost)`
+- declare hook sites inside `RegisterHooks(authorHost, store)`
 - call `host.activate()` after construction
 - use the keyed overload when one owner needs several hooks on the same path
 
@@ -338,8 +338,8 @@ Rules:
 Register mutation callbacks only when the module actually mutates live run data.
 
 Supported mutation shapes:
-- patch only: `registerPatchMutation(plan, store)`
-- manual only: `registerManualMutation = { apply = ..., revert = ... }`
+- patch only: `registerPatchMutation(plan, host, store)`
+- manual only: `registerManualMutation = { apply = function(host, store) ..., revert = function(host, store) ... }`
 - hybrid: both
 
 Patch-plan example:
@@ -355,9 +355,10 @@ local host = lib.createModule({
         name = "Example Module",
         storage = internal.BuildStorage(),
     },
-    registerPatchMutation = function(plan, store)
+    registerPatchMutation = function(plan, host, store)
         plan:set(SomeTable, "Enabled", true)
         plan:appendUnique(SomeTable, "Pool", "NewEntry")
+        host.logIf("Built patch plan")
     end,
     drawTab = internal.DrawTab,
 })
@@ -453,7 +454,7 @@ local PACK_ID = "example-pack"
 local PLUGIN_GUID = _PLUGIN.guid
 ---@class ExampleModuleInternal
 ---@field standaloneUi StandaloneRuntime|nil
----@field RegisterHooks fun(store: ManagedStore, host: AuthorHost)|nil
+---@field RegisterHooks fun(host: AuthorHost, store: ManagedStore)|nil
 ---@field DrawTab fun(imgui: table, session: AuthorSession)|nil
 ---@field DrawQuickContent fun(imgui: table, session: AuthorSession)|nil
 ExampleModule_Internal = ExampleModule_Internal or {}
@@ -531,7 +532,7 @@ function internal.DrawQuickContent(ui, session)
     })
 end
 
-function internal.RegisterHooks(store, host)
+function internal.RegisterHooks(host, store)
     lib.hooks.Wrap(internal, "SomeGameFunction", function(base, ...)
         if host.isEnabled() and store.read("FeatureEnabled") then
             -- Optional runtime behavior goes here.
@@ -566,7 +567,7 @@ Notes on the example:
 - `store` is passed to runtime hooks and mutation callbacks
 - draw callbacks receive the restricted author session through the live host
 - `host.activate()` owns live coordinated host registration
-- `internal.RegisterHooks(store, authorHost)` is the normal place for `lib.hooks.*` declarations
+- `internal.RegisterHooks(authorHost, store)` is the normal place for `lib.hooks.*` declarations
 - `DrawTab` uses raw ImGui for structure and `lib.widgets.*` for controls
 - `DrawQuickContent` is optional
 - packed widgets use the session or row handle passed to the draw path

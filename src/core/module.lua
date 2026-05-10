@@ -5,10 +5,10 @@ local internal = AdamantModpackLib_Internal
 ---@field pluginGuid string
 ---@field config table
 ---@field definition ModuleDefinition
----@field registerHooks fun(store: ManagedStore, host: AuthorHost)|nil
----@field registerPatchMutation fun(plan: table, store: ManagedStore)|nil
+---@field registerHooks fun(host: AuthorHost, store: ManagedStore)|nil
+---@field registerPatchMutation fun(plan: table, host: AuthorHost, store: ManagedStore)|nil
 ---@field registerManualMutation table|nil
----@field onSettingsCommitted fun(store: ManagedStore)|nil
+---@field onSettingsCommitted fun(host: AuthorHost, store: ManagedStore)|nil
 ---@field registerIntegrations fun(host: AuthorHost, store: ManagedStore)|nil
 ---@field drawTab fun(imgui: table, session: AuthorSession, host: AuthorHost)
 ---@field drawQuickContent fun(imgui: table, session: AuthorSession, host: AuthorHost)|nil

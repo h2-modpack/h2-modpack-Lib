@@ -68,6 +68,10 @@ local DefaultViolationPolicy = {
         severity = "error",
         description = "Module hosts can only be activated once.",
     },
+    ["host.activation_in_progress"] = {
+        severity = "error",
+        description = "Module host activation cannot be called recursively from activation callbacks.",
+    },
     ["host.not_activated"] = {
         severity = "error",
         description = "Side-effecting module host methods require explicit activation first.",

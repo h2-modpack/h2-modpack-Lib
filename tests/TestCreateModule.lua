@@ -87,7 +87,7 @@ function TestCreateModule:testCreateModulePassesRuntimeHandlesToHookRefresh()
                 { type = "bool", alias = "Flag", default = true },
             },
         },
-        registerHooks = function(activeStore, authorHost)
+        registerHooks = function(authorHost, activeStore)
             hookSawStore = activeStore and activeStore.read("Flag") == true
             hookSawHost = authorHost ~= nil
         end,
@@ -120,6 +120,8 @@ function TestCreateModule:testCreateModuleReturnsOnlyAuthorHostSurface()
     lu.assertEquals(type(host.isEnabled), "function")
     lu.assertEquals(type(host.getIdentity), "function")
     lu.assertEquals(type(host.getMeta), "function")
+    lu.assertEquals(type(host.log), "function")
+    lu.assertEquals(type(host.logIf), "function")
     lu.assertEquals(type(host.activate), "function")
     lu.assertNil(host.read)
     lu.assertNil(host.writeAndFlush)
