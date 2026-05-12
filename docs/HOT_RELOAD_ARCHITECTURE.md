@@ -44,11 +44,11 @@ Safe to rebuild on every module `init`:
 
 Expected to persist across reloads:
 - Lib coordinator registrations
-- Lib hook registries keyed by persistent hook owner tables
+- Lib hook registries keyed by persistent module owner tables
 - Framework pack registry and stable GUI callbacks
-- module-local hook owner tables
+- module-local `MODULE_ANCHOR` tables passed as `owner`
 
-Do not replace an entire persistent `*_Internal` table during reload. Mutate fields on the existing table instead. Replacing the table breaks hook ownership, mutation tracking, and any live closures that intentionally point at the persistent owner.
+Do not replace the persistent module owner table during reload. Replacing it breaks hook ownership, mutation tracking, and any live closures that intentionally point at the persistent owner.
 
 ## Layer Responsibilities
 
@@ -180,8 +180,8 @@ Supported public hook entrypoints:
 - `lib.hooks.Context.Wrap`
 
 The model is:
-- use a persistent owner table, typically the module `internal`
-- register hook sites from `internal.RegisterHooks(authorHost, store)`
+- use a persistent owner table, typically the module `MODULE_ANCHOR`
+- register hook sites from `registerHooks(authorHost, store)`
 - pass `owner` and `registerHooks` into `lib.createModule(...)`
 - call `host.activate()` after construction
 - Lib runs the full registration pass during module activation
@@ -300,7 +300,7 @@ coordinated path, use a full reload.
 - keep `chalk`, `reload`, and raw config local to `main.lua`
 - recreate `definition`, `store`, `session`, and the Lib-created live host in `init`
 - keep `session` local to `main.lua`; draw callbacks receive the restricted author session through the host
-- register runtime hooks through `internal.RegisterHooks(authorHost, store)` and `lib.hooks.*`
+- register runtime hooks through `registerHooks(authorHost, store)` and ownerless `lib.hooks.*`
 - pass `owner` and `registerHooks` to `lib.createModule(...)` when the module owns runtime hooks
 - call `host.activate()` after construction
 - keep stable GUI callbacks outside `init`

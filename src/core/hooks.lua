@@ -6,6 +6,7 @@ local internal = AdamantModpackLib_Internal
 local hooks = public.hooks
 local internalHooks = internal.hooks
 local REGISTRY_KEY = "__adamantHooks"
+local ActiveOwnerStack = {}
 
 local function getModUtil()
     local resolved = modutil
@@ -169,13 +170,34 @@ local function deactivateSlot(state)
     end
 end
 
---- Registers or updates a stable ModUtil Path.Wrap dispatcher.
+local function getActiveOwner(apiName)
+    local owner = ActiveOwnerStack[#ActiveOwnerStack]
+    if not owner then
+        internal.violate(
+            "hooks.no_active_owner",
+            "lib.hooks.%s requires an active registerHooks context; use %sOwned(owner, ...) outside module activation",
+            apiName,
+            apiName
+        )
+    end
+    return owner
+end
+
+--- Registers or updates a stable ModUtil Path.Wrap dispatcher using the active module owner.
+---@param path string ModUtil path to wrap.
+---@param keyOrHandler string|function Explicit hook key, or handler when no key is needed.
+---@param maybeHandler function|nil Handler when an explicit key is supplied.
+function hooks.Wrap(path, keyOrHandler, maybeHandler)
+    return hooks.WrapOwned(getActiveOwner("Wrap"), path, keyOrHandler, maybeHandler)
+end
+
+--- Registers or updates a stable ModUtil Path.Wrap dispatcher for an explicit owner.
 --- Re-running with the same owner/path/key updates the wrapped handler without stacking another wrapper.
 ---@param owner table Persistent module/framework internal table.
 ---@param path string ModUtil path to wrap.
 ---@param keyOrHandler string|function Explicit hook key, or handler when no key is needed.
 ---@param maybeHandler function|nil Handler when an explicit key is supplied.
-function hooks.Wrap(owner, path, keyOrHandler, maybeHandler)
+function hooks.WrapOwned(owner, path, keyOrHandler, maybeHandler)
     local key, handler = parseRegistrationArgs(path, keyOrHandler, maybeHandler, "handler")
     if type(handler) ~= "function" then
         internal.violate("hooks.invalid_registration", "lib.hooks.Wrap: handler must be a function")
@@ -192,13 +214,21 @@ function hooks.Wrap(owner, path, keyOrHandler, maybeHandler)
     clearPendingState(state)
 end
 
---- Registers or updates a stable ModUtil Path.Override.
+--- Registers or updates a stable ModUtil Path.Override using the active module owner.
+---@param path string ModUtil path to override.
+---@param keyOrReplacement string|any Explicit hook key, or replacement when no key is needed.
+---@param maybeReplacement any|nil Replacement when an explicit key is supplied.
+function hooks.Override(path, keyOrReplacement, maybeReplacement)
+    return hooks.OverrideOwned(getActiveOwner("Override"), path, keyOrReplacement, maybeReplacement)
+end
+
+--- Registers or updates a stable ModUtil Path.Override for an explicit owner.
 --- Function replacements use a dispatcher so hot reloads update behavior without re-overriding.
 ---@param owner table Persistent module/framework internal table.
 ---@param path string ModUtil path to override.
 ---@param keyOrReplacement string|any Explicit hook key, or replacement when no key is needed.
 ---@param maybeReplacement any|nil Replacement when an explicit key is supplied.
-function hooks.Override(owner, path, keyOrReplacement, maybeReplacement)
+function hooks.OverrideOwned(owner, path, keyOrReplacement, maybeReplacement)
     local key, replacement = parseRegistrationArgs(path, keyOrReplacement, maybeReplacement, "replacement")
     local state, registry = getSlot(owner, "override", path, key)
     if registry.refreshing then
@@ -211,13 +241,21 @@ function hooks.Override(owner, path, keyOrReplacement, maybeReplacement)
     clearPendingState(state)
 end
 
---- Registers or updates a stable ModUtil Path.Context.Wrap dispatcher.
+--- Registers or updates a stable ModUtil Path.Context.Wrap dispatcher using the active module owner.
+---@param path string ModUtil path to context-wrap.
+---@param keyOrContext string|function Explicit hook key, or context function when no key is needed.
+---@param maybeContext function|nil Context function when an explicit key is supplied.
+function hooks.Context.Wrap(path, keyOrContext, maybeContext)
+    return hooks.Context.WrapOwned(getActiveOwner("Context.Wrap"), path, keyOrContext, maybeContext)
+end
+
+--- Registers or updates a stable ModUtil Path.Context.Wrap dispatcher for an explicit owner.
 --- Removed context wraps become inert during host hook refresh; ModUtil has no safe path-level restore for one context wrapper.
 ---@param owner table Persistent module/framework internal table.
 ---@param path string ModUtil path to context-wrap.
 ---@param keyOrContext string|function Explicit hook key, or context function when no key is needed.
 ---@param maybeContext function|nil Context function when an explicit key is supplied.
-function hooks.Context.Wrap(owner, path, keyOrContext, maybeContext)
+function hooks.Context.WrapOwned(owner, path, keyOrContext, maybeContext)
     local key, context = parseRegistrationArgs(path, keyOrContext, maybeContext, "context")
     if type(context) ~= "function" then
         internal.violate("hooks.invalid_registration", "lib.hooks.Context.Wrap: context must be a function")
@@ -246,7 +284,9 @@ function internalHooks.refresh(owner, register)
     registry.generation = registry.generation + 1
     registry.refreshing = true
 
+    ActiveOwnerStack[#ActiveOwnerStack + 1] = owner
     local ok, err = pcall(register)
+    ActiveOwnerStack[#ActiveOwnerStack] = nil
     registry.refreshing = false
 
     if ok then

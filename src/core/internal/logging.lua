@@ -113,6 +113,10 @@ local DefaultViolationPolicy = {
         severity = "error",
         description = "Inactive hook replacements should not be invoked after refresh invalidation.",
     },
+    ["hooks.no_active_owner"] = {
+        severity = "error",
+        description = "Ownerless hook APIs require an active module hook registration context.",
+    },
     ["hooks.modutil_unavailable"] = {
         severity = "error",
         description = "Hook registration requires SGG_Modding-ModUtil to be available.",

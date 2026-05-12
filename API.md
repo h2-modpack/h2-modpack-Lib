@@ -458,38 +458,44 @@ Options:
 
 Reload-stable wrappers around ModUtil path hooks.
 
-Use a persistent owner table, typically the module's `internal` table.
+Hosted modules normally call ownerless hook APIs inside `registerHooks(...)`.
+Lib scopes those calls to the persistent owner passed to `createModule(...)`.
 
-### `lib.hooks.Wrap(owner, path, handler)`
+### `lib.hooks.Wrap(path, handler)`
 
 Registers or updates a stable `modutil.mod.Path.Wrap(...)` dispatcher.
 
 Also supports:
-- `lib.hooks.Wrap(owner, path, key, handler)`
+- `lib.hooks.Wrap(path, key, handler)`
 
-Use the keyed form when one owner registers more than one wrap against the same path.
+Use the keyed form when one module registers more than one wrap against the same path.
 
-### `lib.hooks.Override(owner, path, replacement)`
+### `lib.hooks.Override(path, replacement)`
 
 Registers or updates a stable `modutil.mod.Path.Override(...)`.
 
 Also supports:
-- `lib.hooks.Override(owner, path, key, replacement)`
+- `lib.hooks.Override(path, key, replacement)`
 
 Function replacements are dispatched through a stable wrapper so reloading updates behavior without stacking another override.
 
-### `lib.hooks.Context.Wrap(owner, path, context)`
+### `lib.hooks.Context.Wrap(path, context)`
 
 Registers or updates a stable `modutil.mod.Path.Context.Wrap(...)` dispatcher.
 
 Also supports:
-- `lib.hooks.Context.Wrap(owner, path, key, context)`
+- `lib.hooks.Context.Wrap(path, key, context)`
+
+Infrastructure and non-hosted code can use explicit owner variants:
+- `lib.hooks.WrapOwned(owner, path, handler)`
+- `lib.hooks.OverrideOwned(owner, path, replacement)`
+- `lib.hooks.Context.WrapOwned(owner, path, context)`
 
 ### Typical module pattern
 
 ```lua
 function internal.RegisterHooks(host, store)
-    lib.hooks.Wrap(internal, "GetEligibleLootNames", function(base, ...)
+    lib.hooks.Wrap("GetEligibleLootNames", function(base, ...)
         local result = base(...)
         if host.isEnabled() and store.read("FeatureEnabled") then
             -- inspect or transform the wrapped call here
@@ -738,11 +744,11 @@ Runs `settingsObserver(host, store)` when present. Host flush paths use this aft
 ### `lib.createModuleHost(opts)`
 
 Creates full and author-facing host objects around:
+- optional `owner`
 - `definition`
 - `pluginGuid`
 - `store`
 - `session`
-- optional `hookOwner`
 - optional `registerHooks`
 - optional `registerPatchMutation`
 - optional `registerManualMutation`
@@ -771,9 +777,9 @@ Activates a host created by `lib.createModuleHost(...)`. Normal author code
 should call `authorHost.activate()` instead.
 
 If `registerHooks` is provided:
-- `hookOwner` must be a persistent table
+- `owner` must be a persistent table
 - Lib runs `registerHooks(authorHost, store)` during activation
-- hook declarations made through `lib.hooks.*` are refreshed as one registration pass for that owner
+- ownerless hook declarations made through `lib.hooks.*` are refreshed as one registration pass for that owner
 
 If `registerIntegrations` is provided, Lib runs
 `registerIntegrations(authorHost, store)` during activation.

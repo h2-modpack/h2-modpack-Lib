@@ -256,11 +256,12 @@ end
 Use `registerPatchMutation` when possible. Reach for `registerManualMutation`
 only when the mutation is not naturally expressed as reversible table edits.
 
-If the module installs runtime hooks, declare them through `lib.hooks.*` from `internal.RegisterHooks(...)`:
+If the module installs runtime hooks, declare them through ownerless `lib.hooks.*`
+calls from `internal.RegisterHooks(...)`:
 
 ```lua
 function internal.RegisterHooks(host, store)
-    lib.hooks.Wrap(internal, "SomeGameFunction", function(base, ...)
+    lib.hooks.Wrap("SomeGameFunction", function(base, ...)
         local result = base(...)
 
         if host.isEnabled() and store.read("FeatureEnabled") then

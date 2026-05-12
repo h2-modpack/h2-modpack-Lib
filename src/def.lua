@@ -146,11 +146,11 @@ local lib = {}
 ---| fun(host: AdamantModpackLib.AuthorHost, store: AdamantModpackLib.ManagedStore)
 
 ---@class AdamantModpackLib.ModuleHostOpts
+---@field owner? table Persistent module owner used for hook refresh ownership when `registerHooks` is provided.
 ---@field definition AdamantModpackLib.PreparedDefinition
 ---@field pluginGuid string Plugin guid captured at module file load time.
 ---@field store AdamantModpackLib.ManagedStore
 ---@field session AdamantModpackLib.Session
----@field hookOwner? table Persistent table used by hot-reload-safe hooks.
 ---@field registerHooks? AdamantModpackLib.RegisterHooks
 ---@field registerPatchMutation? fun(
 ---    plan: AdamantModpackLib.MutationPlan,
@@ -747,29 +747,47 @@ end
 ---@type AdamantModpackLib.HooksApi
 lib.hooks = {}
 
+---@param path string
+---@param keyOrHandler string|fun(base: function, ...: any): any
+---@param maybeHandler? fun(base: function, ...: any): any
+function lib.hooks.Wrap(path, keyOrHandler, maybeHandler)
+end
+
 ---@param owner table
 ---@param path string
 ---@param keyOrHandler string|fun(base: function, ...: any): any
 ---@param maybeHandler? fun(base: function, ...: any): any
-function lib.hooks.Wrap(owner, path, keyOrHandler, maybeHandler)
+function lib.hooks.WrapOwned(owner, path, keyOrHandler, maybeHandler)
+end
+
+---@param path string
+---@param keyOrReplacement any
+---@param maybeReplacement? any
+function lib.hooks.Override(path, keyOrReplacement, maybeReplacement)
 end
 
 ---@param owner table
 ---@param path string
 ---@param keyOrReplacement any
 ---@param maybeReplacement? any
-function lib.hooks.Override(owner, path, keyOrReplacement, maybeReplacement)
+function lib.hooks.OverrideOwned(owner, path, keyOrReplacement, maybeReplacement)
 end
 
 ---@class AdamantModpackLib.HooksContextApi
 ---@type AdamantModpackLib.HooksContextApi
 lib.hooks.Context = {}
 
+---@param path string
+---@param keyOrContext string|fun(...: any): any
+---@param maybeContext? fun(...: any): any
+function lib.hooks.Context.Wrap(path, keyOrContext, maybeContext)
+end
+
 ---@param owner table
 ---@param path string
 ---@param keyOrContext string|fun(...: any): any
 ---@param maybeContext? fun(...: any): any
-function lib.hooks.Context.Wrap(owner, path, keyOrContext, maybeContext)
+function lib.hooks.Context.WrapOwned(owner, path, keyOrContext, maybeContext)
 end
 
 ---@class AdamantModpackLib.ImguiHelpersApi

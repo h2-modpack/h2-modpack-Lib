@@ -17,7 +17,7 @@ end
 local function createActivatedHost(pluginGuid, opts, activationOpts)
     activationOpts = activationOpts or {}
     opts.pluginGuid = pluginGuid
-    opts.hookOwner = activationOpts.hookOwner
+    opts.owner = activationOpts.owner
     opts.registerHooks = activationOpts.registerHooks
     opts.registerIntegrations = activationOpts.registerIntegrations
     local host, authorHost = lib.createModuleHost(opts)

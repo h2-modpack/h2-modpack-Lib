@@ -111,11 +111,11 @@ local function createHostWithHooks(owner, registerHooks)
         end,
     }
     local host = lib.createModuleHost({
+        owner = owner,
         pluginGuid = "hook-test-module",
         definition = lib.prepareDefinition({}, { id = "HookTest", name = "Hook Test", storage = {} }),
         store = store,
         session = session,
-        hookOwner = owner,
         registerHooks = registerHooks,
         drawTab = function() end,
     })
@@ -129,10 +129,10 @@ function TestHooks:testWrapRegistersOnceAndUpdatesHandler()
         return "base:" .. value
     end
 
-    lib.hooks.Wrap(owner, "AdamantHookTestWrap", function(base, value)
+    lib.hooks.WrapOwned(owner, "AdamantHookTestWrap", function(base, value)
         return "first:" .. base(value)
     end)
-    lib.hooks.Wrap(owner, "AdamantHookTestWrap", function(base, value)
+    lib.hooks.WrapOwned(owner, "AdamantHookTestWrap", function(base, value)
         return "second:" .. base(value)
     end)
 
@@ -149,7 +149,7 @@ function TestHooks:testWrapResolvesModUtilFromRomModsWhenGlobalIsMissing()
         return "base:" .. value
     end
 
-    lib.hooks.Wrap(owner, "AdamantHookTestWrapRomMods", function(base, value)
+    lib.hooks.WrapOwned(owner, "AdamantHookTestWrapRomMods", function(base, value)
         return "wrapped:" .. base(value)
     end)
 
@@ -166,7 +166,7 @@ function TestHooks:testWrapRefreshOmissionFallsBackToBase()
     end
 
     createHostWithHooks(owner, function()
-        lib.hooks.Wrap(owner, "AdamantHookTestWrapRefresh", function(base, value)
+        lib.hooks.Wrap("AdamantHookTestWrapRefresh", function(base, value)
             return "wrapped:" .. base(value)
         end)
     end)
@@ -179,6 +179,33 @@ function TestHooks:testWrapRefreshOmissionFallsBackToBase()
     restorePathMock()
 end
 
+function TestHooks:testRegisterHooksCanUseOwnerlessHookApi()
+    installPathMock()
+    local owner = {}
+    _G.AdamantHookTestOwnerlessWrap = function(value)
+        return "base:" .. value
+    end
+
+    createHostWithHooks(owner, function()
+        lib.hooks.Wrap("AdamantHookTestOwnerlessWrap", function(base, value)
+            return "scoped:" .. base(value)
+        end)
+    end)
+
+    lu.assertEquals(_G.AdamantHookTestOwnerlessWrap("x"), "scoped:base:x")
+    restorePathMock()
+end
+
+function TestHooks:testOwnerlessHookApiRequiresActiveRegistrationContext()
+    local ok = pcall(function()
+        lib.hooks.Wrap("AdamantHookTestNoContext", function(base)
+            return base()
+        end)
+    end)
+
+    lu.assertFalse(ok)
+end
+
 function TestHooks:testOverrideFunctionRegistersOnceAndUpdatesReplacement()
     local counts = installPathMock()
     local owner = {}
@@ -186,10 +213,10 @@ function TestHooks:testOverrideFunctionRegistersOnceAndUpdatesReplacement()
         return "base"
     end
 
-    lib.hooks.Override(owner, "AdamantHookTestOverride", function()
+    lib.hooks.OverrideOwned(owner, "AdamantHookTestOverride", function()
         return "first"
     end)
-    lib.hooks.Override(owner, "AdamantHookTestOverride", function()
+    lib.hooks.OverrideOwned(owner, "AdamantHookTestOverride", function()
         return "second"
     end)
 
@@ -206,7 +233,7 @@ function TestHooks:testOverrideRefreshOmissionRestoresOriginal()
     end
 
     createHostWithHooks(owner, function()
-        lib.hooks.Override(owner, "AdamantHookTestOverrideRefresh", function()
+        lib.hooks.Override("AdamantHookTestOverrideRefresh", function()
             return "override"
         end)
     end)
@@ -229,10 +256,10 @@ function TestHooks:testContextWrapRegistersOnceAndUpdatesContext()
         table.insert(observed, "base")
     end
 
-    lib.hooks.Context.Wrap(owner, "AdamantHookTestContext", function()
+    lib.hooks.Context.WrapOwned(owner, "AdamantHookTestContext", function()
         table.insert(observed, "first")
     end)
-    lib.hooks.Context.Wrap(owner, "AdamantHookTestContext", function()
+    lib.hooks.Context.WrapOwned(owner, "AdamantHookTestContext", function()
         table.insert(observed, "second")
     end)
 
@@ -253,7 +280,7 @@ function TestHooks:testContextWrapRefreshOmissionBecomesInert()
     end
 
     createHostWithHooks(owner, function()
-        lib.hooks.Context.Wrap(owner, "AdamantHookTestContextRefresh", function()
+        lib.hooks.Context.Wrap("AdamantHookTestContextRefresh", function()
             table.insert(observed, "context")
         end)
     end)
@@ -284,29 +311,29 @@ function TestHooks:testRefreshFailureKeepsPreviousLiveHookState()
     end
 
     createHostWithHooks(owner, function()
-        lib.hooks.Wrap(owner, "AdamantHookTestFailureWrap", function(base, value)
+        lib.hooks.Wrap("AdamantHookTestFailureWrap", function(base, value)
             return "first:" .. base(value)
         end)
-        lib.hooks.Override(owner, "AdamantHookTestFailureOverride", function()
+        lib.hooks.Override("AdamantHookTestFailureOverride", function()
             return "first-override"
         end)
-        lib.hooks.Context.Wrap(owner, "AdamantHookTestFailureContext", function()
+        lib.hooks.Context.Wrap("AdamantHookTestFailureContext", function()
             table.insert(observed, "first-context")
         end)
     end)
 
     local ok = pcall(function()
         createHostWithHooks(owner, function()
-            lib.hooks.Wrap(owner, "AdamantHookTestFailureWrap", function(base, value)
+            lib.hooks.Wrap("AdamantHookTestFailureWrap", function(base, value)
                 return "second:" .. base(value)
             end)
-            lib.hooks.Override(owner, "AdamantHookTestFailureOverride", function()
+            lib.hooks.Override("AdamantHookTestFailureOverride", function()
                 return "second-override"
             end)
-            lib.hooks.Context.Wrap(owner, "AdamantHookTestFailureContext", function()
+            lib.hooks.Context.Wrap("AdamantHookTestFailureContext", function()
                 table.insert(observed, "second-context")
             end)
-            lib.hooks.Wrap(owner, "AdamantHookTestFailureNew", function(base, value)
+            lib.hooks.Wrap("AdamantHookTestFailureNew", function(base, value)
                 return "new:" .. base(value)
             end)
             error("boom")
@@ -324,6 +351,11 @@ function TestHooks:testRefreshFailureKeepsPreviousLiveHookState()
     lu.assertEquals(_G.AdamantHookTestFailureOverride(), "first-override")
     lu.assertEquals(observed, { "first-context", "base" })
     lu.assertEquals(_G.AdamantHookTestFailureNew("x"), "new-base:x")
+    lu.assertFalse(pcall(function()
+        lib.hooks.Wrap("AdamantHookTestFailureNew", function(base, value)
+            return "leaked:" .. base(value)
+        end)
+    end))
     restorePathMock()
 end
 

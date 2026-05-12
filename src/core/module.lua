@@ -55,11 +55,11 @@ function public.createModule(opts)
     local definition = public.prepareDefinition(opts.owner, opts.definition)
     local store, session = public.createStore(opts.config, definition)
     local _, authorHost = public.createModuleHost({
+        owner = opts.owner,
         definition = definition,
         pluginGuid = opts.pluginGuid,
         store = store,
         session = session,
-        hookOwner = opts.owner,
         registerHooks = opts.registerHooks,
         registerPatchMutation = opts.registerPatchMutation,
         registerManualMutation = opts.registerManualMutation,

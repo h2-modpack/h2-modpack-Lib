@@ -22,11 +22,11 @@ local HostState = setmetatable({}, { __mode = "k" })
 ---@field activate fun(): AuthorHost
 
 ---@class ModuleHostOpts
+---@field owner table|nil
 ---@field definition ModuleDefinition
 ---@field pluginGuid string
 ---@field store ManagedStore
 ---@field session Session
----@field hookOwner table|nil
 ---@field registerHooks fun(host: AuthorHost, store: ManagedStore)|nil
 ---@field registerPatchMutation fun(plan: table, host: AuthorHost, store: ManagedStore)|nil
 ---@field registerManualMutation table|nil
@@ -66,11 +66,11 @@ function public.getLiveModuleHost(pluginGuid)
 end
 
 local KnownHostOpts = {
+    owner = true,
     definition = true,
     pluginGuid = true,
     store = true,
     session = true,
-    hookOwner = true,
     registerHooks = true,
     registerPatchMutation = true,
     registerManualMutation = true,
@@ -127,11 +127,11 @@ function public.createModuleHost(opts)
         internal.violate("host.invalid_create_opts", "createModuleHost: opts must be a table")
     end
     ValidateKnownOpts(opts, "createModuleHost")
+    local owner = opts.owner
     local def = opts.definition
     local pluginGuid = opts.pluginGuid
     local store = opts.store
     local session = opts.session
-    local hookOwner = opts.hookOwner
     local registerHooks = opts.registerHooks
     local registerIntegrations = opts.registerIntegrations
     if type(def) ~= "table" or def._preparedDefinition ~= true then
@@ -159,8 +159,8 @@ function public.createModuleHost(opts)
         if type(registerHooks) ~= "function" then
             internal.violate("host.invalid_create_opts", "createModuleHost: registerHooks must be a function")
         end
-        if type(hookOwner) ~= "table" then
-            internal.violate("host.invalid_create_opts", "createModuleHost: hookOwner is required when registerHooks is provided")
+        if type(owner) ~= "table" then
+            internal.violate("host.invalid_create_opts", "createModuleHost: owner is required when registerHooks is provided")
         end
     end
     if registerIntegrations ~= nil and type(registerIntegrations) ~= "function" then
@@ -344,7 +344,7 @@ function public.createModuleHost(opts)
         mutationBundle = mutationBundle,
         pluginGuid = pluginGuid,
         store = store,
-        hookOwner = hookOwner,
+        owner = owner,
         registerHooks = registerHooks,
         registerIntegrations = registerIntegrations,
         authorSession = authorSession,
@@ -365,7 +365,7 @@ function public.activateModuleHost(host)
     end
 
     local pluginGuid = state.pluginGuid
-    local hookOwner = state.hookOwner
+    local owner = state.owner
     local registerHooks = state.registerHooks
     local registerIntegrations = state.registerIntegrations
     local store = state.store
@@ -391,7 +391,7 @@ function public.activateModuleHost(host)
     internal.liveModuleHosts[pluginGuid] = host
     local ok, err = pcall(function()
         if registerHooks ~= nil then
-            internal.hooks.refresh(hookOwner, function()
+            internal.hooks.refresh(owner, function()
                 return registerHooks(authorHost, store)
             end)
         end

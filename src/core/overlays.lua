@@ -386,16 +386,16 @@ local function refreshOverlayVisibility()
 end
 
 local function ensureHooks()
-    public.hooks.Wrap(internal, "StartRoomPresentation", "overlays:roomPresentation",
+    public.hooks.WrapOwned(internal, "StartRoomPresentation", "overlays:roomPresentation",
         function(base, currentRun, currentRoom, metaPointsAwarded)
             base(currentRun, currentRoom, metaPointsAwarded)
             refreshOverlayVisibility()
         end)
-    public.hooks.Wrap(internal, "ShowCombatUI", "overlays:showCombatUI", function(base, flag, args)
+    public.hooks.WrapOwned(internal, "ShowCombatUI", "overlays:showCombatUI", function(base, flag, args)
         base(flag, args)
         refreshOverlayVisibility()
     end)
-    public.hooks.Wrap(internal, "HideCombatUI", "overlays:hideCombatUI", function(base, flag, args)
+    public.hooks.WrapOwned(internal, "HideCombatUI", "overlays:hideCombatUI", function(base, flag, args)
         base(flag, args)
         refreshOverlayVisibility()
     end)

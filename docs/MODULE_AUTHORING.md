@@ -82,12 +82,14 @@ hot-reload tracking and hook refresh ownership.
 Call `host.activate()` after construction. That activation step publishes the
 live host, registers hooks, runs integrations, and syncs initial runtime behavior.
 When `registerHooks` is provided, Lib calls it as
-`registerHooks(authorHost, store)`. Modules that use shared runtime helper files
+`registerHooks(authorHost, store)`. Ownerless `lib.hooks.*` calls inside this
+callback are scoped to the module owner passed to `createModule`, so hook files
+do not need to know the persistent owner table. Modules that use shared runtime helper files
 should pass the needed store or narrower access/read closures into those helpers:
 
 ```lua
 function internal.RegisterHooks(host, store)
-    lib.hooks.Wrap(internal, "SomeGameFunction", function(base, ...)
+    lib.hooks.Wrap("SomeGameFunction", function(base, ...)
         if not host.isEnabled() then
             return base(...)
         end
@@ -310,7 +312,7 @@ Typical shape:
 
 ```lua
 function internal.RegisterHooks(host, store)
-    lib.hooks.Wrap(internal, "GetEligibleLootNames", function(base, ...)
+    lib.hooks.Wrap("GetEligibleLootNames", function(base, ...)
         local result = base(...)
         if host.isEnabled() and store.read("FeatureEnabled") then
             -- inspect or transform the wrapped call here
@@ -542,7 +544,7 @@ function internal.DrawQuickContent(ui, session)
 end
 
 function internal.RegisterHooks(host, store)
-    lib.hooks.Wrap(internal, "SomeGameFunction", function(base, ...)
+    lib.hooks.Wrap("SomeGameFunction", function(base, ...)
         if host.isEnabled() and store.read("FeatureEnabled") then
             -- Optional runtime behavior goes here.
         end
