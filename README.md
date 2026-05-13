@@ -76,15 +76,20 @@ is optional and marks modules that participate in Framework coordination.
 
 Common top-level helpers:
 - `lib.createModule(...)`
+- `lib.tryCreateModule(...)`
 - `lib.prepareDefinition(...)`
 - `lib.createStore(...)`
 - `lib.createModuleHost(...)`
+- `lib.activateModuleHost(...)`
+- `lib.tryActivateModule(...)`
 - `lib.standaloneHost(...)`
 - `lib.isModuleEnabled(...)`
 - `lib.isModuleCoordinated(...)`
 - `lib.resetStorageToDefaults(...)`
 
 Most authors start with `lib.createModule(...)`.
+Pack orchestrators that should skip invalid modules instead of stopping sibling
+modules can use `lib.tryCreateModule(...)` plus `host.tryActivate()`.
 See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for the recommended project shape.
 
 For custom construction, the lower-level `prepareDefinition(...)`,

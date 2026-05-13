@@ -70,3 +70,20 @@ function public.createModule(opts)
     })
     return authorHost, store
 end
+
+--- Safely creates a module through the canonical prepare -> store -> host pipeline.
+--- Returns nils plus the construction error instead of throwing.
+---@param opts ModuleCreateOpts
+---@return AuthorHost|nil host
+---@return ManagedStore|nil store
+---@return string|nil err
+function public.tryCreateModule(opts)
+    local ok, host, store = pcall(public.createModule, opts)
+    if ok then
+        return host, store, nil
+    end
+
+    local err = tostring(host)
+    internal.violate("host.create_failed", "createModule failed; skipping module: %s", err)
+    return nil, nil, err
+end

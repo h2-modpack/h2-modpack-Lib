@@ -123,11 +123,32 @@ function TestCreateModule:testCreateModuleReturnsOnlyAuthorHostSurface()
     lu.assertEquals(type(host.log), "function")
     lu.assertEquals(type(host.logIf), "function")
     lu.assertEquals(type(host.activate), "function")
+    lu.assertEquals(type(host.tryActivate), "function")
     lu.assertNil(host.read)
     lu.assertNil(host.writeAndFlush)
     lu.assertNil(host.commitIfDirty)
     lu.assertNil(host.applyMutation)
     lu.assertNil(host.setEnabled)
+end
+
+function TestCreateModule:testTryCreateModuleReturnsErrorAndLogsWarning()
+    local host, store, err = lib.tryCreateModule({
+        owner = {},
+        pluginGuid = "test-try-create-module-invalid",
+        config = {},
+        definition = {
+            id = "TryCreateInvalid",
+        },
+        drawTab = function() end,
+    })
+
+    lu.assertNil(host)
+    lu.assertNil(store)
+    lu.assertStrContains(err, "definition.missing_name")
+    lu.assertEquals(#Warnings, 1)
+    lu.assertStrContains(Warnings[1], "host.create_failed")
+    lu.assertStrContains(Warnings[1], "definition.missing_name")
+    lu.assertNil(lib.getLiveModuleHost("test-try-create-module-invalid"))
 end
 
 function TestCreateModule:testCreateModuleActivationIsSingleUse()

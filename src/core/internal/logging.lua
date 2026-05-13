@@ -108,6 +108,14 @@ local DefaultViolationPolicy = {
         severity = "error",
         description = "A coordinated structural reload was detected but no rebuild callback accepted it.",
     },
+    ["host.create_failed"] = {
+        severity = "warn",
+        description = "Safe module construction failed; the caller may skip this module and continue loading siblings.",
+    },
+    ["host.activate_failed"] = {
+        severity = "warn",
+        description = "Safe module activation failed; the caller may skip this module and continue loading siblings.",
+    },
 
     ["hooks.invalid_registration"] = {
         severity = "error",

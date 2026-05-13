@@ -277,6 +277,8 @@ function TestHost:testCreateModuleHostPassesAuthorHostToCallbacks()
     lu.assertTrue(callbackHost.isEnabled())
     lu.assertEquals(type(callbackHost.log), "function")
     lu.assertEquals(type(callbackHost.logIf), "function")
+    lu.assertEquals(type(callbackHost.activate), "function")
+    lu.assertEquals(type(callbackHost.tryActivate), "function")
     lu.assertNil(callbackHost.read)
     lu.assertNil(callbackHost.setEnabled)
 
@@ -286,6 +288,35 @@ function TestHost:testCreateModuleHostPassesAuthorHostToCallbacks()
     lu.assertEquals(Warnings[warningCount + 1], "[AuthorHostModule] plain message")
     lu.assertEquals(Warnings[warningCount + 2], "[AuthorHostModule] debug 7")
     lu.assertEquals(#Warnings, warningCount + 2)
+end
+
+function TestHost:testFullHostOwnsAuthorHostCapabilities()
+    local definition = lib.prepareDefinition({}, {
+        id = "FullHostCapabilities",
+        name = "Full Host Capabilities",
+        storage = {},
+    })
+    local store, session = lib.createStore({
+        Enabled = true,
+        DebugMode = false,
+    }, definition)
+    local host, authorHost = lib.createModuleHost({
+        pluginGuid = "test-full-host-capabilities",
+        definition = definition,
+        store = store,
+        session = session,
+        drawTab = function() end,
+    })
+
+    lu.assertEquals(type(host.isEnabled), "function")
+    lu.assertEquals(type(host.getIdentity), "function")
+    lu.assertEquals(type(host.getMeta), "function")
+    lu.assertEquals(type(host.log), "function")
+    lu.assertEquals(type(host.logIf), "function")
+    lu.assertEquals(type(host.activate), "function")
+    lu.assertEquals(type(host.tryActivate), "function")
+    lu.assertEquals(authorHost.activate, host.activate)
+    lu.assertEquals(authorHost.tryActivate, host.tryActivate)
 end
 
 function TestHost:testCreateModuleHostSkipsImmediateCoordinatedSyncWhenFrameworkRebuildIsPending()
@@ -412,6 +443,67 @@ function TestHost:testActivationFailureRestoresLiveHostAndIntegrations()
     end)
 
     lib.integrations.unregisterProvider(providerId)
+end
+
+function TestHost:testTryActivateModuleReturnsErrorAndDoesNotPublishBrokenHost()
+    local pluginGuid = "test-try-activate-failure"
+    local definition = lib.prepareDefinition({}, {
+        id = "TryActivateFailure",
+        name = "Try Activate Failure",
+        storage = {},
+    })
+    local store, session = lib.createStore({
+        Enabled = true,
+        DebugMode = false,
+    }, definition)
+    local host, authorHost = lib.createModuleHost({
+        pluginGuid = pluginGuid,
+        definition = definition,
+        store = store,
+        session = session,
+        registerIntegrations = function()
+            error("try activate boom")
+        end,
+        drawTab = function() end,
+    })
+
+    local ok, err = authorHost.tryActivate()
+
+    lu.assertFalse(ok)
+    lu.assertStrContains(err, "try activate boom")
+    lu.assertEquals(#Warnings, 1)
+    lu.assertStrContains(Warnings[1], "host.activate_failed")
+    lu.assertStrContains(Warnings[1], "try activate boom")
+    lu.assertNil(lib.getLiveModuleHost(pluginGuid))
+    lu.assertErrorMsgContains("host.not_activated", function()
+        host.flush()
+    end)
+end
+
+function TestHost:testTryActivateModuleSucceedsThroughFullHost()
+    local pluginGuid = "test-try-activate-success"
+    local definition = lib.prepareDefinition({}, {
+        id = "TryActivateSuccess",
+        name = "Try Activate Success",
+        storage = {},
+    })
+    local store, session = lib.createStore({
+        Enabled = true,
+        DebugMode = false,
+    }, definition)
+    local host = lib.createModuleHost({
+        pluginGuid = pluginGuid,
+        definition = definition,
+        store = store,
+        session = session,
+        drawTab = function() end,
+    })
+
+    local ok, err = host.tryActivate()
+
+    lu.assertTrue(ok)
+    lu.assertNil(err)
+    lu.assertEquals(lib.getLiveModuleHost(pluginGuid), host)
 end
 
 function TestHost:testActivationRefreshRemovesOmittedIntegrations()

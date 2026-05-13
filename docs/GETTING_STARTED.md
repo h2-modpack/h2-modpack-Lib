@@ -143,6 +143,32 @@ Every module must declare `id` and `name`. Coordinated modules also declare
 `modpack`. Modules with no custom settings may omit `storage`; Lib still
 injects the built-in `Enabled` and `DebugMode` aliases.
 
+Use `lib.tryCreateModule(...)` and `host.tryActivate()` at pack orchestration
+boundaries when one invalid module should be skipped without stopping sibling
+modules:
+
+```lua
+local host, store, err = lib.tryCreateModule({
+    owner = internal,
+    pluginGuid = PLUGIN_GUID,
+    config = config,
+    definition = {
+        modpack = PACK_ID,
+        id = "ExampleModule",
+        name = "Example Module",
+    },
+    drawTab = function() end,
+})
+
+if host then
+    local ok, activateErr = host.tryActivate()
+end
+```
+
+The `try*` helpers preserve the construction/activation split. They wrap the
+same hard-fail APIs, log a module-scoped warning, and return an error instead
+of throwing.
+
 ### 2. Declare storage in `data.lua`
 
 Example:

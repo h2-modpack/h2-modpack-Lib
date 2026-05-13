@@ -4,10 +4,12 @@ This is the public Lib surface.
 
 Preferred usage uses top-level module authoring helpers plus namespaces for specialized APIs:
 - `lib.createModule(...)`
+- `lib.tryCreateModule(...)`
 - `lib.prepareDefinition(...)`
 - `lib.createStore(...)`
 - `lib.createModuleHost(...)`
 - `lib.activateModuleHost(...)`
+- `lib.tryActivateModule(...)`
 - `lib.standaloneHost(...)`
 - `lib.isModuleEnabled(...)`
 - `lib.isModuleCoordinated(...)`
@@ -36,6 +38,7 @@ Modules declare:
 
 Modules normally create and publish their behavior host through:
 - `lib.createModule(...)`
+- `host.activate()`
 
 Module/host creation requires:
 - `drawTab`
@@ -251,6 +254,27 @@ registerHooks(host, store)
 Runtime helper files should receive the needed `store` or narrowed read/access
 closures from `registerHooks(...)`; draw/UI paths should continue using the
 session passed to draw callbacks.
+
+### `lib.tryCreateModule(opts)`
+
+Safe wrapper around `lib.createModule(...)`.
+
+Returns:
+- `host, store, nil` when construction succeeds
+- `nil, nil, err` when construction fails
+
+The failure path logs `host.create_failed` and does not activate or publish a
+host. Use this at pack orchestration boundaries when one invalid module should
+be skipped without stopping sibling modules.
+
+```lua
+local host, store, err = lib.tryCreateModule(opts)
+if host then
+    local ok, activateErr = host.tryActivate()
+end
+```
+
+`tryCreateModule(...)` only wraps construction. Activation remains explicit.
 
 ### `lib.createStore(config, definition)`
 
@@ -772,7 +796,7 @@ Creates full and author-facing host objects around:
 - `session.resetToDefaults(opts?)`
 
 Returns the full host and the author-facing projection. Construction is side-effect
-free; `authorHost.activate()` publishes the full host, refreshes hook and
+free; `host.activate()` or `authorHost.activate()` publishes the full host, refreshes hook and
 integration generations for this module, runs optional registration callbacks,
 and syncs initial runtime behavior. Commit and reload behavior stays on the full
 host. Normal module code should use the author host returned by
@@ -818,6 +842,20 @@ Behavior:
 - activation refreshes optional hooks and integrations transactionally
 - when a coordinator is already registered for `definition.modpack`, activation immediately syncs the module's live mutation state
 - otherwise startup sync is owned by Framework or standalone hosting
+
+### `lib.tryActivateModule(host)`
+
+Safe wrapper around `lib.activateModuleHost(host)`.
+
+Returns:
+- `true, nil` when activation succeeds
+- `false, err` when activation fails
+
+The failure path logs `host.activate_failed`, rolls back activation side effects
+through the same transaction path as `activateModuleHost(...)`, and leaves the
+host unactivated. `host.tryActivate()` delegates to this helper. The author host
+returned by `createModule(...)` also exposes `tryActivate()` as a safe subset of
+the full host surface.
 
 ### `lib.standaloneHost(pluginGuid)`
 

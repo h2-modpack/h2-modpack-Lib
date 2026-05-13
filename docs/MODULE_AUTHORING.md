@@ -81,6 +81,11 @@ For `createModule(...)`, `owner` is the single persistent owner for structural
 hot-reload tracking and hook refresh ownership.
 Call `host.activate()` after construction. That activation step publishes the
 live host, registers hooks, runs integrations, and syncs initial runtime behavior.
+Pack-level orchestrators can use `lib.tryCreateModule(...)` and
+`host.tryActivate()` when an invalid module should be logged and skipped rather
+than stopping sibling modules. These helpers preserve the lifecycle split:
+construction stays separate from activation, and each `try*` helper only wraps
+one phase.
 When `registerHooks` is provided, Lib calls it as
 `registerHooks(host, store)`. Ownerless `lib.hooks.*` calls inside this
 callback are scoped to the module owner passed to `createModule`, so hook files

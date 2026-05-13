@@ -112,6 +112,7 @@ local lib = {}
 ---Activates module hooks, integrations, live-host registration, and initial runtime sync.
 ---Call once after construction.
 ---@field activate fun(): AdamantModpackLib.AuthorHost
+---@field tryActivate fun(): boolean, string? Safely activates the host and returns an error instead of throwing.
 ---@field isEnabled fun(): boolean
 ---@field getIdentity fun(): AdamantModpackLib.ModuleIdentity
 ---@field getMeta fun(): AdamantModpackLib.ModuleMeta
@@ -203,6 +204,8 @@ local lib = {}
 ---@field applyOnLoad fun(): boolean, string?
 ---@field applyMutation fun(): boolean, string?
 ---@field revertMutation fun(): boolean, string?
+---@field activate fun(): AdamantModpackLib.AuthorHost
+---@field tryActivate fun(): boolean, string?
 ---@field drawTab fun(imgui: table)
 ---@field drawQuickContent? fun(imgui: table)
 
@@ -982,6 +985,13 @@ end
 function lib.createModule(opts)
 end
 
+---@param opts AdamantModpackLib.ModuleCreateOpts
+---@return AdamantModpackLib.AuthorHost? host
+---@return AdamantModpackLib.ManagedStore? store
+---@return string? err
+function lib.tryCreateModule(opts)
+end
+
 ---@param opts AdamantModpackLib.ModuleHostOpts
 ---@return AdamantModpackLib.ModuleHost host
 ---@return AdamantModpackLib.AuthorHost authorHost
@@ -991,6 +1001,12 @@ end
 ---@param host AdamantModpackLib.ModuleHost
 ---@return AdamantModpackLib.AuthorHost host
 function lib.activateModuleHost(host)
+end
+
+---@param host AdamantModpackLib.ModuleHost
+---@return boolean ok
+---@return string? err
+function lib.tryActivateModule(host)
 end
 
 ---@param pluginGuid string Plugin guid used when creating the module host.

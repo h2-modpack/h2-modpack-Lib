@@ -20,6 +20,7 @@ local HostState = setmetatable({}, { __mode = "k" })
 ---@field log fun(fmt: string, ...): nil
 ---@field logIf fun(fmt: string, ...): nil
 ---@field activate fun(): AuthorHost
+---@field tryActivate fun(): boolean, string|nil
 
 ---@class ModuleHostOpts
 ---@field owner table|nil
@@ -55,6 +56,8 @@ local HostState = setmetatable({}, { __mode = "k" })
 ---@field applyOnLoad fun(): boolean, string|nil
 ---@field applyMutation fun(): boolean, string|nil
 ---@field revertMutation fun(): boolean, string|nil
+---@field activate fun(): AuthorHost
+---@field tryActivate fun(): boolean, string|nil
 ---@field drawTab fun(imgui: table)
 ---@field drawQuickContent fun(imgui: table)|nil
 
@@ -310,10 +313,20 @@ function public.createModuleHost(opts)
         return public.lifecycle.revertMutation(def, mutationBundle, authorHost, store)
     end
 
+    function host.activate()
+        return public.activateModuleHost(host)
+    end
+
+    function host.tryActivate()
+        return public.tryActivateModule(host)
+    end
+
     authorHost = {
         isEnabled = host.isEnabled,
         getIdentity = host.getIdentity,
         getMeta = host.getMeta,
+        activate = host.activate,
+        tryActivate = host.tryActivate,
     }
 
     function authorHost.log(fmt, ...)
@@ -322,10 +335,6 @@ function public.createModuleHost(opts)
 
     function authorHost.logIf(fmt, ...)
         return host.logIf(fmt, ...)
-    end
-
-    function authorHost.activate()
-        return public.activateModuleHost(host)
     end
 
     function host.drawTab(imgui)
@@ -443,6 +452,22 @@ function public.activateModuleHost(host)
     state.activating = false
     state.activated = true
     return authorHost
+end
+
+--- Safely activates a constructed module host by registering external side effects.
+--- Returns false plus the activation error instead of throwing.
+---@param host ModuleHost
+---@return boolean ok
+---@return string|nil err
+function public.tryActivateModule(host)
+    local ok, err = pcall(public.activateModuleHost, host)
+    if ok then
+        return true, nil
+    end
+
+    err = tostring(err)
+    internal.violate("host.activate_failed", "activateModuleHost failed; skipping module: %s", err)
+    return false, err
 end
 
 --- Initializes standalone module hosting and returns window/menu-bar renderers.
