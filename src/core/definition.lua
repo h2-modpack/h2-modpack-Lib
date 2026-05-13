@@ -132,15 +132,25 @@ function definitionInternal.validate(definition, label)
         end
     end
 
-    for _, key in ipairs({ "modpack", "id", "name", "shortName", "tooltip" }) do
+    if definition.id == nil or definition.id == "" then
+        internal.violate("definition.missing_id", "%s: definition.id is required", prefix)
+    elseif type(definition.id) ~= "string" then
+        internal.violate("definition.invalid_field_type", "%s: definition.id should be string, got %s",
+            prefix, type(definition.id))
+    end
+
+    if definition.name == nil or definition.name == "" then
+        internal.violate("definition.missing_name", "%s: definition.name is required", prefix)
+    elseif type(definition.name) ~= "string" then
+        internal.violate("definition.invalid_field_type", "%s: definition.name should be string, got %s",
+            prefix, type(definition.name))
+    end
+
+    for _, key in ipairs({ "modpack", "shortName", "tooltip" }) do
         checkType(key, "string")
     end
     checkType("storage", "table")
     checkType("hashGroupPlan", "table")
-
-    if definition.modpack ~= nil and definition.id == nil then
-        internal.violate("definition.missing_coordinated_id", "%s: coordinated modules should declare definition.id", prefix)
-    end
 end
 
 function definitionInternal.getStructuralFingerprint(definition)

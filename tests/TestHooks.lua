@@ -89,7 +89,8 @@ local function restorePathMock()
     savedRomModutil = nil
 end
 
-local function createHostWithHooks(owner, registerHooks)
+local function createHostWithHooks(owner, registerHooks, activationOpts)
+    activationOpts = activationOpts or {}
     local store = {
         read = function()
             return false
@@ -117,6 +118,7 @@ local function createHostWithHooks(owner, registerHooks)
         store = store,
         session = session,
         registerHooks = registerHooks,
+        registerIntegrations = activationOpts.registerIntegrations,
         drawTab = function() end,
     })
     return lib.activateModuleHost(host)
@@ -176,6 +178,27 @@ function TestHooks:testWrapRefreshOmissionFallsBackToBase()
     createHostWithHooks(owner, function() end)
 
     lu.assertEquals(_G.AdamantHookTestWrapRefresh("x"), "base:x")
+    restorePathMock()
+end
+
+function TestHooks:testMissingRegisterHooksRefreshRemovesPreviousHooks()
+    installPathMock()
+    local owner = {}
+    _G.AdamantHookTestMissingRegisterHooks = function(value)
+        return "base:" .. value
+    end
+
+    createHostWithHooks(owner, function()
+        lib.hooks.Wrap("AdamantHookTestMissingRegisterHooks", function(base, value)
+            return "wrapped:" .. base(value)
+        end)
+    end)
+
+    lu.assertEquals(_G.AdamantHookTestMissingRegisterHooks("x"), "wrapped:base:x")
+
+    createHostWithHooks(owner, nil)
+
+    lu.assertEquals(_G.AdamantHookTestMissingRegisterHooks("x"), "base:x")
     restorePathMock()
 end
 
@@ -356,6 +379,38 @@ function TestHooks:testRefreshFailureKeepsPreviousLiveHookState()
             return "leaked:" .. base(value)
         end)
     end))
+    restorePathMock()
+end
+
+function TestHooks:testActivationFailureAfterHookRefreshRestoresPreviousLiveHookState()
+    installPathMock()
+    local owner = {}
+    _G.AdamantHookTestActivationRollback = function(value)
+        return "base:" .. value
+    end
+
+    createHostWithHooks(owner, function()
+        lib.hooks.Wrap("AdamantHookTestActivationRollback", function(base, value)
+            return "first:" .. base(value)
+        end)
+    end)
+
+    lu.assertEquals(_G.AdamantHookTestActivationRollback("x"), "first:base:x")
+
+    local ok = pcall(function()
+        createHostWithHooks(owner, function()
+            lib.hooks.Wrap("AdamantHookTestActivationRollback", function(base, value)
+                return "second:" .. base(value)
+            end)
+        end, {
+            registerIntegrations = function()
+                error("late activation boom")
+            end,
+        })
+    end)
+
+    lu.assertFalse(ok)
+    lu.assertEquals(_G.AdamantHookTestActivationRollback("x"), "first:base:x")
     restorePathMock()
 end
 

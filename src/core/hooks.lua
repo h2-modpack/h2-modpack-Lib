@@ -170,6 +170,115 @@ local function deactivateSlot(state)
     end
 end
 
+local function snapshotSlot(state)
+    return {
+        kind = state.kind,
+        path = state.path,
+        key = state.key,
+        generation = state.generation,
+        registered = state.registered,
+        handler = state.handler,
+        replacement = state.replacement,
+        context = state.context,
+        usesDispatcher = state.usesDispatcher,
+    }
+end
+
+local function snapshotRegistry(registry)
+    local slots = {}
+    for id, state in pairs(registry.slots) do
+        slots[id] = snapshotSlot(state)
+    end
+    return {
+        generation = registry.generation,
+        refreshing = registry.refreshing,
+        slots = slots,
+    }
+end
+
+local function restoreWrapSlot(state, snapshot)
+    state.generation = snapshot.generation
+    state.registered = snapshot.registered
+    state.handler = snapshot.handler
+    state.replacement = nil
+    state.context = nil
+    state.usesDispatcher = nil
+    clearPendingState(state)
+end
+
+local function restoreContextWrapSlot(state, snapshot)
+    state.generation = snapshot.generation
+    state.registered = snapshot.registered
+    state.handler = nil
+    state.replacement = nil
+    state.context = snapshot.context
+    state.usesDispatcher = nil
+    clearPendingState(state)
+end
+
+local function restoreOverrideSlot(state, snapshot)
+    state.generation = snapshot.generation
+    clearPendingState(state)
+
+    if snapshot.registered then
+        state.pendingReplacement = snapshot.replacement
+        applyOverrideState(state)
+        clearPendingState(state)
+    else
+        deactivateSlot(state)
+    end
+
+    state.registered = snapshot.registered
+    state.replacement = snapshot.replacement
+    state.usesDispatcher = snapshot.usesDispatcher
+end
+
+local function restoreSlot(registry, id, snapshot)
+    local state = registry.slots[id]
+    if not state then
+        state = {
+            kind = snapshot.kind,
+            path = snapshot.path,
+            key = snapshot.key,
+            registered = false,
+        }
+        registry.slots[id] = state
+    end
+
+    state.kind = snapshot.kind
+    state.path = snapshot.path
+    state.key = snapshot.key
+
+    if snapshot.kind == "wrap" then
+        restoreWrapSlot(state, snapshot)
+    elseif snapshot.kind == "contextWrap" then
+        restoreContextWrapSlot(state, snapshot)
+    elseif snapshot.kind == "override" then
+        restoreOverrideSlot(state, snapshot)
+    end
+end
+
+local function restoreRegistry(registry, snapshot)
+    for id, state in pairs(registry.slots) do
+        if snapshot.slots[id] == nil then
+            deactivateSlot(state)
+            clearPendingState(state)
+            if state.kind == "wrap" or state.kind == "contextWrap" then
+                state.generation = snapshot.generation
+            else
+                registry.slots[id] = nil
+            end
+        end
+    end
+
+    for id, slotSnapshot in pairs(snapshot.slots) do
+        restoreSlot(registry, id, slotSnapshot)
+    end
+
+    registry.generation = snapshot.generation
+    registry.refreshing = snapshot.refreshing
+end
+
 local function getActiveOwner(apiName)
     local owner = ActiveOwnerStack[#ActiveOwnerStack]
     if not owner then
@@ -270,6 +379,27 @@ function hooks.Context.WrapOwned(owner, path, keyOrContext, maybeContext)
     state.pendingContext = context
     applyContextWrapState(state)
     clearPendingState(state)
+end
+
+--- Starts a rollback boundary for hook refreshes owned by one persistent owner.
+---@param owner table Persistent module/framework internal table.
+function internalHooks.beginTransaction(owner)
+    local registry = getRegistry(owner)
+    local snapshot = snapshotRegistry(registry)
+    local closed = false
+
+    return {
+        commit = function()
+            closed = true
+        end,
+        rollback = function()
+            if closed then
+                return
+            end
+            restoreRegistry(registry, snapshot)
+            closed = true
+        end,
+    }
 end
 
 --- Runs hook registration as one reload generation and deactivates registrations omitted by the callback.

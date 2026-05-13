@@ -36,7 +36,7 @@ If you want the script workflow and setup details, read the
 A module is built from four main pieces:
 
 - `definition`
-  Declares module identity, optional storage, and hash layout hints.
+  Declares required module identity/display metadata, optional storage, and hash layout hints.
 - `store`
   Persisted runtime state. Read this from gameplay and hook code.
 - `session`
@@ -99,8 +99,8 @@ Use this file to declare module data. UI belongs in `ui.lua`; gameplay behavior 
 
 Owns immediate-mode UI:
 
-- `internal.DrawTab(ui, session)`
-- optional `internal.DrawQuickContent(ui, session)`
+- `internal.DrawTab(imgui, session, host)`
+- optional `internal.DrawQuickContent(imgui, session, host)`
 
 This code should read and write staged values through the author-facing `session` it receives from the host.
 
@@ -108,7 +108,7 @@ This code should read and write staged values through the author-facing `session
 
 Owns gameplay and mutation behavior:
 
-- `internal.RegisterHooks(authorHost, store)`
+- `internal.RegisterHooks(host, store)`
 - optional `internal.BuildPatchPlan(...)`
 - optional manual mutation apply/revert callbacks
 
@@ -134,13 +134,14 @@ local host = lib.createModule({
         id = "ExampleModule",
         name = "Example Module",
     },
+    drawTab = function() end,
 })
 host.activate()
 ```
 
-For coordinated modules, `modpack`, `id`, `name`, and `storage` are the important discovery fields.
-Modules with no custom settings may omit `storage`; Lib still injects the built-in
-`Enabled` and `DebugMode` aliases.
+Every module must declare `id` and `name`. Coordinated modules also declare
+`modpack`. Modules with no custom settings may omit `storage`; Lib still
+injects the built-in `Enabled` and `DebugMode` aliases.
 
 ### 2. Declare storage in `data.lua`
 
@@ -169,6 +170,7 @@ local host = lib.createModule({
         name = "Example Module",
         storage = BuildStorage(),
     },
+    drawTab = function() end,
 })
 host.activate()
 ```
@@ -216,7 +218,7 @@ The returned store is kept only when gameplay logic needs runtime reads.
 Example:
 
 ```lua
-function internal.DrawTab(ui, session)
+function internal.DrawTab(ui, session, host)
     lib.widgets.checkbox(ui, session, "FeatureEnabled", {
         label = "Enable Feature",
     })
@@ -411,7 +413,7 @@ Keep UI and game mutation separate. UI edits state; logic applies state.
 
 ### Putting UI outside draw functions
 
-Author UI through draw functions such as `internal.DrawTab(ui, session)`.
+Author UI through draw functions such as `internal.DrawTab(ui, session, host)`.
 
 ## LuaLS Setup
 
@@ -426,11 +428,12 @@ And for the module internal table:
 
 ```lua
 ---@class TemplateModuleInternal
----@field DrawTab fun(imgui: table, session: AuthorSession)|nil
----@field DrawQuickContent fun(imgui: table, session: AuthorSession)|nil
+---@field DrawTab fun(imgui: table, session: AuthorSession, host: AuthorHost)|nil
+---@field DrawQuickContent fun(imgui: table, session: AuthorSession, host: AuthorHost)|nil
 ```
 
-That lets LuaLS infer the `AuthorSession` type through `internal.DrawTab = function(...)`.
+That lets LuaLS infer the author `session` and `host` types through
+`internal.DrawTab = function(...)`.
 
 ## Recommended Next Reads
 

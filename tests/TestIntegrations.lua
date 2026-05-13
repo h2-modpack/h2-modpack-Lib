@@ -12,6 +12,7 @@ function TestIntegrations:tearDown()
     lib.integrations.unregisterProvider("ProviderA")
     lib.integrations.unregisterProvider("ProviderB")
     lib.integrations.unregisterProvider("ProviderC")
+    lib.integrations.unregisterProvider("RefreshProvider")
 end
 
 function TestIntegrations:testRegisterAndGetIntegration()
@@ -161,6 +162,53 @@ function TestIntegrations:testUnregisterProviderRemovesProviderAcrossIntegration
     local found, providerId = lib.integrations.get("test.two")
     lu.assertEquals(found.value, 3)
     lu.assertEquals(providerId, "ProviderB")
+end
+
+function TestIntegrations:testRefreshRemovesOmittedProviderRegistrations()
+    lib.integrations.unregisterProvider("RefreshProvider")
+
+    AdamantModpackLib_Internal.integrations.refresh("RefreshProvider", function()
+        lib.integrations.register("test.refresh.one", "RefreshProvider", { value = 1 })
+        lib.integrations.register("test.refresh.two", "RefreshProvider", { value = 2 })
+    end)
+
+    lu.assertNotNil(lib.integrations.get("test.refresh.one"))
+    lu.assertNotNil(lib.integrations.get("test.refresh.two"))
+
+    AdamantModpackLib_Internal.integrations.refresh("RefreshProvider", function()
+        lib.integrations.register("test.refresh.two", "RefreshProvider", { value = 3 })
+    end)
+
+    lu.assertNil(lib.integrations.get("test.refresh.one"))
+    local found, providerId = lib.integrations.get("test.refresh.two")
+    lu.assertEquals(found.value, 3)
+    lu.assertEquals(providerId, "RefreshProvider")
+
+    lib.integrations.unregisterProvider("RefreshProvider")
+end
+
+function TestIntegrations:testFailedRefreshKeepsPreviousProviderRegistrations()
+    lib.integrations.unregisterProvider("RefreshProvider")
+
+    AdamantModpackLib_Internal.integrations.refresh("RefreshProvider", function()
+        lib.integrations.register("test.refresh.one", "RefreshProvider", { value = 1 })
+    end)
+
+    local transaction = AdamantModpackLib_Internal.integrations.beginTransaction()
+    lu.assertErrorMsgContains("refresh boom", function()
+        AdamantModpackLib_Internal.integrations.refresh("RefreshProvider", function()
+            lib.integrations.register("test.refresh.two", "RefreshProvider", { value = 2 })
+            error("refresh boom")
+        end)
+    end)
+    transaction.rollback()
+
+    local foundOne, providerOne = lib.integrations.get("test.refresh.one")
+    lu.assertEquals(foundOne.value, 1)
+    lu.assertEquals(providerOne, "RefreshProvider")
+    lu.assertNil(lib.integrations.get("test.refresh.two"))
+
+    lib.integrations.unregisterProvider("RefreshProvider")
 end
 
 function TestIntegrations:testMissingIntegrationReturnsNilAndEmptyList()

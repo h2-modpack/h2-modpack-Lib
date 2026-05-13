@@ -19,16 +19,20 @@ local DefaultViolationPolicy = {
     },
 
     ["definition.invalid_field_type"] = {
-        severity = "debug",
+        severity = "error",
         description = "Definition metadata fields should use the expected public contract types.",
     },
     ["definition.invalid_args"] = {
         severity = "error",
         description = "Definition preparation requires valid owner and definition arguments.",
     },
-    ["definition.missing_coordinated_id"] = {
-        severity = "debug",
-        description = "Coordinated modules should declare an id for discovery and hash/profile identity.",
+    ["definition.missing_id"] = {
+        severity = "error",
+        description = "Definitions must declare a stable module id.",
+    },
+    ["definition.missing_name"] = {
+        severity = "error",
+        description = "Definitions must declare a stable display name.",
     },
     ["definition.structural_reload_required"] = {
         severity = "warn",

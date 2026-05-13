@@ -9,6 +9,9 @@ All notable changes to this project will be documented in this file.
 - Storage declarations now use direct flat `alias` identifiers as the canonical managed storage backing keys.
 - Removed old `configKey`, `lifetime`, and `runtime` storage declaration compatibility in favor of explicit `persist`, `stage`, and `hash` axes.
 - Lib now injects `Enabled` and `DebugMode` as built-in prepared storage aliases instead of requiring module-authored config defaults.
+- Module definitions now require both stable `id` and display `name`; `modpack` remains optional.
+- Module callbacks now receive the author host consistently: `registerHooks(host, store)`, `registerIntegrations(host, store)`, `registerPatchMutation(plan, host, store)`, manual mutation `apply(host, store)` / `revert(host, store)`, `onSettingsCommitted(host, store)`, `drawTab(imgui, session, host)`, and `drawQuickContent(imgui, session, host)`.
+- Host activation now refreshes hook and integration generations transactionally so omitted hook/integration registrations are removed on reload and late activation failures roll back refreshed hook state.
 - Persistent runtime-cache module state is now declared with `stage = false, hash = false`, read through `store.read(...)`, and written through `store.writeUnstaged(...)`.
 - Added first-class table storage roots with row-scoped aliases, staged table handles, read-only store table handles, packed child row access, and hash/profile serialization.
 - Table storage handles use colon method syntax, such as `tiers:read(rowIndex, alias)`.
@@ -28,7 +31,7 @@ All notable changes to this project will be documented in this file.
 - Added token-based `lib.overlays.suppressForUi()` overlay suppression for foreground ImGui configuration windows.
 - Added `lib.gameObject.*` helpers for namespaced runtime state attached to live game object tables.
 - Added runtime-only persisted storage aliases through `runtime = true` plus `store.getRuntimeState()`.
-- Added `definition.onSettingsCommitted(store)` as a post-commit observer for rebuilding derived runtime/UI structures after staged config commits.
+- Added `definition.onSettingsCommitted(host, store)` as a post-commit observer for rebuilding derived runtime/UI structures after staged config commits.
 - Added docs for hot-reload architecture and known limitations under `docs/`.
 - Added player-facing `THUNDERSTORE_README.md` packaging support.
 
@@ -41,7 +44,7 @@ All notable changes to this project will be documented in this file.
 - `createModuleHost(...)` now owns live-host publication and requires `drawTab`.
 - Public module host surface was narrowed around stable host accessors and behavior calls; direct raw definition access was removed.
 - `createModuleHost(...)` and `standaloneHost(...)` now require an explicit plugin guid captured at module load time.
-- Manual lifecycle hooks now receive the active managed store as `apply(store)` and `revert(store)`.
+- Manual lifecycle hooks now receive the active author host and managed store as `apply(host, store)` and `revert(host, store)`.
 - Mutation lifecycle state is tracked by stable module identity where available, making reload/reapply behavior more robust.
 - `lib.lifecycle.applyOnLoad(...)` now reverts active tracked mutation state when a module reloads disabled.
 - Store creation now requires prepared definitions with explicit storage.
@@ -100,7 +103,7 @@ Initial public release of the adamant Modpack Lib surface.
 - standalone and framework-friendly module authoring contract based on:
   - `public.definition`
   - `public.host`
-  - direct draw functions such as `DrawTab(imgui, session)`
+  - direct draw functions such as `DrawTab(imgui, session, host)`
 
 ### Notes
 

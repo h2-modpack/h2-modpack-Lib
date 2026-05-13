@@ -142,6 +142,8 @@ end
 function TestStorageValidation:testResetSessionToDefaultsResetsChangedPersistentRoots()
     local config = { Flag = true, Count = 3, Filter = "ignored" }
     local definition = lib.prepareDefinition({}, {
+        id = "ResetPersistentRoots",
+        name = "Reset Persistent Roots",
         storage = {
             { type = "bool", alias = "Flag", default = false },
             { type = "int", alias = "Count", default = 1, min = 0, max = 5 },
@@ -163,6 +165,8 @@ end
 function TestStorageValidation:testResetSessionToDefaultsCanExcludeAliases()
     local config = { Flag = true, ViewRegion = "Surface" }
     local definition = lib.prepareDefinition({}, {
+        id = "ResetExcludeAliases",
+        name = "Reset Exclude Aliases",
         storage = {
             { type = "bool", alias = "Flag", default = false },
             { type = "string", alias = "ViewRegion", default = "Underworld" },

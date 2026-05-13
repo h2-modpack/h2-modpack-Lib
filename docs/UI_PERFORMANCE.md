@@ -3,16 +3,16 @@
 Reference for writing or auditing module draw code without re-deriving render-path performance analysis from scratch.
 
 This guidance applies to module draw code:
-- `DrawTab(ui, session)`
-- optional `DrawQuickContent(ui, session)`
+- `DrawTab(ui, session, host)`
+- optional `DrawQuickContent(ui, session, host)`
 - `lib.widgets.*`
 - raw ImGui for structure
 
 ## Why Draw Paths Need Care
 
 Module UI is immediate-mode:
-- `DrawTab(ui, session)`
-- optional `DrawQuickContent(ui, session)`
+- `DrawTab(ui, session, host)`
+- optional `DrawQuickContent(ui, session, host)`
 
 These run every imgui frame.
 Any unnecessary allocation or repeated C-boundary call inside those paths shows up immediately.

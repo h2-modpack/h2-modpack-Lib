@@ -5,12 +5,16 @@ local integrations = public.integrations
 
 internal.integrations = internal.integrations or {
     registry = {},
+    providerRegistry = {},
     transactions = {},
 }
 internal.integrations.transactions = internal.integrations.transactions or {}
+internal.integrations.providerRegistry = internal.integrations.providerRegistry or {}
 
 local registry = internal.integrations.registry
+local providerRegistry = internal.integrations.providerRegistry
 local transactions = internal.integrations.transactions
+local ActiveProviderStack = {}
 
 local function getBucket(id, create)
     local bucket = registry[id]
@@ -87,6 +91,19 @@ local function getActiveTransaction()
     return transactions[#transactions]
 end
 
+local function getProviderRefresh(providerId, create)
+    local refresh = providerRegistry[providerId]
+    if not refresh and create then
+        refresh = {
+            generation = 0,
+            refreshing = false,
+            slots = {},
+        }
+        providerRegistry[providerId] = refresh
+    end
+    return refresh
+end
+
 local function recordRegistrationChange(id, providerId, bucket)
     local transaction = getActiveTransaction()
     if not transaction then
@@ -105,6 +122,21 @@ local function recordRegistrationChange(id, providerId, bucket)
         existed = bucket.providers[providerId] ~= nil,
         api = bucket.providers[providerId],
         orderIndex = getProviderOrderIndex(bucket, providerId),
+    }
+end
+
+local function recordProviderSlot(id, providerId)
+    local refreshProviderId = ActiveProviderStack[#ActiveProviderStack] or providerId
+    local refresh = getProviderRefresh(refreshProviderId, false)
+    if not refresh or not refresh.refreshing then
+        return
+    end
+
+    local key = id .. "\0" .. providerId
+    refresh.slots[key] = {
+        id = id,
+        providerId = providerId,
+        generation = refresh.generation,
     }
 end
 
@@ -153,6 +185,42 @@ function internal.integrations.beginTransaction()
     }
 end
 
+---@param providerId string Stable provider id.
+---@param register fun()
+function internal.integrations.refresh(providerId, register)
+    if type(providerId) ~= "string" or providerId == "" then
+        internal.violate("integrations.invalid_args", "internal.integrations.refresh: providerId must be a non-empty string")
+    end
+    if type(register) ~= "function" then
+        internal.violate("integrations.invalid_args", "internal.integrations.refresh: register must be a function")
+    end
+
+    local refresh = getProviderRefresh(providerId, true)
+    refresh.generation = refresh.generation + 1
+    refresh.refreshing = true
+
+    ActiveProviderStack[#ActiveProviderStack + 1] = providerId
+    local ok, err = pcall(register)
+    ActiveProviderStack[#ActiveProviderStack] = nil
+    refresh.refreshing = false
+
+    if ok then
+        for key, slot in pairs(refresh.slots) do
+            if slot.generation ~= refresh.generation then
+                integrations.unregister(slot.id, slot.providerId)
+                refresh.slots[key] = nil
+            end
+        end
+    else
+        for key, slot in pairs(refresh.slots) do
+            if slot.generation == refresh.generation then
+                refresh.slots[key] = nil
+            end
+        end
+        error(err, 0)
+    end
+end
+
 --- Registers or replaces an optional cross-module integration provider.
 --- Re-registering the same `id` and `providerId` updates the API in place.
 ---@param id string Domain-named integration id, e.g. "run-director.god-availability".
@@ -172,6 +240,7 @@ function integrations.register(id, providerId, api)
 
     local bucket = getBucket(id, true)
     recordRegistrationChange(id, providerId, bucket)
+    recordProviderSlot(id, providerId)
     if bucket.providers[providerId] == nil then
         table.insert(bucket.order, providerId)
     end
@@ -215,6 +284,7 @@ function integrations.unregisterProvider(providerId)
             pruneBucket(id, bucket)
         end
     end
+    providerRegistry[providerId] = nil
     return count
 end
 

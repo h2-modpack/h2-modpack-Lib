@@ -29,13 +29,16 @@ The top-level `lib.config` export also exposes Lib's Chalk config.
 ## Core Model
 
 Modules declare:
-- `definition.modpack`
-- `definition.id`
-- `definition.name`
+- required `definition.id`
+- required `definition.name`
+- optional `definition.modpack`
 - optional `definition.storage`
 
 Modules normally create and publish their behavior host through:
 - `lib.createModule(...)`
+
+Module/host creation requires:
+- `drawTab`
 
 Optional module capabilities are passed to module/host creation:
 - `registerPatchMutation`
@@ -43,7 +46,6 @@ Optional module capabilities are passed to module/host creation:
 - `onSettingsCommitted`
 - `registerHooks`
 - `registerIntegrations`
-- `drawTab`
 - `drawQuickContent`
 
 That host owns:
@@ -66,12 +68,12 @@ Small registry for optional cross-module cooperation. Modules can publish a
 domain-named integration API, and consumers can use it when present while
 remaining fully functional when absent.
 
-Typical provider:
+Typical provider inside `registerIntegrations(host, store)`:
 
 ```lua
-lib.integrations.register("run-director.god-availability", internal.definition.id, {
+lib.integrations.register("run-director.god-availability", MODULE_ID, {
     isActive = function()
-        return lib.isModuleEnabled(store, internal.definition.modpack)
+        return host.isEnabled()
     end,
     isAvailable = function(godKey)
         return true
@@ -145,6 +147,8 @@ Creates the canonical definition object for a module from a raw authored definit
 
 What it does:
 - clones the authored definition into a Lib-owned table
+- requires `definition.id` as the stable module identity
+- requires `definition.name` as the stable display name
 - validates top-level definition keys and types
 - prepares `definition.storage` metadata for later `createStore(...)` use
 - injects Lib-owned built-in storage aliases:
@@ -204,8 +208,9 @@ Rules:
 ### `lib.createModule(opts)`
 
 Canonical module-construction helper.
-`owner` is used for structural hot-reload tracking and, when `registerHooks` is
-provided, hook refresh ownership.
+`owner` is used for structural hot-reload tracking and hook refresh ownership.
+When a module declares runtime hooks, use a persistent owner table so Lib can
+remove omitted hook declarations on later reloads.
 
 ```lua
 local host, store = lib.createModule({
@@ -240,7 +245,7 @@ construction can use `prepareDefinition(...)`, `createStore(...)`,
 If `registerHooks` is provided, Lib calls it as:
 
 ```lua
-registerHooks(authorHost, store)
+registerHooks(host, store)
 ```
 
 Runtime helper files should receive the needed `store` or narrowed read/access
@@ -276,7 +281,7 @@ Returned surface:
 Persisted writes happen through semantic helpers or session flushes:
 
 ```lua
-lib.lifecycle.setEnabled(def, mutationBundle, store, enabled)
+lib.lifecycle.setEnabled(def, mutationBundle, host, store, enabled)
 lib.lifecycle.setDebugMode(store, enabled)
 ```
 
@@ -297,7 +302,7 @@ Rules:
 - widgets and draw code should usually read staged values from `session.view`
 - runtime/gameplay code should read persisted values through `store.read(...)`
 - module-owned runtime markers declared with `stage = false, hash = false` should write through `store.writeUnstaged(...)`
-- enabled toggles should write through the host or `lib.lifecycle.setEnabled(def, mutationBundle, store, enabled)`
+- enabled toggles should write through the host or `lib.lifecycle.setEnabled(def, mutationBundle, host, store, enabled)`
 - debug toggles should write through `lib.lifecycle.setDebugMode(store, enabled)`
 - profile/hash plumbing should stage values through `session.write(...)` and flush them through `session._flushToConfig()`
 - transient aliases are read from `session`
@@ -486,7 +491,8 @@ Registers or updates a stable `modutil.mod.Path.Context.Wrap(...)` dispatcher.
 Also supports:
 - `lib.hooks.Context.Wrap(path, key, context)`
 
-Infrastructure and non-hosted code can use explicit owner variants:
+Infrastructure and non-hosted code can use explicit-owner variants. Module
+authors should prefer the ownerless APIs inside `registerHooks(...)`.
 - `lib.hooks.WrapOwned(owner, path, handler)`
 - `lib.hooks.OverrideOwned(owner, path, replacement)`
 - `lib.hooks.Context.WrapOwned(owner, path, context)`
@@ -688,7 +694,7 @@ Infers the mutation lifecycle shape:
 
 Registers coordinator config for a pack. Framework uses this during coordinator initialization.
 
-### `lib.lifecycle.setEnabled(def, mutationBundle, store, enabled)`
+### `lib.lifecycle.setEnabled(def, mutationBundle, host, store, enabled)`
 
 Transitions persisted enabled state and applies/reverts mutation state as needed.
 
@@ -766,23 +772,28 @@ Creates full and author-facing host objects around:
 - `session.resetToDefaults(opts?)`
 
 Returns the full host and the author-facing projection. Construction is side-effect
-free; `authorHost.activate()` publishes the full host, refreshes optional hooks,
-runs optional integrations, and syncs initial runtime behavior. Commit and reload
-behavior stays on the full host. Normal module code should use the author host
-returned by `createModule(...)`.
+free; `authorHost.activate()` publishes the full host, refreshes hook and
+integration generations for this module, runs optional registration callbacks,
+and syncs initial runtime behavior. Commit and reload behavior stays on the full
+host. Normal module code should use the author host returned by
+`createModule(...)`.
 
 ### `lib.activateModuleHost(host)`
 
 Activates a host created by `lib.createModuleHost(...)`. Normal author code
-should call `authorHost.activate()` instead.
+calls `authorHost.activate()`.
 
-If `registerHooks` is provided:
-- `owner` must be a persistent table
-- Lib runs `registerHooks(authorHost, store)` during activation
+For hook refresh:
+- `owner` must be a persistent table when `registerHooks` is provided
+- Lib refreshes the host's hook owner during activation
+- when provided, Lib runs `registerHooks(host, store)` inside that refresh
 - ownerless hook declarations made through `lib.hooks.*` are refreshed as one registration pass for that owner
 
-If `registerIntegrations` is provided, Lib runs
-`registerIntegrations(authorHost, store)` during activation.
+Activation refreshes the module's integration provider generation using
+`definition.id` as the stable provider owner. If `registerIntegrations` is
+provided, Lib runs `registerIntegrations(host, store)` during activation.
+Registrations absent from the current activation pass are removed for that
+module owner.
 
 Returned author surface:
 - `host.isEnabled()`
@@ -804,7 +815,7 @@ Use this as the bridge between module state and either:
 
 Behavior:
 - activation publishes the host to Lib's live-host registry
-- activation runs optional integrations
+- activation refreshes optional hooks and integrations transactionally
 - when a coordinator is already registered for `definition.modpack`, activation immediately syncs the module's live mutation state
 - otherwise startup sync is owned by Framework or standalone hosting
 

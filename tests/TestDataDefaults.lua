@@ -43,6 +43,8 @@ TestDataDefaults = {}
 
 local function makeStore(definition, config)
     config = config or {}
+    definition.id = definition.id or "DataDefaults"
+    definition.name = definition.name or "Data Defaults"
     if not AdamantModpackLib_Internal.definition.isPrepared(definition) then
         definition = lib.prepareDefinition({}, definition)
     end
@@ -333,6 +335,8 @@ end
 
 function TestDataDefaults:testPreparedStorageDefaultsAreStableAcrossCreateStoreCalls()
     local definition = lib.prepareDefinition({}, {
+        id = "StablePreparedDefaults",
+        name = "Stable Prepared Defaults",
         storage = {
             { type = "int", alias = "MyCount", default = 5, min = 0, max = 10 },
         },

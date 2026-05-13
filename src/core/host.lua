@@ -166,6 +166,7 @@ function public.createModuleHost(opts)
     if registerIntegrations ~= nil and type(registerIntegrations) ~= "function" then
         internal.violate("host.invalid_create_opts", "createModuleHost: registerIntegrations must be a function")
     end
+    local hookOwner = owner or {}
 
     ---@type AuthorSession
     local authorSession = {
@@ -344,7 +345,7 @@ function public.createModuleHost(opts)
         mutationBundle = mutationBundle,
         pluginGuid = pluginGuid,
         store = store,
-        owner = owner,
+        owner = hookOwner,
         registerHooks = registerHooks,
         registerIntegrations = registerIntegrations,
         authorSession = authorSession,
@@ -385,19 +386,22 @@ function public.activateModuleHost(host)
     local hasPendingCoordinatorRebuild = pendingCoordinatorRebuild ~= nil
     local previousHost = internal.liveModuleHosts[pluginGuid]
     local hadPreviousHost = previousHost ~= nil
+    local hookTransaction = internal.hooks.beginTransaction(owner)
     local integrationTransaction = internal.integrations.beginTransaction()
     state.activating = true
 
     internal.liveModuleHosts[pluginGuid] = host
     local ok, err = pcall(function()
-        if registerHooks ~= nil then
-            internal.hooks.refresh(owner, function()
+        internal.hooks.refresh(owner, function()
+            if registerHooks ~= nil then
                 return registerHooks(authorHost, store)
-            end)
-        end
-        if registerIntegrations then
-            registerIntegrations(authorHost, store)
-        end
+            end
+        end)
+        internal.integrations.refresh(def.id, function()
+            if registerIntegrations then
+                return registerIntegrations(authorHost, store)
+            end
+        end)
 
         if not hasPendingCoordinatorRebuild
             and type(packId) == "string"
@@ -424,6 +428,7 @@ function public.activateModuleHost(host)
 
     if not ok then
         state.activating = false
+        hookTransaction.rollback()
         integrationTransaction.rollback()
         if hadPreviousHost then
             internal.liveModuleHosts[pluginGuid] = previousHost
@@ -433,6 +438,7 @@ function public.activateModuleHost(host)
         error(err, 0)
     end
 
+    hookTransaction.commit()
     integrationTransaction.commit()
     state.activating = false
     state.activated = true

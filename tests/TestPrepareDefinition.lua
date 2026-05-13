@@ -118,6 +118,35 @@ function TestPrepareDefinition:testPrepareDefinitionRejectsReservedBuiltInStorag
     end)
 end
 
+function TestPrepareDefinition:testPrepareDefinitionRejectsInvalidMetadataFieldTypes()
+    lu.assertErrorMsgContains("definition.invalid_field_type", function()
+        lib.prepareDefinition({}, {
+            modpack = "test-pack",
+            id = "Example",
+            name = 7,
+            storage = {},
+        })
+    end)
+end
+
+function TestPrepareDefinition:testPrepareDefinitionRejectsDefinitionWithoutId()
+    lu.assertErrorMsgContains("definition.missing_id", function()
+        lib.prepareDefinition({}, {
+            name = "Missing ID",
+            storage = {},
+        })
+    end)
+end
+
+function TestPrepareDefinition:testPrepareDefinitionRejectsDefinitionWithoutName()
+    lu.assertErrorMsgContains("definition.missing_name", function()
+        lib.prepareDefinition({}, {
+            id = "MissingName",
+            storage = {},
+        })
+    end)
+end
+
 function TestPrepareDefinition:testCreateModuleHostRequestsCoordinatorRebuildOnStructuralMismatch()
     local owner = {}
     local rebuildReason = nil
@@ -296,6 +325,8 @@ end
 
 function TestPrepareDefinition:testCreateStoreRejectsNonTableConfig()
     local definition = lib.prepareDefinition({}, {
+        id = "RejectNonTableConfig",
+        name = "Reject Non Table Config",
         storage = {
             { type = "bool", alias = "EnabledFlag", default = false },
         },
@@ -308,6 +339,8 @@ end
 
 function TestPrepareDefinition:testCreateModuleHostRejectsRawDefinition()
     local prepared = lib.prepareDefinition({}, {
+        id = "RejectRawDefinition",
+        name = "Reject Raw Definition",
         storage = {
             { type = "bool", alias = "EnabledFlag", default = false },
         },

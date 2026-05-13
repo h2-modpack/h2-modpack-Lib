@@ -1,6 +1,8 @@
 local lu = require('luaunit')
 
 local function prepareDefinition(definition)
+    definition.id = definition.id or "SessionTest"
+    definition.name = definition.name or "Session Test"
     return lib.prepareDefinition({}, definition)
 end
 

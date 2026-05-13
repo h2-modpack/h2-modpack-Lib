@@ -414,6 +414,53 @@ function TestHost:testActivationFailureRestoresLiveHostAndIntegrations()
     lib.integrations.unregisterProvider(providerId)
 end
 
+function TestHost:testActivationRefreshRemovesOmittedIntegrations()
+    local pluginGuid = "test-activation-integration-refresh"
+    local integrationId = "test.activation.refresh"
+    local providerId = "ActivationRefresh"
+
+    local firstDefinition = lib.prepareDefinition({}, {
+        id = providerId,
+        name = "Activation Refresh",
+        storage = {},
+    })
+    local firstStore, firstSession = lib.createStore({
+        Enabled = true,
+        DebugMode = false,
+    }, firstDefinition)
+    createActivatedHost(pluginGuid, {
+        definition = firstDefinition,
+        store = firstStore,
+        session = firstSession,
+        drawTab = function() end,
+    }, {
+        registerIntegrations = function()
+            lib.integrations.register(integrationId, providerId, { value = "first" })
+        end,
+    })
+
+    lu.assertNotNil(lib.integrations.get(integrationId))
+
+    local secondDefinition = lib.prepareDefinition({}, {
+        id = providerId,
+        name = "Activation Refresh",
+        storage = {},
+    })
+    local secondStore, secondSession = lib.createStore({
+        Enabled = true,
+        DebugMode = false,
+    }, secondDefinition)
+    createActivatedHost(pluginGuid, {
+        definition = secondDefinition,
+        store = secondStore,
+        session = secondSession,
+        drawTab = function() end,
+    })
+
+    lu.assertNil(lib.integrations.get(integrationId))
+    lib.integrations.unregisterProvider(providerId)
+end
+
 function TestHost:testActivationRejectsReentrantActivateCalls()
     local definition = lib.prepareDefinition({}, {
         id = "ReentrantActivate",

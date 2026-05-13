@@ -98,7 +98,7 @@ Modules own their local rebuild:
 - keep `chalk`, `reload`, and raw config local to `main.lua`
 - keep persisted runtime reads on `store`
 - keep staged UI edits on the author-facing `session`
-- declare runtime hooks from `internal.RegisterHooks(authorHost, store)`
+- declare runtime hooks from `internal.RegisterHooks(host, store)`
 
 ## Bootstrap Pattern
 
@@ -133,7 +133,8 @@ The important part is the split:
 During module creation and activation:
 - the module host closes over the current `definition`, `store`, and `session`
 - `host.activate()` publishes the live host
-- if `registerHooks` is provided, Lib refreshes that owner's hook registrations
+- Lib refreshes that owner's hook registrations; absent hook registrations for that owner are deactivated
+- Lib refreshes integration registrations under required `definition.id`; absent integration providers for that module id are removed
 - if the coordinator for `definition.modpack` is already registered, Lib immediately syncs live mutation state
 
 That means one coordinated module reload refreshes its live runtime behavior immediately without forcing a pack rebuild.
@@ -158,7 +159,7 @@ Framework reload is an infrastructure path, not the fast module-authoring path.
 Rebuilding a pack is allowed to recreate Framework UI state from scratch. The
 mod window may close, the selected tab may reset, and transient profile/import
 feedback may be lost. Persist only correctness-critical state across Framework
-reloads; module behavior state should refresh through Lib hosts instead.
+reloads. Module behavior state refreshes through Lib hosts.
 
 A Framework file reload does not, by itself, rebuild an existing pack object.
 The coordinator must call `Framework.init(params)` again, either from its reload
@@ -181,13 +182,13 @@ Supported public hook entrypoints:
 
 The model is:
 - use a persistent owner table, typically the module `MODULE_ANCHOR`
-- register hook sites from `registerHooks(authorHost, store)`
+- register hook sites from `registerHooks(host, store)`
 - pass `owner` and `registerHooks` into `lib.createModule(...)`
 - call `host.activate()` after construction
 - Lib runs the full registration pass during module activation
 
 Behavior:
-- the same owner/path/key updates the live handler instead of stacking another wrapper
+- the same owner/path/key updates the live handler and keeps one active wrapper
 - function overrides dispatch through a stable wrapper
 - omitted wrap and context-wrap registrations become inert
 - omitted override registrations are restored
@@ -199,7 +200,7 @@ This keeps hot-reloaded logic live without accumulating normal duplicate wrapper
 There is one accepted development-only caveat.
 
 If the same wrap or context-wrap site is:
-- removed
+- omitted from a registration pass
 - hot reloaded
 - re-added
 - hot reloaded again
@@ -286,7 +287,8 @@ otherwise full reload is required.
 Changes to:
 - `definition.id`
 - `definition.modpack`
-- `definition.name` or `shortName`
+- `definition.name`
+- `definition.shortName`
 - `definition.storage`
 - `definition.hashGroupPlan` / host hash hints
 - module presence or discovery shape
@@ -300,10 +302,10 @@ coordinated path, use a full reload.
 - keep `chalk`, `reload`, and raw config local to `main.lua`
 - recreate `definition`, `store`, `session`, and the Lib-created live host in `init`
 - keep `session` local to `main.lua`; draw callbacks receive the restricted author session through the host
-- register runtime hooks through `registerHooks(authorHost, store)` and ownerless `lib.hooks.*`
+- register runtime hooks through `registerHooks(host, store)` and ownerless `lib.hooks.*`
 - pass `owner` and `registerHooks` to `lib.createModule(...)` when the module owns runtime hooks
 - call `host.activate()` after construction
 - keep stable GUI callbacks outside `init`
 - late-read current framework or module state from those stable callbacks when a stale closure would matter
 - do not use raw ModUtil path wraps for repo-owned hot-reload-sensitive hook sites
-- do not replace persistent internal registries on reload; update their contents instead
+- keep persistent internal registries stable across reloads; update their contents in place

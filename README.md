@@ -22,6 +22,8 @@ local host = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     definition = {
+        id = "ExampleModule",
+        name = "Example Module",
         ...
     },
     registerHooks = internal.RegisterHooks,
@@ -34,6 +36,8 @@ host.activate()
 `owner` is used for structural hot-reload tracking and hook refresh ownership.
 Pass `registerHooks` when the module uses `lib.hooks.*`.
 `host.activate()` registers the live host for coordinated discovery and standalone hosting.
+Every module definition must declare a stable `id` and display `name`; `modpack`
+is optional and marks modules that participate in Framework coordination.
 
 ## Docs
 

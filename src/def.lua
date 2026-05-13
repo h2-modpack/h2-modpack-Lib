@@ -120,8 +120,8 @@ local lib = {}
 
 ---@class AdamantModpackLib.ModuleDefinition
 ---@field modpack? string Coordinator pack id for coordinated modules.
----@field id? string Stable module id within the pack.
----@field name? string Display name.
+---@field id string Stable module id within the pack.
+---@field name string Display name.
 ---@field shortName? string Short UI label.
 ---@field tooltip? string UI tooltip.
 ---@field storage? AdamantModpackLib.StorageSchema Module storage schema.
@@ -207,7 +207,7 @@ local lib = {}
 ---@field drawQuickContent? fun(imgui: table)
 
 ---@class AdamantModpackLib.ModuleIdentity
----@field id? string
+---@field id string
 ---@field modpack? string
 
 ---@class AdamantModpackLib.ModuleMeta

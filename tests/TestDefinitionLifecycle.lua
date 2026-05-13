@@ -31,7 +31,11 @@ local function HybridMutation(patch, apply, revert)
 end
 
 local function makeStore(enabled)
-    return lib.createStore({ Enabled = enabled }, lib.prepareDefinition({}, { storage = {} }))
+    return lib.createStore({ Enabled = enabled }, lib.prepareDefinition({}, {
+        id = "LifecycleStore",
+        name = "Lifecycle Store",
+        storage = {},
+    }))
 end
 
 function TestDefinitionLifecycle:testSetApplyAndRevert()
@@ -278,6 +282,8 @@ function TestDefinitionLifecycle:testCommitSessionCallsSettingsObserverAfterFlus
         Value = false,
     }
     local definition = lib.prepareDefinition({}, {
+        id = "CommitSessionObserver",
+        name = "Commit Session Observer",
         storage = {
             {
                 type = "bool",
@@ -310,7 +316,7 @@ end
 function TestDefinitionLifecycle:testApplyDefinitionSupportsPatchOnly()
     local store = makeStore(false)
     local target = { Value = 1 }
-    local def = {}
+    local def = { id = "PatchOnly" }
     local mutation = PatchMutation(function(plan)
             plan:set(target, "Value", 7)
         end)
@@ -446,7 +452,7 @@ end
 
 function TestDefinitionLifecycle:testApplyDefinitionNoOpsWhenLifecycleMissingAndRunDataUnaffected()
     local store = makeStore(false)
-    local def = {}
+    local def = { id = "NoLifecycle" }
 
     local ok, err = lib.lifecycle.applyMutation(def, nil, nil, store)
     lu.assertTrue(ok)
@@ -460,7 +466,7 @@ end
 function TestDefinitionLifecycle:testSetDefinitionEnabledCommitsOnlyAfterSuccessfulEnable()
     local store = makeStore(false)
     local applied = false
-    local def = {}
+    local def = { id = "SuccessfulEnable" }
     local mutation = ManualMutation(function()
         applied = true
     end, function() end)
@@ -475,7 +481,7 @@ end
 
 function TestDefinitionLifecycle:testSetDefinitionEnabledDoesNotCommitFailedEnable()
     local store = makeStore(false)
-    local def = {}
+    local def = { id = "FailedEnable" }
     local mutation = ManualMutation(function()
         error("enable boom")
     end, function() end)
@@ -489,7 +495,7 @@ end
 
 function TestDefinitionLifecycle:testSetDefinitionEnabledDoesNotCommitFailedDisable()
     local store = makeStore(true)
-    local def = {}
+    local def = { id = "FailedDisable" }
     local mutation = ManualMutation(function() end, function()
         error("disable boom")
     end)
@@ -504,7 +510,7 @@ end
 function TestDefinitionLifecycle:testSetDefinitionEnabledReappliesWhenAlreadyEnabled()
     local store = makeStore(true)
     local calls = {}
-    local def = {}
+    local def = { id = "ReapplyEnabled" }
     local mutation = ManualMutation(function()
         table.insert(calls, "apply")
     end, function()
@@ -522,7 +528,7 @@ end
 function TestDefinitionLifecycle:testSetDefinitionEnabledNoOpsWhenAlreadyDisabled()
     local store = makeStore(false)
     local revertCalls = 0
-    local def = {}
+    local def = { id = "AlreadyDisabled" }
     local mutation = ManualMutation(function() end, function()
         revertCalls = revertCalls + 1
     end)
@@ -538,7 +544,7 @@ end
 function TestDefinitionLifecycle:testReapplyDefinitionStopsWhenRevertFails()
     local store = makeStore(true)
     local applyCalls = 0
-    local def = {}
+    local def = { id = "RevertFails" }
     local mutation = ManualMutation(function()
         applyCalls = applyCalls + 1
     end, function()
@@ -556,7 +562,7 @@ function TestDefinitionLifecycle:testHybridOrderingIsPatchThenManualOnApplyAndMa
     local store = makeStore(false)
     local target = { Value = 0 }
     local order = {}
-    local def = {}
+    local def = { id = "HybridOrdering" }
     local mutation = HybridMutation(function(plan)
             table.insert(order, "build")
             plan:set(target, "Value", 10)

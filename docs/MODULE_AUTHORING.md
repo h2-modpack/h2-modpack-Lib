@@ -4,7 +4,7 @@ This guide describes the supported module contract in Lib:
 - namespaced public API
 - managed storage and explicit `session`
 - immediate-mode widgets
-- direct draw-function authoring through `internal.DrawTab(ui, session)`
+- direct draw-function authoring through `internal.DrawTab(ui, session, host)`
 
 ## Lib Surface
 
@@ -28,7 +28,7 @@ Use the namespaced API directly.
 Typical coordinated module:
 
 ```lua
-function internal.DrawTab(ui, session)
+function internal.DrawTab(ui, session, host)
     lib.widgets.checkbox(ui, session, "EnabledFlag", {
         label = "Enabled",
     })
@@ -40,7 +40,7 @@ function internal.DrawTab(ui, session)
     })
 end
 
-function internal.DrawQuickContent(ui, session)
+function internal.DrawQuickContent(ui, session, host)
     lib.widgets.dropdown(ui, session, "Mode", {
         label = "Mode",
         values = { "Vanilla", "Chaos" },
@@ -82,7 +82,7 @@ hot-reload tracking and hook refresh ownership.
 Call `host.activate()` after construction. That activation step publishes the
 live host, registers hooks, runs integrations, and syncs initial runtime behavior.
 When `registerHooks` is provided, Lib calls it as
-`registerHooks(authorHost, store)`. Ownerless `lib.hooks.*` calls inside this
+`registerHooks(host, store)`. Ownerless `lib.hooks.*` calls inside this
 callback are scoped to the module owner passed to `createModule`, so hook files
 do not need to know the persistent owner table. Modules that use shared runtime helper files
 should pass the needed store or narrower access/read closures into those helpers:
@@ -113,9 +113,9 @@ Examples: `drawTab(imgui, session, host)`, `registerHooks(host, store)`,
 ## Definition Rules
 
 Meaningful prepared definition fields:
+- `id` (required stable module identity)
+- `name` (required display name)
 - `modpack`
-- `id`
-- `name`
 - `shortName`
 - `tooltip`
 - `storage`
@@ -123,10 +123,12 @@ Meaningful prepared definition fields:
 
 Lib rejects any definition key outside the list above so typos and stale author code fail at module load.
 
-Coordinated modules should declare:
-- `modpack`
+All modules must declare:
 - `id`
 - `name`
+
+Coordinated modules also declare:
+- `modpack`
 
 Modules with no custom settings may omit `storage`; Lib injects built-in
 `Enabled` and `DebugMode` aliases during preparation.
@@ -300,7 +302,7 @@ Lib widgets cover common controls. Use raw ImGui for custom structure and layout
 
 Framework Quick Setup reads:
 - coordinator `renderQuickSetup(ctx)`
-- module `DrawQuickContent(ui, session)`
+- module `DrawQuickContent(ui, session, host)`
 
 `DrawQuickContent` is a Framework Quick Setup hook.
 
@@ -340,7 +342,7 @@ host.activate()
 
 Rules:
 - use a persistent owner table such as the module `internal`
-- declare hook sites inside `RegisterHooks(authorHost, store)`
+- declare hook sites inside `RegisterHooks(host, store)`
 - call `host.activate()` after construction
 - use the keyed overload when one owner needs several hooks on the same path
 
@@ -385,16 +387,17 @@ Framework discovery requires:
 - a live host registered by `host.activate()`
 - `host.getIdentity()`
 - `host.getMeta()`
-- a prepared definition with `storage`
+- a prepared definition and Lib-created storage surface
 
 `lib.getLiveModuleHost(...)` exposes that full runtime host for Framework,
-standalone hosting, and Lib internals. Module code should normally use the
-author host returned by `lib.createModule(...)` instead.
+standalone hosting, and Lib internals. Module code normally uses the author host
+returned by `lib.createModule(...)`.
 
 Framework behavior:
 - each coordinated module gets its own top-level tab
-- `host.drawTab(...)` is the normal rendering contract
-- `host.drawQuickContent(...)` participates only in Quick Setup
+- full-host `host.drawTab(imgui)` is the normal rendering contract
+- full-host `host.drawQuickContent(imgui)` participates only in Quick Setup
+- authored draw callbacks receive `drawTab(imgui, session, host)` and `drawQuickContent(imgui, session, host)`
 
 ## Standalone Modules
 
@@ -466,8 +469,8 @@ local PLUGIN_GUID = _PLUGIN.guid
 ---@class ExampleModuleInternal
 ---@field standaloneUi StandaloneRuntime|nil
 ---@field RegisterHooks fun(host: AuthorHost, store: ManagedStore)|nil
----@field DrawTab fun(imgui: table, session: AuthorSession)|nil
----@field DrawQuickContent fun(imgui: table, session: AuthorSession)|nil
+---@field DrawTab fun(imgui: table, session: AuthorSession, host: AuthorHost)|nil
+---@field DrawQuickContent fun(imgui: table, session: AuthorSession, host: AuthorHost)|nil
 ExampleModule_Internal = ExampleModule_Internal or {}
 ---@type ExampleModuleInternal
 local internal = ExampleModule_Internal
@@ -511,7 +514,7 @@ local function init()
     internal.standaloneUi = lib.standaloneHost(PLUGIN_GUID)
 end
 
-function internal.DrawTab(ui, session)
+function internal.DrawTab(ui, session, host)
     lib.widgets.checkbox(ui, session, "FeatureEnabled", {
         label = "Enable Feature",
         tooltip = "Turns the feature logic on for this module.",
@@ -535,7 +538,7 @@ function internal.DrawTab(ui, session)
     })
 end
 
-function internal.DrawQuickContent(ui, session)
+function internal.DrawQuickContent(ui, session, host)
     lib.widgets.dropdown(ui, session, "Mode", {
         label = "Mode",
         values = { "Vanilla", "Chaos", "Custom" },
@@ -578,7 +581,7 @@ Notes on the example:
 - `store` is passed to runtime hooks and mutation callbacks
 - draw callbacks receive the restricted author session through the live host
 - `host.activate()` owns live coordinated host registration
-- `internal.RegisterHooks(authorHost, store)` is the normal place for `lib.hooks.*` declarations
+- `internal.RegisterHooks(host, store)` is the normal place for `lib.hooks.*` declarations
 - `DrawTab` uses raw ImGui for structure and `lib.widgets.*` for controls
 - `DrawQuickContent` is optional
 - packed widgets use the session or row handle passed to the draw path
