@@ -1,6 +1,8 @@
 import 'core/internal/logging.lua'
 import 'core/internal/values.lua'
 import 'core/internal/storage_types.lua'
+import 'core/internal/storage_packed.lua'
+import 'core/internal/storage_table.lua'
 import 'core/internal/storage.lua'
 import 'core/internal/store.lua'
 import 'core/internal/session.lua'
@@ -13,6 +15,7 @@ import 'core/game_object.lua'
 import 'core/hooks.lua'
 import 'core/overlays.lua'
 import 'core/host.lua'
+import 'core/standalone_host.lua'
 import 'core/module.lua'
 import('core/mutations.lua', nil, mutationPlan)
 import('core/internal/mutations.lua', nil, mutationPlan)

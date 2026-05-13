@@ -19,45 +19,6 @@ end
 
 storage.NormalizeInteger = NormalizeInteger
 
-local function GetBitValueMask(width)
-    local normalizedWidth = math.floor(tonumber(width) or 0)
-    if normalizedWidth <= 0 then return 0 end
-    if normalizedWidth >= 32 then return 0xFFFFFFFF end
-    return bit32.rshift(0xFFFFFFFF, 32 - normalizedWidth)
-end
-
-storage.GetBitValueMask = GetBitValueMask
-
----@param packed number|nil
----@param offset number|nil
----@param width number|nil
----@return number
-function storage.readPackedBits(packed, offset, width)
-    local normalizedPacked = math.floor(tonumber(packed) or 0)
-    local normalizedOffset = math.max(0, math.floor(tonumber(offset) or 0))
-    local mask = GetBitValueMask(width)
-    if mask == 0 then return 0 end
-    return bit32.band(bit32.rshift(normalizedPacked, normalizedOffset), mask)
-end
-
----@param packed number|nil
----@param offset number|nil
----@param width number|nil
----@param value number|nil
----@return number
-function storage.writePackedBits(packed, offset, width, value)
-    local normalizedPacked = math.floor(tonumber(packed) or 0)
-    local normalizedOffset = math.max(0, math.floor(tonumber(offset) or 0))
-    local mask = GetBitValueMask(width)
-    if mask == 0 then return normalizedPacked end
-    local normalizedValue = math.floor(tonumber(value) or 0)
-    if normalizedValue < 0 then normalizedValue = 0
-    elseif normalizedValue > mask then normalizedValue = mask end
-    local shiftedMask = bit32.lshift(mask, normalizedOffset)
-    local cleared = bit32.band(normalizedPacked, bit32.bnot(shiftedMask))
-    return bit32.bor(cleared, bit32.lshift(normalizedValue, normalizedOffset))
-end
-
 StorageTypes.bool = {
     valueKind = "bool",
     validate = function(node, prefix)
