@@ -8,7 +8,7 @@ local internal = AdamantModpackLib_Internal
 ---@field registerHooks fun(host: AuthorHost, store: ManagedStore)|nil
 ---@field registerPatchMutation fun(plan: table, host: AuthorHost, store: ManagedStore)|nil
 ---@field registerManualMutation table|nil
----@field onSettingsCommitted fun(host: AuthorHost, store: ManagedStore)|nil
+---@field onSettingsCommitted fun(host: AuthorHost, store: ManagedStore, commit: table)|nil
 ---@field registerIntegrations fun(host: AuthorHost, store: ManagedStore)|nil
 ---@field drawTab fun(imgui: table, session: AuthorSession, host: AuthorHost)
 ---@field drawQuickContent fun(imgui: table, session: AuthorSession, host: AuthorHost)|nil

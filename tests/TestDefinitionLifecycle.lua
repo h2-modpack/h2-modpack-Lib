@@ -313,6 +313,42 @@ function TestDefinitionLifecycle:testCommitSessionCallsSettingsObserverAfterFlus
     lu.assertEquals(calls, 1)
 end
 
+function TestDefinitionLifecycle:testCommitSessionCallsSettingsObserverForActions()
+    local calls = 0
+    local observedAction = nil
+    local observedConfigChange = nil
+    local config = {
+        Enabled = true,
+    }
+    local definition = lib.prepareDefinition({}, {
+        id = "CommitSessionActionObserver",
+        name = "Commit Session Action Observer",
+        storage = {},
+    })
+    local store, session = lib.createStore(config, definition)
+    local settingsObserver = function(_, _, commit)
+        calls = calls + 1
+        observedAction = commit.readAction("recording")
+        observedConfigChange = commit.hadConfigChanges()
+    end
+
+    session.stageAction("recording", { kind = "start" })
+    local ok, err = lib.lifecycle.commitSession(definition, nil, settingsObserver, nil, store, session)
+
+    lu.assertTrue(ok)
+    lu.assertNil(err)
+    lu.assertEquals(calls, 1)
+    lu.assertEquals(observedAction, { kind = "start" })
+    lu.assertFalse(observedConfigChange)
+    lu.assertFalse(session.hasActions())
+    lu.assertFalse(session.isDirty())
+
+    ok, err = lib.lifecycle.commitSession(definition, nil, settingsObserver, nil, store, session)
+    lu.assertTrue(ok)
+    lu.assertNil(err)
+    lu.assertEquals(calls, 1)
+end
+
 function TestDefinitionLifecycle:testApplyDefinitionSupportsPatchOnly()
     local store = makeStore(false)
     local target = { Value = 1 }

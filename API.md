@@ -445,6 +445,10 @@ Useful surface:
 - `session.table(alias)`
 - `session.getAliasSchema(alias)`
 - `session.write(alias, value)`
+- `session.stageAction(actionKey, value)`
+- `session.readAction(actionKey)`
+- `session.clearAction(actionKey)`
+- `session.hasActions()`
 - `session.reset(alias)`
 - `session.isDirty()`
 - `session.auditMismatches()`
@@ -460,6 +464,10 @@ When a module is rendered through a Lib host, draw callbacks receive a restricte
 - `read(alias)`
 - `table(alias)`
 - `write(alias, value)`
+- `stageAction(actionKey, value)`
+- `readAction(actionKey)`
+- `clearAction(actionKey)`
+- `hasActions()`
 - `reset(alias)`
 - `getAliasSchema(alias)`
 - `resetToDefaults(opts?)`
@@ -472,6 +480,8 @@ packed roots.
 Behavior:
 - persisted aliases stage in `session` and only hit config on flush/commit
 - transient aliases live only in `session`
+- staged actions are transient "last intent wins" command slots that make the
+  session dirty and are delivered to `onSettingsCommitted(host, store, commit)`
 - packed child aliases re-encode their owning packed root automatically
 
 `session.read(alias)` returns:
@@ -767,14 +777,14 @@ Transactional commit helper for staged `session`.
 Behavior:
 - flushes staged persisted values to config
 - if the module is enabled and the mutation bundle affects run data, reapplies mutation state
-- calls `settingsObserver(host, store)` after a successful dirty commit when present
+- calls `settingsObserver(host, store, commit)` after a successful dirty commit or staged action when present
 - on failure, restores the previous config snapshot and reloads `session`
 
 `onSettingsCommitted` is a post-commit observer for rebuilding derived runtime/UI structures. It is not transactional; callback errors are warned and do not roll back the committed config.
 
-### `lib.lifecycle.notifySettingsCommitted(def, settingsObserver, host, store)`
+### `lib.lifecycle.notifySettingsCommitted(def, settingsObserver, host, store, commit?)`
 
-Runs `settingsObserver(host, store)` when present. Host flush paths use this after direct staged writes, so profile/hash imports and normal UI commits share the same observer boundary.
+Runs `settingsObserver(host, store, commit)` when present. Host flush paths use this after direct staged writes, so profile/hash imports and normal UI commits share the same observer boundary.
 
 ## Standalone Host
 
@@ -929,8 +939,8 @@ Immediate-mode widget helpers.
 Built-ins:
 - `lib.widgets.separator(imgui)`
 - `lib.widgets.text(imgui, text, opts?)`
-- `lib.widgets.button(imgui, label, opts?)`
-- `lib.widgets.confirmButton(imgui, id, label, opts?)`
+- `lib.widgets.button(imgui, session, label, opts?)`
+- `lib.widgets.confirmButton(imgui, session, id, label, opts?)`
 - `lib.widgets.inputText(imgui, session, alias, opts?)`
 - `lib.widgets.dropdown(imgui, session, alias, opts?)`
 - `lib.widgets.mappedDropdown(imgui, session, alias, opts?)`

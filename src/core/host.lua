@@ -5,6 +5,10 @@ local HostState = setmetatable({}, { __mode = "k" })
 ---@field view table<string, any>
 ---@field read fun(alias: string): any
 ---@field write fun(alias: string, value: any)
+---@field stageAction fun(actionKey: string, value: any)
+---@field readAction fun(actionKey: string): any
+---@field clearAction fun(actionKey: string)
+---@field hasActions fun(): boolean
 ---@field reset fun(alias: string)
 ---@field getAliasSchema fun(alias: string): StorageNode|PackedBitNode|nil
 ---@field resetToDefaults fun(opts: table|nil): boolean, number
@@ -27,7 +31,7 @@ local HostState = setmetatable({}, { __mode = "k" })
 ---@field registerHooks fun(host: AuthorHost, store: ManagedStore)|nil
 ---@field registerPatchMutation fun(plan: table, host: AuthorHost, store: ManagedStore)|nil
 ---@field registerManualMutation table|nil
----@field onSettingsCommitted fun(host: AuthorHost, store: ManagedStore)|nil
+---@field onSettingsCommitted fun(host: AuthorHost, store: ManagedStore, commit: table)|nil
 ---@field registerIntegrations fun(host: AuthorHost, store: ManagedStore)|nil
 ---@field drawTab fun(imgui: table, session: AuthorSession, host: AuthorHost)
 ---@field drawQuickContent fun(imgui: table, session: AuthorSession, host: AuthorHost)|nil
@@ -173,6 +177,10 @@ function public.createModuleHost(opts)
         read = session.read,
         table = session.table,
         write = session.write,
+        stageAction = session.stageAction,
+        readAction = session.readAction,
+        clearAction = session.clearAction,
+        hasActions = session.hasActions,
         reset = session.reset,
         getAliasSchema = session.getAliasSchema,
         resetToDefaults = function(resetOpts)
@@ -226,8 +234,8 @@ function public.createModuleHost(opts)
     function host.writeAndFlush(alias, value)
         requireActivated("writeAndFlush")
         session.write(alias, value)
-        session._flushToConfig()
-        return public.lifecycle.notifySettingsCommitted(def, settingsObserver, authorHost, store)
+        local ok, err = public.lifecycle.commitSession(def, mutationBundle, settingsObserver, authorHost, store, session)
+        return ok, err
     end
 
     function host.stage(alias, value)
@@ -240,8 +248,7 @@ function public.createModuleHost(opts)
         if not session.isDirty() then
             return true
         end
-        session._flushToConfig()
-        return public.lifecycle.notifySettingsCommitted(def, settingsObserver, authorHost, store)
+        return public.lifecycle.commitSession(def, mutationBundle, settingsObserver, authorHost, store, session)
     end
 
     function host.reloadFromConfig()

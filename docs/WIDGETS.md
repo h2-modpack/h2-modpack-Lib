@@ -164,18 +164,21 @@ lib.widgets.text(ui, "Underworld", {
 })
 ```
 
-### `lib.widgets.button(imgui, label, opts?)`
+### `lib.widgets.button(imgui, session, label, opts?)`
 
 Options:
 - `id`
 - `tooltip`
+- `action`
+- `value`
 - `onClick(imgui)`
 
 Notes:
 - returns whether the button was clicked
+- when `action` is provided, replaces that staged session action with `value`
 - `onClick` is optional convenience only; you can ignore it and use the boolean return directly
 
-### `lib.widgets.confirmButton(imgui, id, label, opts?)`
+### `lib.widgets.confirmButton(imgui, session, id, label, opts?)`
 
 Renders a button that opens a confirmation popup.
 
@@ -183,10 +186,13 @@ Options:
 - `tooltip`
 - `confirmLabel`
 - `cancelLabel`
+- `action`
+- `value`
 - `onConfirm(imgui)`
 
 Notes:
 - returns `true` only when the confirm action is taken
+- when `action` is provided, replaces that staged session action with `value`
 - this is good for destructive or global reset actions
 
 ## Input widget

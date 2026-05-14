@@ -92,7 +92,14 @@ local lib = {}
 ---@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil Read-only schema metadata.
 ---@field write fun(alias: string, value: any)
 ---@field reset fun(alias: string)
+---@field stageAction fun(actionKey: string, value: any)
+---@field readAction fun(actionKey: string): any
+---@field clearAction fun(actionKey: string)
+---@field hasActions fun(): boolean
 ---@field _flushToConfig fun()
+---@field _hasConfigChanges fun(): boolean
+---@field _captureActionSnapshot fun(): table
+---@field _clearActions fun()
 ---@field _reloadFromConfig fun()
 ---@field _captureDirtyConfigSnapshot fun(): table[]
 ---@field _restoreConfigSnapshot fun(snapshot: table[]?)
@@ -105,8 +112,18 @@ local lib = {}
 ---@field table fun(alias: string): AdamantModpackLib.StorageTableSession?
 ---@field write fun(alias: string, value: any)
 ---@field reset fun(alias: string)
+---@field stageAction fun(actionKey: string, value: any)
+---@field readAction fun(actionKey: string): any
+---@field clearAction fun(actionKey: string)
+---@field hasActions fun(): boolean
 ---@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil Read-only schema metadata.
 ---@field resetToDefaults fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
+
+---@class AdamantModpackLib.CommitContext
+---@field readAction fun(actionKey: string): any
+---@field hasAction fun(actionKey: string): boolean
+---@field hasActions fun(): boolean
+---@field hadConfigChanges fun(): boolean
 
 ---@class AdamantModpackLib.AuthorHost
 ---Activates module hooks, integrations, live-host registration, and initial runtime sync.
@@ -163,7 +180,11 @@ local lib = {}
 ---)
 ---@field registerManualMutation? AdamantModpackLib.ManualMutation
 --- Post-commit observer for rebuilding derived runtime/UI structures.
----@field onSettingsCommitted? fun(host: AdamantModpackLib.AuthorHost, store: AdamantModpackLib.ManagedStore)
+---@field onSettingsCommitted? fun(
+---    host: AdamantModpackLib.AuthorHost,
+---    store: AdamantModpackLib.ManagedStore,
+---    commit: AdamantModpackLib.CommitContext
+---)
 ---@field registerIntegrations? fun(host: AdamantModpackLib.AuthorHost, store: AdamantModpackLib.ManagedStore)
 ---@field drawTab fun(imgui: table, session: AdamantModpackLib.AuthorSession, host: AdamantModpackLib.AuthorHost)
 ---@field drawQuickContent? fun(imgui: table, session: AdamantModpackLib.AuthorSession, host: AdamantModpackLib.AuthorHost)
@@ -182,7 +203,11 @@ local lib = {}
 ---)
 ---@field registerManualMutation? AdamantModpackLib.ManualMutation
 --- Post-commit observer for rebuilding derived runtime/UI structures.
----@field onSettingsCommitted? fun(host: AdamantModpackLib.AuthorHost, store: AdamantModpackLib.ManagedStore)
+---@field onSettingsCommitted? fun(
+---    host: AdamantModpackLib.AuthorHost,
+---    store: AdamantModpackLib.ManagedStore,
+---    commit: AdamantModpackLib.CommitContext
+---)
 ---@field registerIntegrations? fun(host: AdamantModpackLib.AuthorHost, store: AdamantModpackLib.ManagedStore)
 ---@field drawTab fun(imgui: table, session: AdamantModpackLib.AuthorSession, host: AdamantModpackLib.AuthorHost)
 ---@field drawQuickContent? fun(imgui: table, session: AdamantModpackLib.AuthorSession, host: AdamantModpackLib.AuthorHost)
@@ -286,12 +311,16 @@ local lib = {}
 ---@class AdamantModpackLib.ButtonOpts
 ---@field id? string|number
 ---@field tooltip? string
+---@field action? string Staged session action key to replace when clicked.
+---@field value? any Staged session action payload.
 ---@field onClick? fun(imgui: table)
 
 ---@class AdamantModpackLib.ConfirmButtonOpts
 ---@field tooltip? string
 ---@field confirmLabel? string
 ---@field cancelLabel? string
+---@field action? string Staged session action key to replace when confirmed.
+---@field value? any Staged session action payload.
 ---@field onConfirm? fun(imgui: table)
 
 ---@class AdamantModpackLib.InputTextOpts
@@ -467,12 +496,17 @@ function lib.lifecycle.applyOnLoad(def, mutationBundle, host, store)
 end
 
 ---@param def AdamantModpackLib.ModuleDefinition
----@param settingsObserver fun(host: AdamantModpackLib.AuthorHost?, store: AdamantModpackLib.ManagedStore)?
+---@param settingsObserver fun(
+---    host: AdamantModpackLib.AuthorHost?,
+---    store: AdamantModpackLib.ManagedStore,
+---    commit: AdamantModpackLib.CommitContext
+---)?
 ---@param host AdamantModpackLib.AuthorHost?
 ---@param store AdamantModpackLib.ManagedStore
+---@param commit? AdamantModpackLib.CommitContext
 ---@return boolean ok
 ---@return string? err
-function lib.lifecycle.notifySettingsCommitted(def, settingsObserver, host, store)
+function lib.lifecycle.notifySettingsCommitted(def, settingsObserver, host, store, commit)
 end
 
 ---@param def AdamantModpackLib.ModuleDefinition
@@ -483,7 +517,11 @@ end
 
 ---@param def AdamantModpackLib.ModuleDefinition
 ---@param mutationBundle AdamantModpackLib.MutationBundle?
----@param settingsObserver fun(host: AdamantModpackLib.AuthorHost?, store: AdamantModpackLib.ManagedStore)?
+---@param settingsObserver fun(
+---    host: AdamantModpackLib.AuthorHost?,
+---    store: AdamantModpackLib.ManagedStore,
+---    commit: AdamantModpackLib.CommitContext
+---)?
 ---@param host AdamantModpackLib.AuthorHost?
 ---@param store AdamantModpackLib.ManagedStore
 ---@param session AdamantModpackLib.Session
@@ -832,18 +870,20 @@ function lib.widgets.text(imgui, text, opts)
 end
 
 ---@param imgui table
+---@param session AdamantModpackLib.AuthorSession
 ---@param label any
 ---@param opts? AdamantModpackLib.ButtonOpts
 ---@return boolean clicked
-function lib.widgets.button(imgui, label, opts)
+function lib.widgets.button(imgui, session, label, opts)
 end
 
 ---@param imgui table
+---@param session AdamantModpackLib.AuthorSession
 ---@param id string|number
 ---@param label any
 ---@param opts? AdamantModpackLib.ConfirmButtonOpts
 ---@return boolean confirmed
-function lib.widgets.confirmButton(imgui, id, label, opts)
+function lib.widgets.confirmButton(imgui, session, id, label, opts)
 end
 
 ---@param imgui table

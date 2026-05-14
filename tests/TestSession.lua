@@ -666,3 +666,27 @@ function TestSession:testTableStorageHashRoundTripsRows()
     lu.assertEquals(decoded[2].Note, "a|b=%c")
     lu.assertEquals(decoded[2].PackedChoices, 4)
 end
+
+function TestSession:testSessionActionsAreDirtyAndLastWriteWins()
+    local definition = lib.prepareDefinition({}, {
+        id = "SessionActionTest",
+        name = "Session Action Test",
+        storage = {},
+    })
+    local _, session = lib.createStore({}, definition)
+
+    lu.assertFalse(session.hasActions())
+    lu.assertFalse(session.isDirty())
+
+    session.stageAction("recording", { kind = "start" })
+    session.stageAction("recording", { kind = "stop" })
+
+    lu.assertTrue(session.hasActions())
+    lu.assertTrue(session.isDirty())
+    lu.assertEquals(session.readAction("recording"), { kind = "stop" })
+
+    session.clearAction("recording")
+
+    lu.assertFalse(session.hasActions())
+    lu.assertFalse(session.isDirty())
+end

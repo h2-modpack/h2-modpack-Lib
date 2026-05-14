@@ -3,12 +3,19 @@ local lu = require('luaunit')
 TestWidgets = {}
 
 local function makeSession(value)
+    local actions = {}
     return {
         read = function()
             return value
         end,
         write = function(_, nextValue)
             value = nextValue
+        end,
+        stageAction = function(actionKey, actionValue)
+            actions[actionKey] = actionValue
+        end,
+        readAction = function(actionKey)
+            return actions[actionKey]
         end,
     }
 end
@@ -232,4 +239,24 @@ function TestWidgets:testPackedDropdownSupportsExplicitControlId()
     })
 
     lu.assertEquals(state.beginComboId, "##Packed_Row_2")
+end
+
+function TestWidgets:testButtonStagesSessionAction()
+    local session = makeSession()
+    local clickedLabels = {}
+    local imgui = makeDropdownImgui()
+    imgui.Button = function(label)
+        clickedLabels[#clickedLabels + 1] = label
+        return true
+    end
+
+    local clicked = lib.widgets.button(imgui, session, "Start", {
+        id = "start_recording",
+        action = "recording",
+        value = { kind = "start" },
+    })
+
+    lu.assertTrue(clicked)
+    lu.assertEquals(clickedLabels[1], "Start##start_recording")
+    lu.assertEquals(session.readAction("recording"), { kind = "start" })
 end

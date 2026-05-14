@@ -3,13 +3,40 @@ public.lifecycle = public.lifecycle or {}
 
 local lifecycleApi = public.lifecycle
 local mutationInternal = internal.mutation
+local ClonePersistedValue = internal.values.deepCopy
 
-function lifecycleApi.notifySettingsCommitted(def, settingsObserver, authorHost, store)
+local function hasAction(actions, actionKey)
+    return actions[actionKey] ~= nil
+end
+
+local function hasAnyAction(actions)
+    return next(actions) ~= nil
+end
+
+local function makeCommitContext(actions, hadConfigChanges)
+    actions = actions or {}
+    return {
+        readAction = function(actionKey)
+            return ClonePersistedValue(actions[actionKey])
+        end,
+        hasAction = function(actionKey)
+            return hasAction(actions, actionKey)
+        end,
+        hasActions = function()
+            return hasAnyAction(actions)
+        end,
+        hadConfigChanges = function()
+            return hadConfigChanges == true
+        end,
+    }
+end
+
+function lifecycleApi.notifySettingsCommitted(def, settingsObserver, authorHost, store, commitContext)
     if settingsObserver == nil then
         return true, nil
     end
 
-    local ok, result = pcall(settingsObserver, authorHost, store)
+    local ok, result = pcall(settingsObserver, authorHost, store, commitContext or makeCommitContext(nil, false))
     if not ok then
         internal.violate("lifecycle.on_settings_committed_failed", "%s: onSettingsCommitted failed: %s",
             tostring(def.name or def.id or "module"),
@@ -200,7 +227,7 @@ end
 --- Commits staged session values back to config and reapplies live mutations when required.
 ---@param def ModuleDefinition Module definition declaring mutation behavior.
 ---@param mutationBundle table|nil Module mutation callbacks.
----@param settingsObserver fun(store: ManagedStore)|nil Post-commit observer.
+---@param settingsObserver fun(host: AuthorHost, store: ManagedStore, commit: table)|nil Post-commit observer.
 ---@param store ManagedStore Managed module store associated with the definition.
 ---@param session Session Session exposing transactional flush and reload helpers.
 ---@return boolean ok True when the commit completed successfully.
@@ -210,19 +237,26 @@ function lifecycleApi.commitSession(def, mutationBundle, settingsObserver, autho
         return true, nil
     end
 
-    local snapshot = session._captureDirtyConfigSnapshot()
-    session._flushToConfig()
+    local hadConfigChanges = session._hasConfigChanges()
+    local actions = session._captureActionSnapshot()
+    local commitContext = makeCommitContext(actions, hadConfigChanges)
+    local snapshot = hadConfigChanges and session._captureDirtyConfigSnapshot() or nil
+    if hadConfigChanges then
+        session._flushToConfig()
+    end
+    session._clearActions()
 
     local shouldReapply = lifecycleApi.affectsRunData(mutationBundle)
+        and hadConfigChanges
         and store.read("Enabled") == true
 
     if not shouldReapply then
-        return lifecycleApi.notifySettingsCommitted(def, settingsObserver, authorHost, store)
+        return lifecycleApi.notifySettingsCommitted(def, settingsObserver, authorHost, store, commitContext)
     end
 
     local ok, err = lifecycleApi.reapplyMutation(def, mutationBundle, authorHost, store)
     if ok then
-        return lifecycleApi.notifySettingsCommitted(def, settingsObserver, authorHost, store)
+        return lifecycleApi.notifySettingsCommitted(def, settingsObserver, authorHost, store, commitContext)
     end
 
     session._restoreConfigSnapshot(snapshot)

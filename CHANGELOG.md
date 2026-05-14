@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
 - Removed old `configKey`, `lifetime`, and `runtime` storage declaration compatibility in favor of explicit `persist`, `stage`, and `hash` axes.
 - Lib now injects `Enabled` and `DebugMode` as built-in prepared storage aliases instead of requiring module-authored config defaults.
 - Module definitions now require both stable `id` and display `name`; `modpack` remains optional.
-- Module callbacks now receive the author host consistently: `registerHooks(host, store)`, `registerIntegrations(host, store)`, `registerPatchMutation(plan, host, store)`, manual mutation `apply(host, store)` / `revert(host, store)`, `onSettingsCommitted(host, store)`, `drawTab(imgui, session, host)`, and `drawQuickContent(imgui, session, host)`.
+- Module callbacks receive the author host consistently: `registerHooks(host, store)`, `registerIntegrations(host, store)`, `registerPatchMutation(plan, host, store)`, manual mutation `apply(host, store)` / `revert(host, store)`, `onSettingsCommitted(host, store, commit)`, `drawTab(imgui, session, host)`, and `drawQuickContent(imgui, session, host)`.
 - Host activation now refreshes hook and integration generations transactionally so omitted hook/integration registrations are removed on reload and late activation failures roll back refreshed hook state.
 - Persistent runtime-cache module state is now declared with `stage = false, hash = false`, read through `store.read(...)`, and written through `store.writeUnstaged(...)`.
 - Added first-class table storage roots with row-scoped aliases, staged table handles, read-only store table handles, packed child row access, and hash/profile serialization.
@@ -31,7 +31,7 @@ All notable changes to this project will be documented in this file.
 - Added token-based `lib.overlays.suppressForUi()` overlay suppression for foreground ImGui configuration windows.
 - Added `lib.gameObject.*` helpers for namespaced runtime state attached to live game object tables.
 - Added runtime-only persisted storage aliases through `runtime = true` plus `store.getRuntimeState()`.
-- Added `definition.onSettingsCommitted(host, store)` as a post-commit observer for rebuilding derived runtime/UI structures after staged config commits.
+- Added `definition.onSettingsCommitted(host, store, commit)` as a post-commit observer for rebuilding derived runtime/UI structures after staged config commits and staged session actions.
 - Added docs for hot-reload architecture and known limitations under `docs/`.
 - Added player-facing `THUNDERSTORE_README.md` packaging support.
 

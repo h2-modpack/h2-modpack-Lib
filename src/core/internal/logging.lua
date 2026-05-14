@@ -206,6 +206,10 @@ local DefaultViolationPolicy = {
         severity = "error",
         description = "Session view is read-only; writes must go through session.write.",
     },
+    ["session.invalid_action_key"] = {
+        severity = "error",
+        description = "Session staged actions require a non-empty string action key.",
+    },
 
     ["store.invalid_create_args"] = {
         severity = "error",

@@ -13,6 +13,7 @@ function internal.store.createSession(modConfig, configBackend, storage)
     local stageRootNodes = storageInternal.getStageRoots(storage)
     local aliasNodes = storageInternal.getAliases(storage)
     local staging = {}
+    local actions = {}
     local dirty = false
     local dirtyRoots = {}
     local configEntries = {}
@@ -122,6 +123,25 @@ function internal.store.createSession(modConfig, configBackend, storage)
     local function clearDirty()
         dirty = false
         dirtyRoots = {}
+    end
+
+    local function validateActionKey(methodName, actionKey)
+        if type(actionKey) ~= "string" or actionKey == "" then
+            internal.violate("session.invalid_action_key", "session.%s: actionKey must be a non-empty string",
+                tostring(methodName))
+        end
+    end
+
+    local function hasActions()
+        return next(actions) ~= nil
+    end
+
+    local function captureActionSnapshot()
+        return ClonePersistedValue(actions)
+    end
+
+    local function clearActions()
+        actions = {}
     end
 
     local sessionReadBackend = {
@@ -269,21 +289,44 @@ function internal.store.createSession(modConfig, configBackend, storage)
         write = function(alias, value)
             writeStagingValue(alias, value)
         end,
+        stageAction = function(actionKey, value)
+            validateActionKey("stageAction", actionKey)
+            if value == nil then
+                actions[actionKey] = nil
+                return
+            end
+            actions[actionKey] = ClonePersistedValue(value)
+        end,
+        readAction = function(actionKey)
+            validateActionKey("readAction", actionKey)
+            return ClonePersistedValue(actions[actionKey])
+        end,
+        clearAction = function(actionKey)
+            validateActionKey("clearAction", actionKey)
+            actions[actionKey] = nil
+        end,
+        hasActions = hasActions,
         reset = function(alias)
             resetAliasValue(alias)
         end,
         _reloadFromConfig = function()
             copyConfigToStaging()
             clearDirty()
+            clearActions()
         end,
         _flushToConfig = function()
             copyStagingToConfig()
             clearDirty()
         end,
+        _hasConfigChanges = function()
+            return dirty
+        end,
+        _captureActionSnapshot = captureActionSnapshot,
+        _clearActions = clearActions,
         _captureDirtyConfigSnapshot = captureDirtyConfigSnapshot,
         _restoreConfigSnapshot = restoreConfigSnapshot,
         isDirty = function()
-            return dirty
+            return dirty or hasActions()
         end,
         auditMismatches = function()
             local mismatches = {}
