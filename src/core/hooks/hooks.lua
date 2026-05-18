@@ -25,7 +25,10 @@ local function parseRegistrationArgs(path, keyOrValue, maybeValue, valueName)
         end
         return path, keyOrValue
     end
-    return tostring(keyOrValue), maybeValue
+    if type(keyOrValue) ~= "string" or keyOrValue == "" then
+        logging.violate("hooks.invalid_registration", "lib.hooks: explicit key must be a non-empty string")
+    end
+    return keyOrValue, maybeValue
 end
 
 local function requireActiveInstall(apiName)
@@ -42,7 +45,11 @@ end
 
 local function getHostPluginGuid(host)
     local state = hostState.get(host)
-    local pluginGuid = state and state.pluginGuid or nil
+    if not state then
+        logging.violate("hooks.invalid_registration", "hooks.installForHost: expected managed module host state")
+    end
+
+    local pluginGuid = state.pluginGuid
     if type(pluginGuid) ~= "string" or pluginGuid == "" then
         logging.violate("hooks.invalid_registration", "hooks.installForHost: host pluginGuid is required")
     end

@@ -1,51 +1,10 @@
-# Widgets, Nav, Session, and Hashing
+# Widgets and Navigation
 
-This document covers:
-- storage typing and packing
-- session helpers
-- hash/profile packing helpers
-- immediate-mode widgets
-- navigation helpers
+This document covers `lib.widgets.*` and `lib.nav.*` from a module draw-code point of view.
 
-## Storage Schema
+Widgets operate on the author `session` passed into `drawTab(imgui, session, host)` and `drawQuickContent(imgui, session, host)`.
 
-Module storage is declared on `definition.storage` and consumed by `lib.createModule(...)`.
-
-Built-in root types:
-- `bool`
-- `int`
-- `string`
-- `packedInt`
-- `table`
-
-Storage metadata helpers used for hash/profile work live under `lib.hashing`.
-
-`table` roots expose row handles through `store.table(alias)` and `session.table(alias)`.
-They do not have a generic widget yet; render table rows with ordinary Lua loops
-and the scalar/packed widgets that fit each row.
-Table handle row operations use colon method syntax, for example `rows:read(1, "Enabled")`.
-
-## Reset Helpers
-
-- `lib.resetStorageToDefaults(storage, session, opts?)`
-
-## Hashing
-
-Hash/profile serialization helpers live under `lib.hashing`.
-
-`getRoots(...)` and `getAliases(...)` expose prepared storage metadata for
-inspection by Framework/hash/widget plumbing. Treat the returned maps and nodes
-as read-only; storage metadata is owned by Lib preparation.
-
-Supported helpers:
-- `lib.hashing.getRoots(storage)`
-- `lib.hashing.getAliases(storage)`
-- `lib.hashing.valuesEqual(node, a, b)`
-- `lib.hashing.getPackWidth(node)`
-- `lib.hashing.toHash(node, value)`
-- `lib.hashing.fromHash(node, str)`
-- `lib.hashing.readPackedBits(...)`
-- `lib.hashing.writePackedBits(...)`
+For storage schema, table handles, packed roots, and session/store rules, read [MANAGED_STATE.md](MANAGED_STATE.md).
 
 ## Widgets
 
@@ -80,9 +39,10 @@ lib.widgets.dropdown(ui, session, "Mode", {
 })
 ```
 
-All bound widgets return:
-- `true` when they changed staged `session`
-- `false` otherwise
+Value-bound widgets return `true` when they changed staged `session` and
+`false` otherwise. Button-style widgets return whether they were clicked or
+confirmed. Display-only helpers such as `separator` and `text` draw and return
+nothing.
 
 ## Common concepts
 
@@ -303,6 +263,7 @@ lib.widgets.mappedDropdown(ui, session, "SelectedRoot", {
 Single-choice dropdown over a packed root.
 
 Options:
+- `id`
 - `label`
 - `tooltip`
 - `labelWidth`
@@ -405,13 +366,13 @@ Use when:
 Stepper with `-` and `+` buttons around a rendered value.
 
 Options:
+- `id`
 - `label`
 - `default`
 - `min`
 - `max`
 - `step`
 - `displayValues`
-- `labelWidth`
 - `valueWidth`
 - `buttonSpacing`
 
@@ -432,8 +393,14 @@ Two coupled steppers rendered as:
 - max stepper
 
 Options:
-- all `StepperOpts`
+- `label`
+- `default`
 - `defaultMax`
+- `min`
+- `max`
+- `step`
+- `valueWidth`
+- `buttonSpacing`
 - `rangeGap`
 
 Behavior:
@@ -539,4 +506,4 @@ activeKey = lib.nav.verticalTabs(ui, {
 
 ## Scope
 
-Widgets are direct immediate-mode helpers. Each call draws one control and returns its value and change flag. Composition is ordinary Lua control flow: authors call the helpers they want, in the order they want, inside their own `drawTab` function.
+Widgets are direct immediate-mode helpers. Bound controls return a boolean changed or clicked flag; display-only helpers such as `separator` and `text` draw and return nothing. Composition is ordinary Lua control flow: authors call the helpers they want, in the order they want, inside their own `drawTab` function.

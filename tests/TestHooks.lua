@@ -282,6 +282,30 @@ function TestHooks:testOwnerlessHookApiRequiresActiveRegistrationContext()
     lu.assertFalse(ok)
 end
 
+function TestHooks:testExplicitHookKeysMustBeNonEmptyStrings()
+    lu.assertErrorMsgContains("explicit key must be a non-empty string", function()
+        self:createHostWithHooks("hook-test-invalid-wrap-key", function()
+            self.hooks.Wrap("AdamantHookTestInvalidWrapKey", {}, function(base)
+                return base()
+            end)
+        end)
+    end)
+
+    lu.assertErrorMsgContains("explicit key must be a non-empty string", function()
+        self:createHostWithHooks("hook-test-invalid-override-key", function()
+            self.hooks.Override("AdamantHookTestInvalidOverrideKey", "", function()
+                return "override"
+            end)
+        end)
+    end)
+
+    lu.assertErrorMsgContains("explicit key must be a non-empty string", function()
+        self:createHostWithHooks("hook-test-invalid-context-key", function()
+            self.hooks.Context.Wrap("AdamantHookTestInvalidContextKey", function() end, function() end)
+        end)
+    end)
+end
+
 function TestHooks:testOverrideRequiresFunctionReplacement()
     self.env.AdamantHookTestOverrideFunctionRequired = function()
         return "base"

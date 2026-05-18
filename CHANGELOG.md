@@ -14,7 +14,7 @@ All notable changes to this project will be documented in this file.
 - Module authors now construct through `lib.createModule(...)` / `lib.tryCreateModule(...)` and activate through `host.tryActivate()`; lower-level definition/state/host construction is internal.
 - Host activation now stages and commits hooks, integrations, overlays, and mutation sync through host-owned receipts, so omitted registrations are removed on reload and activation failures roll back candidate effects.
 - `lib.hooks.Override(...)` now accepts function replacements only, matching the host-owned dispatcher model.
-- Retired separate internal lifecycle design notes; accepted lifecycle tradeoffs now live in `docs/KNOWN_LIMITATIONS.md`.
+- Retired separate internal lifecycle design notes; accepted lifecycle tradeoffs now live in `docs/references/KNOWN_LIMITATIONS.md`.
 - Persistent runtime-cache module state is now declared with `stage = false, hash = false`, read through `store.read(...)`, and written through `store.writeUnstaged(...)`.
 - Added first-class table storage roots with row-scoped aliases, staged table handles, read-only store table handles, packed child row access, and hash/profile serialization.
 - Table storage handles use colon method syntax, such as `tiers:read(rowIndex, alias)`.

@@ -164,7 +164,7 @@ local function dispatchWrap(dispatcher, base, ...)
         if hostSlots then
             for slotIndex = 1, #hostSlots.order do
                 local slot = hostSlots.slots[hostSlots.order[slotIndex]]
-                if slot and type(slot.value) == "function" then
+                if slot and slot.value ~= nil then
                     chain = wrapChain(slot.value, chain)
                 end
             end
@@ -180,7 +180,7 @@ local function dispatchContextWrap(dispatcher, ...)
         if hostSlots then
             for slotIndex = #hostSlots.order, 1, -1 do
                 local slot = hostSlots.slots[hostSlots.order[slotIndex]]
-                if slot and type(slot.value) == "function" then
+                if slot and slot.value ~= nil then
                     slot.value(...)
                 end
             end
@@ -195,7 +195,7 @@ local function resolveOverride(dispatcher)
         if hostSlots then
             for slotIndex = #hostSlots.order, 1, -1 do
                 local slot = hostSlots.slots[hostSlots.order[slotIndex]]
-                if slot and type(slot.value) == "function" then
+                if slot and slot.value ~= nil then
                     return slot.value
                 end
             end

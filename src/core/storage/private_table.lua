@@ -261,6 +261,38 @@ local function DeserializeTableValue(node, str)
     return NormalizeTableValue(node, rows)
 end
 
+local function IsSerializedTableValue(node, str)
+    if type(str) ~= "string" then
+        return false
+    end
+
+    local countText, pos = string.match(str, "^(%d+):()")
+    if not countText then
+        return false
+    end
+
+    local count = tonumber(countText) or 0
+    if ClampRowCount(node, count) ~= count then
+        return false
+    end
+
+    local roots = GetRowRootNodes(node)
+    for _ = 1, count do
+        for _, root in ipairs(roots) do
+            local encoded
+            encoded, pos = DecodeLengthPrefixed(str, pos)
+            if encoded == nil then
+                return false
+            end
+            if not storageInternal.isHashTokenValid(root, encoded) then
+                return false
+            end
+        end
+    end
+
+    return pos == #str + 1
+end
+
 local function CreateTableHandle(node, opts)
     opts = opts or {}
     local aliasNodes = GetRowAliasNodes(node)
@@ -500,5 +532,6 @@ return {
     NormalizeTableValue = NormalizeTableValue,
     SerializeTableValue = SerializeTableValue,
     DeserializeTableValue = DeserializeTableValue,
+    IsSerializedTableValue = IsSerializedTableValue,
     CreateTableHandle = CreateTableHandle,
 }

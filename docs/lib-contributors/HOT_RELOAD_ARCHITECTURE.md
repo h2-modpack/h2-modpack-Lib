@@ -4,10 +4,10 @@ This document describes the supported hot-reload model of the adamant stack.
 
 It covers how `adamant-ModpackLib`, `adamant-ModpackFramework`, coordinator shells, and coordinated modules stay coherent when files reload inside one live Hades II process.
 
-For the raw behavior of `SGG_Modding-ReLoad`, `SGG_Modding-ModUtil`, and `SGG_Modding-Chalk`, read [RELOAD_MODUTIL_CHALK_REFERENCE.md](RELOAD_MODUTIL_CHALK_REFERENCE.md) first.
+For the raw behavior of `SGG_Modding-ReLoad`, `SGG_Modding-ModUtil`, and `SGG_Modding-Chalk`, read [RELOAD_MODUTIL_CHALK_REFERENCE.md](../references/RELOAD_MODUTIL_CHALK_REFERENCE.md) first.
 
 Accepted hot-reload boundaries are documented in
-[KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md).
+[KNOWN_LIMITATIONS.md](../references/KNOWN_LIMITATIONS.md).
 
 ## Goals
 
@@ -32,7 +32,7 @@ The stack relies on that persistence for stable runtime registries.
 The stack deliberately stores reload-sensitive state on `_G` tables:
 
 - `AdamantModpackLib_Runtime`
-- `AdamantModpackFramework_Internal`
+- `FrameworkPackRegistry`
 
 These tables are initialized with `X = X or {}` so they survive a file reload in the same game process.
 

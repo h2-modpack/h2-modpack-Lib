@@ -53,6 +53,7 @@ local definition = import('core/module_bootstrap/definition.lua', nil, {
 local integrations = import('core/integrations/integrations.lua', nil, {
     logging = logging,
     runtime = runtime,
+    hostState = hostState,
 })
 local hooks = import('core/hooks/hooks.lua', nil, {
     modutil = externals.modutil,

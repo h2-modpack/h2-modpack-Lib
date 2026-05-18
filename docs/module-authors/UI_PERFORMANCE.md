@@ -25,7 +25,7 @@ This document assumes:
 - draw code reads staged values from `session.view`
 - runtime/gameplay code reads persisted values through `store.read(...)`
 - debug toggles write persisted values through the host/framework flow
-- hash/profile plumbing stages arbitrary values through `session.write(...)` and flushes with `session._flushToConfig()`
+- hash/profile import and config flush behavior belong to host/framework plumbing, not draw callbacks
 - framework/host own `session` commit timing
 - standalone UI registers ROM callbacks through `lib.standaloneUiBridge(...)`
   and installs the active runtime through `lib.standaloneHost(...)`

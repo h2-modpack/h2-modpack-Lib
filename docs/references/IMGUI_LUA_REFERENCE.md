@@ -541,7 +541,10 @@ ImGui.Button("Reset##ModuleB")
 
 Or use `PushID`/`PopID` around repeated items in a loop.
 
-### `GetStyle()` is not in the Lua binding
+### `GetStyle()` availability
 
-`GetStyle()` is not exported by this binding. Use `GetStyleColorVec4(ImGuiCol.*)`,
-`GetFontSize()`, and `GetFrameHeight()` to read style metrics instead.
+Current ReturnOfModding builds expose `GetStyle()` for style fields such as
+`FramePadding` and `ItemInnerSpacing`. Older references or test doubles may not
+include it, so module UI code should prefer stable helpers such as
+`GetStyleColorVec4(ImGuiCol.*)`, `GetFontSize()`, and `GetFrameHeight()` unless
+it specifically needs style-object fields.

@@ -2,6 +2,7 @@ local deps = ...
 
 local logging = deps.logging
 local runtime = deps.runtime
+local hostState = deps.hostState
 local registry = import('core/integrations/private_registry.lua', nil, {
     runtime = runtime,
 })
@@ -48,8 +49,8 @@ function integrations.installForHost(host, register, authorHost, store)
     if register == nil then
         return makeNoopReceipt()
     end
-    if type(host) ~= "table" then
-        logging.violate("integrations.invalid_args", "integrations.installForHost: host is required")
+    if not hostState.get(host) then
+        logging.violate("integrations.invalid_args", "integrations.installForHost: expected managed module host state")
     end
     if type(register) ~= "function" then
         logging.violate("integrations.invalid_args", "integrations.installForHost: register must be a function")

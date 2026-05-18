@@ -12,9 +12,10 @@ Keep the public surface:
 
 - [README.md](README.md)
 - [API.md](API.md)
-- [docs/MODULE_AUTHORING.md](docs/MODULE_AUTHORING.md)
-- [docs/HOT_RELOAD_ARCHITECTURE.md](docs/HOT_RELOAD_ARCHITECTURE.md)
-- [docs/WIDGETS.md](docs/WIDGETS.md)
+- [docs/lib-contributors/LIB_INTERNALS.md](docs/lib-contributors/LIB_INTERNALS.md)
+- [docs/lib-contributors/HOT_RELOAD_ARCHITECTURE.md](docs/lib-contributors/HOT_RELOAD_ARCHITECTURE.md)
+- [docs/lib-contributors/TESTING.md](docs/lib-contributors/TESTING.md)
+- [docs/module-authors/MODULE_AUTHORING.md](docs/module-authors/MODULE_AUTHORING.md)
 
 ## Contribution Rules
 
@@ -29,4 +30,10 @@ Keep the public surface:
 ```bash
 cd adamant-ModpackLib
 lua52.exe tests/all.lua
+```
+
+For shell-repo validation, run:
+
+```bash
+python Setup/test_all.py
 ```

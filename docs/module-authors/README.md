@@ -1,0 +1,21 @@
+# Module Author Docs
+
+Use these docs when building modules on top of ModpackLib.
+
+Recommended order:
+
+1. [GETTING_STARTED.md](GETTING_STARTED.md)
+2. [MODULE_AUTHORING.md](MODULE_AUTHORING.md)
+3. [capabilities/README.md](capabilities/README.md)
+4. [UI_PERFORMANCE.md](UI_PERFORMANCE.md)
+5. [../../API.md](../../API.md)
+
+Capability guides:
+
+- [capabilities/MANAGED_STATE.md](capabilities/MANAGED_STATE.md)
+- [capabilities/WIDGETS.md](capabilities/WIDGETS.md)
+- [capabilities/HOOKS.md](capabilities/HOOKS.md)
+- [capabilities/MUTATIONS.md](capabilities/MUTATIONS.md)
+- [capabilities/OVERLAYS.md](capabilities/OVERLAYS.md)
+- [capabilities/INTEGRATIONS.md](capabilities/INTEGRATIONS.md)
+- [capabilities/GAME_OBJECT_STATE.md](capabilities/GAME_OBJECT_STATE.md)

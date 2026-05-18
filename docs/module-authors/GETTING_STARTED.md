@@ -8,7 +8,7 @@ It explains:
 - how data moves through a module
 - how to build a minimal working module from the template
 
-For the exact API surface, use [API.md](../API.md). For the fuller authoring contract, use [MODULE_AUTHORING.md](MODULE_AUTHORING.md).
+For the exact API surface, use [API.md](../../API.md). For the fuller authoring contract, use [MODULE_AUTHORING.md](MODULE_AUTHORING.md).
 
 ## Starting A New Repo
 
@@ -124,10 +124,6 @@ Start with the template, then fill in these pieces in order.
 At minimum:
 
 ```lua
-local data = import("mods/data.lua")
-local logic = import("mods/logic.lua").bind(data)
-local ui = import("mods/ui.lua").bind(data)
-
 local host = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
@@ -150,7 +146,7 @@ boundaries when one invalid module should be skipped without stopping sibling
 modules:
 
 ```lua
-local host, store, err = lib.tryCreateModule({
+local host, _, err = lib.tryCreateModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     definition = {
@@ -175,18 +171,24 @@ of throwing.
 Example:
 
 ```lua
-local function BuildStorage()
+local data = {}
+
+function data.buildStorage()
     return {
         { type = "bool", alias = "FeatureEnabled", default = false },
         { type = "string", alias = "Mode", default = "Vanilla", maxLen = 32 },
         { type = "string", alias = "FilterText", persist = false, hash = false, default = "", maxLen = 64 },
     }
 end
+
+return data
 ```
 
 Then attach it to the module definition:
 
 ```lua
+local data = import("mods/data.lua")
+
 local host = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
@@ -194,7 +196,7 @@ local host = lib.createModule({
         modpack = PACK_ID,
         id = "ExampleModule",
         name = "Example Module",
-        storage = BuildStorage(),
+        storage = data.buildStorage(),
     },
     drawTab = function() end,
 })
@@ -216,7 +218,7 @@ For persistent runtime markers that should not appear in UI staging, profiles, o
 hashes, declare `stage = false, hash = false` and use
 `store.writeUnstaged(...)`.
 
-### 3. Create the module in `main.lua`
+### 3. Create the module with storage and callbacks in `main.lua`
 
 ```lua
 local host = lib.createModule({
@@ -303,7 +305,7 @@ local function registerHooks(host, store)
 end
 ```
 
-### 6. Create the module in `main.lua`
+### 6. Wire the complete module in `main.lua`
 
 ```lua
 local data = import("mods/data.lua")
@@ -327,7 +329,7 @@ local host = lib.createModule({
 host.tryActivate()
 ```
 
-This is the main module export.
+This is the final `main.lua` module wiring shape.
 
 Framework uses it for coordinated modules. Standalone hosting uses it for module windows and menu items.
 
@@ -474,5 +476,6 @@ That lets LuaLS infer the author `session` and `host` types through
 After this guide:
 
 1. Read [MODULE_AUTHORING.md](MODULE_AUTHORING.md) for the fuller authoring contract.
-2. Use [API.md](../API.md) when you need exact function names and behavior.
-3. Use the template source files as the concrete code reference.
+2. Use [capabilities/README.md](capabilities/README.md) when you need a focused guide for managed state, widgets, hooks, mutations, overlays, integrations, or game-object state.
+3. Use [API.md](../../API.md) when you need exact function names and behavior.
+4. Use the template source files as the concrete code reference.

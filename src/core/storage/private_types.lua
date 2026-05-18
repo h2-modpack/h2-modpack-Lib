@@ -16,6 +16,23 @@ local function NormalizeInteger(node, value)
     return num
 end
 
+local function GetStringMaxLen(node)
+    local maxLen = math.floor(tonumber(node._maxLen or node.maxLen) or 256)
+    if maxLen < 1 then
+        return 256
+    end
+    return maxLen
+end
+
+local function NormalizeString(node, value)
+    local text = value ~= nil and tostring(value) or (node.default or "")
+    local maxLen = GetStringMaxLen(node)
+    if #text > maxLen then
+        return string.sub(text, 1, maxLen)
+    end
+    return text
+end
+
 StorageTypes.bool = {
     valueKind = "bool",
     validate = function(node, prefix)
@@ -31,6 +48,9 @@ StorageTypes.bool = {
     end,
     fromHash = function(_, str)
         return str == "1"
+    end,
+    isHashTokenValid = function(_, str)
+        return str == "0" or str == "1"
     end,
     packWidth = function(_)
         return 1
@@ -65,6 +85,9 @@ StorageTypes.int = {
     fromHash = function(node, str)
         return NormalizeInteger(node, tonumber(str))
     end,
+    isHashTokenValid = function(_, str)
+        return type(str) == "string" and string.match(str, "^-?%d+$") ~= nil
+    end,
     packWidth = function(node)
         if type(node.width) == "number" and node.width >= 1 then
             return math.floor(node.width)
@@ -89,15 +112,26 @@ StorageTypes.string = {
         end
         node._maxLen = math.floor(tonumber(node.maxLen) or 256)
         if node._maxLen < 1 then node._maxLen = 256 end
+        if node.default ~= nil and #node.default > node._maxLen then
+            logging.violate(
+                "storage.invalid_default",
+                "%s: string default length must not exceed maxLen %d",
+                prefix,
+                node._maxLen
+            )
+        end
     end,
     normalize = function(node, value)
-        return value ~= nil and tostring(value) or (node.default or "")
+        return NormalizeString(node, value)
     end,
-    toHash = function(_, value)
-        return tostring(value or "")
+    toHash = function(node, value)
+        return NormalizeString(node, value)
     end,
     fromHash = function(node, str)
-        return str ~= nil and tostring(str) or (node.default or "")
+        return NormalizeString(node, str)
+    end,
+    isHashTokenValid = function(_, str)
+        return str ~= nil
     end,
 }
 
@@ -122,6 +156,9 @@ StorageTypes.packedInt = {
     end,
     fromHash = function(node, str)
         return NormalizeInteger(node, tonumber(str))
+    end,
+    isHashTokenValid = function(_, str)
+        return type(str) == "string" and string.match(str, "^-?%d+$") ~= nil
     end,
     packWidth = function(node)
         if type(node.width) == "number" and node.width >= 1 and node.width <= 32 then
@@ -182,6 +219,9 @@ StorageTypes.table = {
     end,
     fromHash = function(node, str)
         return storage.table.DeserializeTableValue(node, str)
+    end,
+    isHashTokenValid = function(node, str)
+        return storage.table.IsSerializedTableValue(node, str)
     end,
 }
 

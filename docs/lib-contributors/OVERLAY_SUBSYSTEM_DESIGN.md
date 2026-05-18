@@ -265,14 +265,16 @@ After-hook subscriptions are observers:
 - They cannot alter arguments or return values.
 - They do not replace normal hook registration.
 
-The event payload starts with:
+The event payload includes:
 
 ```lua
 event.args
 event.result
+event.results
 ```
 
-The implementation should not block a future `event.results` shape for multi-return hooks.
+`event.result` is the first return value convenience field. `event.results`
+contains the full return-value array for multi-return hooks.
 
 ## Hot Reload And Rollback
 

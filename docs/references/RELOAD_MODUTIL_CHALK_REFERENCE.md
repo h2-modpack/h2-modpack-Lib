@@ -6,7 +6,7 @@ It is written for two audiences:
 - humans maintaining the modpack
 - future agentic tools that should not have to rediscover these library semantics from plugin source
 
-For the hot-reload contract of `adamant-ModpackLib`, `adamant-ModpackFramework`, coordinator shells, and modules built on top of these libraries, see [HOT_RELOAD_ARCHITECTURE.md](HOT_RELOAD_ARCHITECTURE.md).
+For the hot-reload contract of `adamant-ModpackLib`, `adamant-ModpackFramework`, coordinator shells, and modules built on top of these libraries, see [HOT_RELOAD_ARCHITECTURE.md](../lib-contributors/HOT_RELOAD_ARCHITECTURE.md).
 
 ## Scope
 
@@ -44,7 +44,7 @@ These are the main source files this document is based on:
 
 This file documents third-party library behavior.
 
-The repo-specific hot-reload model built on top of those behaviors is documented in [HOT_RELOAD_ARCHITECTURE.md](HOT_RELOAD_ARCHITECTURE.md).
+The repo-specific hot-reload model built on top of those behaviors is documented in [HOT_RELOAD_ARCHITECTURE.md](../lib-contributors/HOT_RELOAD_ARCHITECTURE.md).
 
 ---
 
@@ -524,7 +524,7 @@ end)
 
 If the plugin has no first-load-only setup, use `loader.load(nil, init)` instead.
 
-For the repo-specific module and coordinator patterns built on top of these libraries, see [HOT_RELOAD_ARCHITECTURE.md](HOT_RELOAD_ARCHITECTURE.md).
+For the repo-specific module and coordinator patterns built on top of these libraries, see [HOT_RELOAD_ARCHITECTURE.md](../lib-contributors/HOT_RELOAD_ARCHITECTURE.md).
 
 ## Guidance For Future Agents
 
@@ -534,7 +534,7 @@ If you are an agent reading this later, assume the following unless local repo c
 - `once_loaded.game(...)` is a readiness gate, not a lifecycle system
 - `chalk.auto(...)` returns a fresh wrapper around persisted config each reload; that is normal
 - do not claim ModUtil deduplicates wraps unless you have new source evidence
-- if you need the repo's stack contract rather than raw library behavior, read [HOT_RELOAD_ARCHITECTURE.md](HOT_RELOAD_ARCHITECTURE.md)
+- if you need the repo's stack contract rather than raw library behavior, read [HOT_RELOAD_ARCHITECTURE.md](../lib-contributors/HOT_RELOAD_ARCHITECTURE.md)
 - when reviewing hot reload behavior, separate:
   - plugin file reload
   - game script import milestones

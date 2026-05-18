@@ -58,6 +58,13 @@ function hashingPublic.fromHash(node, str)
     return storageType.fromHash(node, str)
 end
 
+---@param node StorageNode|PackedBitNode
+---@param str string|nil
+---@return boolean
+function hashingPublic.isHashTokenValid(node, str)
+    return storageService.isHashTokenValid(node, str)
+end
+
 ---@param packed number|nil
 ---@param offset number|nil
 ---@param width number|nil

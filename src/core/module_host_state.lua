@@ -17,7 +17,7 @@ local HostState = runtime.moduleHost.hostState
 local hostState = {}
 
 function hostState.get(host)
-    return type(host) == "table" and HostState[host] or nil
+    return HostState[host]
 end
 
 function hostState.set(host, state)
@@ -25,7 +25,7 @@ function hostState.set(host, state)
 end
 
 function hostState.getLiveHost(pluginGuid)
-    return type(pluginGuid) == "string" and pluginGuid ~= "" and liveHosts[pluginGuid] or nil
+    return liveHosts[pluginGuid]
 end
 
 function hostState.setLiveHost(pluginGuid, host)

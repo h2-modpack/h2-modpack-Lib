@@ -8,26 +8,46 @@ This guide describes the supported module contract in Lib:
 
 ## Lib Surface
 
-Module code should use:
+Common module author surfaces:
 - `lib.config`
 - `lib.createModule(...)`
-- `lib.tryCreateModule(...)`
+- `lib.widgets.*`
+- `lib.nav.*`
+- `lib.imguiHelpers.*`
+
+Standalone modules also use:
 - `lib.standaloneHost(...)`
-- `lib.getLiveModuleHost(...)`
-- `lib.coordinator.isRegistered(...)`
-- `lib.resetStorageToDefaults(...)`
+- `lib.standaloneUiBridge(...)`
+
+Use runtime behavior APIs only when the module owns that kind of behavior:
 - `lib.hooks.*`
 - `lib.overlays.*`
 - `lib.integrations.*`
 - `lib.gameObject.*`
-- `lib.hashing.*`
 - `lib.mutation.*`
-- `lib.coordinator.*`
-- `lib.imguiHelpers.*`
-- `lib.widgets.*`
-- `lib.nav.*`
 
-Use the namespaced API directly.
+Pack, Framework, migration, and advanced storage plumbing may also use:
+- `lib.tryCreateModule(...)`
+- `lib.getLiveModuleHost(...)`
+- `lib.coordinator.*`
+- `lib.resetStorageToDefaults(...)`
+- `lib.hashing.*`
+
+Use the namespaced API directly. Normal module code should keep the author host
+returned by `lib.createModule(...)` and should not reach through
+`lib.getLiveModuleHost(...)` unless it is doing host/framework plumbing.
+
+## Capability Guides
+
+Use focused capability guides for feature-level authoring details:
+
+- [capabilities/MANAGED_STATE.md](capabilities/MANAGED_STATE.md)
+- [capabilities/WIDGETS.md](capabilities/WIDGETS.md)
+- [capabilities/HOOKS.md](capabilities/HOOKS.md)
+- [capabilities/MUTATIONS.md](capabilities/MUTATIONS.md)
+- [capabilities/OVERLAYS.md](capabilities/OVERLAYS.md)
+- [capabilities/INTEGRATIONS.md](capabilities/INTEGRATIONS.md)
+- [capabilities/GAME_OBJECT_STATE.md](capabilities/GAME_OBJECT_STATE.md)
 
 ## Basic Module Shape
 
@@ -154,146 +174,30 @@ Framework behavior:
 
 ## Store and State Rules
 
-After store creation:
-- use `store.read(alias)` for persisted runtime state
-- use the callback-provided `session` for staged UI state
-- keep raw Chalk config local to `main.lua`
+For the focused state guide, read [capabilities/MANAGED_STATE.md](capabilities/MANAGED_STATE.md).
 
-Draw code should usually read from:
-- `session.view`
+Module construction creates two author-facing state handles:
 
-Runtime/gameplay code should usually read from:
-- `store.read(...)`
+- draw code receives `session` for staged UI reads and writes
+- runtime callbacks receive `store` for committed gameplay reads
 
-Host/framework plumbing owns built-in state changes:
-- `Enabled` is toggled by Framework or the standalone host
-- `DebugMode` is toggled by Framework or the standalone host
+Raw Chalk config should stay local to `main.lua`. Host/framework plumbing owns
+commit, reload, hash/profile import, and config flush behavior.
 
-Hash/profile plumbing should stage arbitrary decoded aliases through:
-- `session.write(alias, value)`
-- `session._flushToConfig()`
+Storage roots live on `definition.storage`. Normal roots persist, stage, and
+hash by default. Use `persist = false, hash = false` for transient session-only
+UI state, and `stage = false, hash = false` for runtime-cache values that are
+read and written through `store`.
 
-Draw code stages schema-backed values through `session`. Under the host contract, draw callbacks receive an author session with:
-- `session.view`
-- `session.read(alias)`
-- `session.write(alias, value)`
-- `session.reset(alias)`
+Lib injects `Enabled` and `DebugMode` into every prepared definition. Do not
+declare them in module storage or `config.lua`.
 
-Use `store.read(...)` from runtime/gameplay code for persisted values. Use `session` for transient aliases and UI edits.
-
-## Storage Authoring
-
-### Persisted roots
-
-```lua
-{ type = "int", alias = "Count", default = 3, min = 1, max = 9 }
-{ type = "string", alias = "Mode", default = "Vanilla", maxLen = 32 }
-```
-
-### Transient roots
-
-```lua
-{ type = "string", alias = "FilterText", persist = false, hash = false, default = "", maxLen = 64 }
-```
-
-Rules:
-- `alias` is the store/session key and persisted backing key
-- aliases are direct flat storage identifiers
-- normal roots persist, stage, and hash by default
-- `persist = false` roots are session-only
-- `stage = false` roots read through `store.read(...)` and write through `store.writeUnstaged(...)`
-- `hash = false` roots are excluded from hash/profile serialization
-- `hash = true` requires both `persist = true` and `stage = true`
-
-Lib injects these built-in aliases into every prepared definition:
-
-| Alias | Declaration | Purpose |
-| --- | --- | --- |
-| `Enabled` | `{ type = "bool", alias = "Enabled", default = false }` | Module behavior toggle |
-| `DebugMode` | `{ type = "bool", alias = "DebugMode", default = false, hash = false }` | Diagnostic toggle |
-
-Do not declare `Enabled` or `DebugMode` in module storage or `config.lua`.
-
-Common shapes:
-
-| Declaration | Use case |
-| --- | --- |
-| omitted flags | ordinary persisted module setting |
-| `persist = false, hash = false` | transient UI state such as filters or active tabs |
-| `stage = false, hash = false` | persistent runtime cache read through `store.read(...)` and written through `store.writeUnstaged(...)` |
-| `hash = false` | persisted UI preference that should not affect profiles or shared hashes |
-
-### Packed storage
-
-Use `packedInt` when you need alias-addressable packed children:
-
-```lua
-{
-    type = "packedInt",
-    alias = "PackedAphrodite",
-    bits = {
-        { alias = "AttackBanned", offset = 0, width = 1, type = "bool", default = false },
-        { alias = "RarityOverride", offset = 1, width = 2, type = "int", default = 0 },
-    },
-}
-```
-
-If the module treats the packed value as a raw mask, a plain root `int` is enough.
-
-### Table storage
-
-Use `table` for a compact ordered list of rows where every row shares the same schema:
-
-```lua
-{
-    type = "table",
-    alias = "Tiers",
-    minRows = 0,
-    maxRows = 10,
-    defaultRows = 1,
-    row = {
-        { type = "bool", alias = "Enabled", default = true },
-        { type = "int", alias = "Limit", default = 2, min = 0, max = 5 },
-        {
-            type = "packedInt",
-            alias = "PackedChoices",
-            bits = {
-                { alias = "ChoiceA", offset = 0, width = 1, type = "bool", default = false },
-                { alias = "ChoiceMode", offset = 1, width = 2, type = "int", default = 0 },
-            },
-        },
-    },
-}
-```
-
-Rules:
-- the table root owns `persist`, `stage`, and `hash`
-- row aliases are scoped to one row and do not leak into `session.read(...)`
-- rows are compact ordered arrays with no holes
-- `defaultRows` creates the default row count; each row uses the row field defaults
-- packed child aliases work inside a row just like packed child aliases work globally
-
-Access:
-
-```lua
-local tiers = session.table("Tiers")
-tiers:append({ Enabled = true, ChoiceA = true })
-tiers:write(1, "ChoiceMode", 2)
-local mode = tiers:read(1, "ChoiceMode")
-
-local row = tiers:rowHandle(1)
-row.write("ChoiceMode", 2)
-local selected = row.read("ChoiceMode")
-```
-
-Use `store.table(alias)` for read-only runtime access and `session.table(alias)` for staged UI edits.
-Table handles are object methods, so call row operations with colon syntax:
-`tiers:read(rowIndex, alias)`, `tiers:write(rowIndex, alias, value)`, and `tiers:append(rowValues)`.
-Row handles are positional cursors into the current table rows. They expose `read(alias)` and
-`getAliasSchema(alias)`, and session-backed row handles also expose `write(alias, value)` and
-`reset(alias)`.
+Use [capabilities/MANAGED_STATE.md](capabilities/MANAGED_STATE.md) for storage
+axes, table roots, packed roots, session actions, and commit observers.
 
 ## Immediate-Mode UI
+
+For the focused widget and navigation guide, read [capabilities/WIDGETS.md](capabilities/WIDGETS.md).
 
 Module UI is authored directly in Lua draw functions.
 
@@ -323,88 +227,27 @@ Framework Quick Setup reads:
 
 ## Runtime Hooks
 
-Modules that register ModUtil path hooks should do that through `lib.hooks.*`.
+For the focused hooks guide, read [capabilities/HOOKS.md](capabilities/HOOKS.md).
 
-Typical shape:
+Modules that register ModUtil path hooks should declare them inside
+`registerHooks(host, store)` and pass that callback to `lib.createModule(...)`.
+Ownerless `lib.hooks.*` calls inside the callback are scoped to the activating
+module's `pluginGuid`, so hook files do not need to manage owner tokens.
 
-```lua
-local function registerHooks(host, store)
-    lib.hooks.Wrap("GetEligibleLootNames", function(base, ...)
-        local result = base(...)
-        if host.isEnabled() and store.read("FeatureEnabled") then
-            -- inspect or transform the wrapped call here
-        end
-        return result
-    end)
-end
-
-local data = import("mods/data.lua")
-local ui = import("mods/ui.lua").bind(data)
-
-local host = lib.createModule({
-    pluginGuid = PLUGIN_GUID,
-    config = config,
-    definition = {
-        modpack = PACK_ID,
-        id = MODULE_ID,
-        name = "Example Module",
-        storage = data.buildStorage(),
-    },
-    registerHooks = registerHooks,
-    drawTab = ui.drawTab,
-    drawQuickContent = ui.drawQuickContent,
-})
-host.tryActivate()
-```
-
-Rules:
-- declare hook sites inside `registerHooks(host, store)`
-- call `host.tryActivate()` after construction
-- use the keyed overload when one module needs several hooks on the same path
+Use keyed overloads when one module needs several hooks on the same path.
 
 ## Mutation Lifecycle
 
-Register mutation callbacks only when the module actually mutates live run data.
+For the focused mutation guide, read [capabilities/MUTATIONS.md](capabilities/MUTATIONS.md).
 
-Supported mutation shape:
-- patch plan: `registerPatchMutation(plan, host, store)`
+Register `registerPatchMutation(plan, host, store)` only when the module mutates
+live run data. The callback describes the mutation plan for an enabled module.
+Lib owns apply/revert, enable/disable, settings commit, profile load, hot reload,
+and rollback behavior through the live host.
 
-Patch-plan example:
-
-```lua
-local data = import("mods/data.lua")
-local ui = import("mods/ui.lua").bind(data)
-
-local host = lib.createModule({
-    pluginGuid = PLUGIN_GUID,
-    config = config,
-    definition = {
-        modpack = PACK_ID,
-        id = MODULE_ID,
-        name = "Example Module",
-        storage = data.buildStorage(),
-    },
-    registerPatchMutation = function(plan, host, store)
-        plan:set(SomeTable, "Enabled", true)
-        plan:appendUnique(SomeTable, "Pool", "NewEntry")
-        host.logIf("Built patch plan")
-    end,
-    drawTab = ui.drawTab,
-})
-host.tryActivate()
-```
-
-Lib applies and reverts these mutations through the live host. Module authors
-normally provide the callbacks and let `createModule(...)` wire the lifecycle.
-
-Patch plans are the only supported run-data mutation API. Manual apply/revert
-callbacks are not supported because Lib cannot inspect or reliably restore
-arbitrary side effects. If a real mutation cannot be expressed by the current
-plan surface, add a first-class patch-plan operation instead.
-
-`plan:transform(tbl, key, fn)` tracks and restores only `tbl[key]`. The callback
-receives a copy of the current value and must return the replacement value for
-that key. Mutating unrelated global state inside the callback is unsupported.
+Patch plans are the only supported run-data mutation API. If a real mutation
+cannot be expressed by the current plan surface, add a first-class patch-plan
+operation instead of bypassing the tracked lifecycle.
 
 ## Coordinated Modules
 

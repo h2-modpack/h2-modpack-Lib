@@ -45,30 +45,33 @@ is optional and marks modules that participate in Framework coordination.
 
 ## Docs
 
-- [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)
-  Start here for the core concepts, file roles, and first module flow.
+Start with the route that matches what you are doing.
+
+Module authors:
+- [docs/module-authors/GETTING_STARTED.md](docs/module-authors/GETTING_STARTED.md)
+  First module flow, file roles, and core concepts.
+- [docs/module-authors/MODULE_AUTHORING.md](docs/module-authors/MODULE_AUTHORING.md)
+  Full authoring contract for storage, sessions, lifecycle, hooks, overlays, mutations, and hosting.
+- [docs/module-authors/capabilities/README.md](docs/module-authors/capabilities/README.md)
+  Focused guides for managed state, widgets, hooks, mutations, overlays, integrations, and game-object state.
 - [API.md](API.md)
   Public namespaces, functions, and data contracts.
-- [docs/MODULE_AUTHORING.md](docs/MODULE_AUTHORING.md)
-  Deeper authoring guide for storage, sessions, lifecycle, and hosting.
-- [docs/WIDGETS.md](docs/WIDGETS.md)
-  Widget and navigation helpers for module UIs.
-- [docs/UI_PERFORMANCE.md](docs/UI_PERFORMANCE.md)
-  Render-path guidance for responsive ImGui screens.
-- [docs/IMGUI_LUA_REFERENCE.md](docs/IMGUI_LUA_REFERENCE.md)
-  Notes on the Dear ImGui Lua binding used by the stack.
-- [docs/RELOAD_MODUTIL_CHALK_REFERENCE.md](docs/RELOAD_MODUTIL_CHALK_REFERENCE.md)
-  Third-party stack reference for ReLoad, ModUtil, and Chalk behavior.
-- [docs/HOT_RELOAD_ARCHITECTURE.md](docs/HOT_RELOAD_ARCHITECTURE.md)
-  Stack hot-reload contract for Lib, Framework, Core, and coordinated modules.
-- [docs/MIGRATING_MUTATIONS.md](docs/MIGRATING_MUTATIONS.md)
-  Migration notes for the patch-only runtime mutation API.
-- [docs/MIGRATING_PLUGIN_GUID_RUNTIME.md](docs/MIGRATING_PLUGIN_GUID_RUNTIME.md)
-  Migration notes for ownerless module lifecycle identity.
-- [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md)
-  Accepted architecture boundaries and runtime constraints.
+
+Lib contributors:
 - [CONTRIBUTING.md](CONTRIBUTING.md)
   Contributor expectations for changing the public Lib contract.
+- [docs/lib-contributors/LIB_INTERNALS.md](docs/lib-contributors/LIB_INTERNALS.md)
+  Internal composition, dependency flow, runtime anchors, and service-surface rules.
+- [docs/lib-contributors/HOT_RELOAD_ARCHITECTURE.md](docs/lib-contributors/HOT_RELOAD_ARCHITECTURE.md)
+  Stack hot-reload contract for Lib, Framework, Core, and coordinated modules.
+- [docs/lib-contributors/TESTING.md](docs/lib-contributors/TESTING.md)
+  Lib and repo-level validation workflow.
+
+Reference and historical notes:
+- [docs/README.md](docs/README.md)
+  Full docs map.
+- [docs/references/KNOWN_LIMITATIONS.md](docs/references/KNOWN_LIMITATIONS.md)
+  Accepted architecture boundaries and runtime constraints.
 
 ## Public Surface
 
@@ -96,7 +99,7 @@ Common top-level helpers:
 Most authors start with `lib.createModule(...)`.
 Pack orchestrators that should skip invalid modules instead of stopping sibling
 modules can use `lib.tryCreateModule(...)` plus `host.tryActivate()`.
-See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for the recommended project shape.
+See [docs/module-authors/GETTING_STARTED.md](docs/module-authors/GETTING_STARTED.md) for the recommended project shape.
 
 ## Validation
 

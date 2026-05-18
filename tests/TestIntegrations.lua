@@ -166,9 +166,22 @@ function TestIntegrations:testHostInstallStagesProvidersUntilCommit()
     local previous = { value = "previous" }
     local replacement = { value = "replacement" }
     self.public.register(id, providerId, previous)
+    local definition = self.harness.moduleHost.prepareDefinition({}, {
+        id = "IntegrationStageHost",
+        name = "Integration Stage Host",
+        storage = {},
+    })
+    local state = self.harness.moduleState.create({}, definition)
+    local host = self.harness.moduleHost.create({
+        pluginGuid = "integration-stage-host",
+        definition = definition,
+        store = state.store,
+        session = state.session,
+        drawTab = function() end,
+    })
 
     local observedDuringInstall = nil
-    local receipt = self.integrations.installForHost({}, function()
+    local receipt = self.integrations.installForHost(host, function()
         self.public.register(id, providerId, replacement)
         observedDuringInstall = self.public.get(id)
     end)

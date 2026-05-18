@@ -403,6 +403,18 @@ function storage.NormalizeStorageValue(node, value)
     return value
 end
 
+--- Checks whether a serialized hash/profile token is syntactically valid for a node.
+---@param node StorageNode|PackedBitNode|nil Storage node whose type-specific hash grammar should be used.
+---@param str string|nil Serialized hash token.
+---@return boolean valid True when the token can be decoded without falling back because of malformed syntax.
+function storage.isHashTokenValid(node, str)
+    local storageType = node and StorageTypes and node.type and StorageTypes[node.type] or nil
+    if storageType and storageType.isHashTokenValid ~= nil then
+        return storageType.isHashTokenValid(node, str)
+    end
+    return str ~= nil
+end
+
 --- Reads a declared alias through a backend that owns root-value storage.
 ---@param aliasNodes table<string, StorageNode|PackedBitNode>
 ---@param backend table

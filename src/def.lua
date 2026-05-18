@@ -620,6 +620,12 @@ end
 function lib.hashing.fromHash(node, str)
 end
 
+---@param node AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode
+---@param str string?
+---@return boolean valid
+function lib.hashing.isHashTokenValid(node, str)
+end
+
 ---@param packed number?
 ---@param offset number?
 ---@param width number?

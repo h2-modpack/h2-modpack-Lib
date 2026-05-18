@@ -653,6 +653,11 @@ Encodes one storage value for hash/profile serialization.
 
 Decodes one storage value from hash/profile serialization.
 
+### `lib.hashing.isHashTokenValid(node, str)`
+
+Returns whether one serialized hash/profile token is syntactically valid for a prepared storage node.
+Use this at external hash/profile import boundaries before calling `fromHash(...)`.
+
 ### `lib.hashing.readPackedBits(packed, offset, width)`
 
 Raw numeric bit extraction helper.
@@ -796,6 +801,7 @@ Exports:
 - `lib.imguiHelpers.ImGuiCol`
 - `lib.imguiHelpers.ImGuiTreeNodeFlags`
 - `lib.imguiHelpers.unpackColor(color)`
+- `lib.imguiHelpers.textColored(ui, color, text)`
 
 The enum tables normalize ReturnOfModding ImGui constants that are passed as raw integers in Lua.
 

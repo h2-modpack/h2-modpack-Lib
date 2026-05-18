@@ -70,6 +70,55 @@ function TestStorageValidation:testInvalidTableRowAliasFails()
     end)
 end
 
+function TestStorageValidation:testStringDefaultLongerThanMaxLenFails()
+    lu.assertErrorMsgContains("string default length must not exceed maxLen 3", function()
+        prepareDefinition(self.harness, {
+            id = "StringDefaultMaxLen",
+            name = "String Default MaxLen",
+            storage = {
+                { type = "string", alias = "Name", default = "abcd", maxLen = 3 },
+            },
+        })
+    end)
+end
+
+function TestStorageValidation:testStringMaxLenNormalizesStorageAndHashValues()
+    local definition = prepareDefinition(self.harness, {
+        id = "StringMaxLen",
+        name = "String MaxLen",
+        storage = {
+            { type = "string", alias = "Name", default = "", maxLen = 3 },
+        },
+    })
+    local node = self.storage.getAliases(definition.storage).Name
+
+    lu.assertEquals(self.storage.NormalizeStorageValue(node, "abcdef"), "abc")
+    lu.assertEquals(self.hashing.toHash(node, "abcdef"), "abc")
+    lu.assertEquals(self.hashing.fromHash(node, "abcdef"), "abc")
+end
+
+function TestStorageValidation:testStringMaxLenNormalizesTableRows()
+    local definition = prepareDefinition(self.harness, {
+        id = "TableStringMaxLen",
+        name = "Table String MaxLen",
+        storage = {
+            {
+                type = "table",
+                alias = "Rows",
+                defaultRows = 1,
+                row = {
+                    { type = "string", alias = "Note", default = "", maxLen = 4 },
+                },
+            },
+        },
+    })
+    local _, session = createModuleState(self.harness, {}, definition)
+    local rows = session.table("Rows")
+
+    lu.assertTrue(rows:write(1, "Note", "abcdef"))
+    lu.assertEquals(rows:read(1, "Note"), "abcd")
+end
+
 function TestStorageValidation:testTransientRootRegistersAliasButNotPersistedRoots()
     local storage = {
         { type = "bool", alias = "Enabled", default = false },

@@ -1,6 +1,12 @@
-# Subsystem Migration Notes
+# Lib Internals
 
-Working rules for migrating Lib subsystems from the broad internal bus toward explicit dependency composition.
+Contributor rules for Lib's internal composition model.
+
+Lib uses explicit dependency composition rather than a broad internal bus.
+`core/init.lua` is the composition root: it constructs or imports subsystem
+services, captures the service objects that later subsystems need, and passes
+targeted dependencies through import args. Persistent globals are reserved for
+hot-reload-stable runtime anchors.
 
 ## Returned Service Surface
 
@@ -34,7 +40,7 @@ end
 - Module host live-host, pending-rebuild, and weak host-state tables are activation anchors; keep the tables under `runtime.moduleHost`, but keep lifecycle behavior on the returned `moduleHost` service.
 - Standalone UI bridges and GUI-close callbacks are runtime anchors because external callers keep their handles; keep live standalone runtimes under `runtime.standalone`, and make callbacks late-read that table.
 
-## Retired Internal Shims
+## Legacy Internal Shims
 
 - The old Lib internal namespace has been retired.
 - Do not add new compatibility assignments for ordinary services.
@@ -50,8 +56,8 @@ end
 
 ## Tests
 
-- Migrate tests with the subsystem.
-- A subsystem is not clean until its tests stop depending on the old internal bus for that subsystem.
+- Tests should mirror the subsystem dependency graph where practical.
+- A subsystem is not clean if its tests depend on retired internal-bus surfaces for that subsystem.
 - Do not add production APIs only for tests.
 - If tests need alternate dependency behavior, mock the import or dependency in the test harness.
 - Use grep to verify retired names are gone from `src` and `tests`.

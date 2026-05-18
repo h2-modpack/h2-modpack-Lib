@@ -117,12 +117,12 @@ local function disposeReceipt(receipt)
 end
 
 function overlays.installForHost(host, register, authorHost, store)
-    if type(host) ~= "table" then
-        logging.violate("overlays.invalid_registration", "overlays.installForHost: host is required")
+    local state = hostState.get(host)
+    if not state then
+        logging.violate("overlays.invalid_registration", "overlays.installForHost: expected managed module host state")
     end
 
-    local state = hostState.get(host)
-    local pluginGuid = state and state.pluginGuid or nil
+    local pluginGuid = state.pluginGuid
     if type(pluginGuid) ~= "string" or pluginGuid == "" then
         logging.violate("overlays.invalid_registration", "overlays.installForHost: host pluginGuid is required")
     end

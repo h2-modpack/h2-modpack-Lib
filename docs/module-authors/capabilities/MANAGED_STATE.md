@@ -1,0 +1,208 @@
+# Managed State
+
+Managed state is the core Lib feature most module code builds on. It gives each module:
+
+- a validated storage schema
+- a persisted runtime `store`
+- a staged UI `session`
+- built-in `Enabled` and `DebugMode` aliases
+- hash/profile participation for stable settings
+- table and packed-value helpers
+
+The normal entrypoint is `lib.createModule(...)`. It prepares the definition, creates the store/session pair, and passes the right handle to each callback.
+
+## State Surfaces
+
+Use each state surface for one job:
+
+| Surface | Use it for | Where it appears |
+| --- | --- | --- |
+| `store` | persisted runtime reads and unstaged runtime-cache writes | `registerHooks`, `registerPatchMutation`, `registerIntegrations`, `registerOverlays` |
+| `session` | staged UI reads/writes | `drawTab`, `drawQuickContent` |
+| `config` | Chalk-owned backing table | local to `main.lua` |
+
+Draw code should stage changes through `session`. Gameplay, hooks, overlays, integrations, and mutations should read committed values through `store`.
+
+```lua
+function ui.drawTab(imgui, session, host)
+    lib.widgets.checkbox(imgui, session, "FeatureEnabled", {
+        label = "Enable Feature",
+    })
+end
+
+function logic.registerHooks(host, store)
+    lib.hooks.Wrap("SomeGameFunction", function(base, ...)
+        if host.isEnabled() and store.read("FeatureEnabled") then
+            -- Runtime behavior reads committed state.
+        end
+        return base(...)
+    end)
+end
+```
+
+Host/framework plumbing owns commit, reload, hash/profile import, and config flush behavior. Module draw callbacks receive the author-facing session, not the private full session.
+
+## Storage Roots
+
+Storage lives on `definition.storage`:
+
+```lua
+function data.buildStorage()
+    return {
+        { type = "bool", alias = "FeatureEnabled", default = false },
+        { type = "string", alias = "Mode", default = "Vanilla", maxLen = 32 },
+        { type = "string", alias = "FilterText", persist = false, hash = false, default = "", maxLen = 64 },
+    }
+end
+```
+
+Rules:
+
+- `alias` is the storage, session, widget, and persisted config key.
+- Normal roots persist, stage, and hash by default.
+- `persist = false, hash = false` creates session-only transient UI state.
+- `stage = false, hash = false` creates persisted runtime-cache state outside the UI/profile/hash surface.
+- `hash = false` keeps a persisted staged value out of hash/profile serialization.
+- `hash = true` requires both `persist = true` and `stage = true`.
+
+Lib injects these aliases into every prepared module:
+
+| Alias | Purpose |
+| --- | --- |
+| `Enabled` | module behavior toggle |
+| `DebugMode` | diagnostic toggle, excluded from hashes/profiles |
+
+Do not declare `Enabled` or `DebugMode` yourself.
+
+## Runtime Cache Values
+
+Use runtime-cache storage for module-owned intent that should survive reloads or restarts but should not appear in UI staging, profiles, or hashes:
+
+```lua
+{
+    type = "bool",
+    alias = "RecordingActive",
+    default = false,
+    stage = false,
+    hash = false,
+}
+```
+
+Read and write it through `store`:
+
+```lua
+store.writeUnstaged("RecordingActive", true)
+local active = store.read("RecordingActive") == true
+```
+
+`store.writeUnstaged(...)` only accepts aliases declared with `stage = false`.
+
+## Tables
+
+Use `type = "table"` for compact ordered rows with one shared row schema:
+
+```lua
+{
+    type = "table",
+    alias = "Tiers",
+    minRows = 0,
+    maxRows = 10,
+    defaultRows = 1,
+    row = {
+        { type = "bool", alias = "Enabled", default = true },
+        { type = "int", alias = "Limit", default = 2, min = 0, max = 5 },
+    },
+}
+```
+
+Table rules:
+
+- The table root owns `persist`, `stage`, and `hash`.
+- Row aliases are scoped to one row and do not leak into `session.read(...)`.
+- Rows are compact ordered arrays with no row ids or holes.
+- `defaultRows` creates the default row count.
+
+Use `session.table(alias)` for staged UI edits:
+
+```lua
+local tiers = session.table("Tiers")
+tiers:append({ Enabled = true, Limit = 3 })
+tiers:write(1, "Limit", 4)
+local limit = tiers:read(1, "Limit")
+```
+
+Use `store.table(alias)` for read-only runtime access. Table handles use colon method syntax.
+
+## Packed Values
+
+Use `packedInt` when one numeric root should expose named child aliases:
+
+```lua
+{
+    type = "packedInt",
+    alias = "PackedFlags",
+    bits = {
+        { alias = "AttackBanned", offset = 0, width = 1, type = "bool", default = false },
+        { alias = "RarityOverride", offset = 1, width = 2, type = "int", default = 0 },
+    },
+}
+```
+
+Packed widgets can write child aliases through the same session. Lib handles repacking the root.
+
+## Session Actions
+
+Author sessions also expose action staging:
+
+- `session.stageAction(actionKey, value)`
+- `session.readAction(actionKey)`
+- `session.clearAction(actionKey)`
+- `session.hasActions()`
+
+Use actions for one-shot UI intent that should be observed by host/framework commit plumbing, not for ordinary persistent settings.
+
+Observe committed actions with `onSettingsCommitted(host, store, commit)`:
+
+```lua
+local function onSettingsCommitted(host, store, commit)
+    if commit.hasAction("ClearCache") then
+        local scope = commit.readAction("ClearCache")
+        host.logIf("Clearing cache for %s", tostring(scope))
+    end
+
+    if commit.hadConfigChanges() then
+        -- Rebuild derived state from committed store values here.
+    end
+end
+
+local host = lib.createModule({
+    pluginGuid = PLUGIN_GUID,
+    config = config,
+    definition = definition,
+    onSettingsCommitted = onSettingsCommitted,
+    drawTab = ui.drawTab,
+})
+host.tryActivate()
+```
+
+`commit` exposes:
+
+- `commit.readAction(actionKey)`
+- `commit.hasAction(actionKey)`
+- `commit.hasActions()`
+- `commit.hadConfigChanges()`
+
+Buttons can stage actions for this path through their `action` and `value`
+options. Actions are cleared after the commit pass.
+
+## Common Mistakes
+
+- Do not read transient aliases from `store`; they only live in `session`.
+- Do not write raw Chalk config from draw code.
+- Do not call private session flush/reload helpers from module UI.
+- Do not use session actions as persistent settings.
+- Do not put gameplay behavior in `ui.lua`; UI stages state, runtime code consumes committed state.
+
+See also:
+- [WIDGETS.md](WIDGETS.md)
+- [../../../API.md](../../../API.md)
