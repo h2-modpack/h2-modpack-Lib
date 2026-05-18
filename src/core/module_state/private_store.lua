@@ -1,9 +1,9 @@
 local deps = ...
 
-local internal = deps.internal
+local logging = deps.logging
 local storageInternal = deps.storage
 local values = deps.values
-local managedStoreState = deps.state.managedStores
+local managedStoreState = setmetatable({}, { __mode = "k" })
 local ClonePersistedValue = values.deepCopy
 local NormalizeStorageValue = storageInternal.NormalizeStorageValue
 
@@ -14,7 +14,7 @@ end
 local function writePersisted(store, alias, value)
     local state = store and managedStoreState[store] or nil
     if not state then
-        internal.violate("store.invalid_managed_store", "internal.store.writePersisted expects a managed store")
+        logging.violate("store.invalid_managed_store", "moduleState.writePersisted expects a managed store")
     end
     return state.write(alias, value)
 end
@@ -102,7 +102,7 @@ local function create(modConfig, backend, storage)
         readRoot = readRootNode,
         canRead = function(node, alias)
             if not node._persist and node._stage then
-                internal.violate(
+                logging.violate(
                     "store.invalid_read_surface",
                     "store.read: alias '%s' is staged-only; use session for UI-only state",
                     tostring(alias))
@@ -111,7 +111,7 @@ local function create(modConfig, backend, storage)
             return true
         end,
         onUnknownRead = function(alias)
-            internal.violate("store.unknown_read_alias", "store.read: unknown storage alias '%s'", tostring(alias))
+            logging.violate("store.unknown_read_alias", "store.read: unknown storage alias '%s'", tostring(alias))
         end,
     }
 
@@ -123,16 +123,16 @@ local function create(modConfig, backend, storage)
         end,
         canWrite = function(node, alias)
             if not node._persist and node._stage then
-                internal.violate(
+                logging.violate(
                     "store.invalid_write_surface",
-                    "internal.store.writePersisted: alias '%s' is staged-only; use session for UI-only state",
+                    "moduleState.writePersisted: alias '%s' is staged-only; use session for UI-only state",
                     tostring(alias))
                 return false
             end
             return true
         end,
         onUnknownWrite = function(alias)
-            internal.violate("store.unknown_write_alias", "internal.store.writePersisted: unknown storage alias '%s'",
+            logging.violate("store.unknown_write_alias", "moduleState.writePersisted: unknown storage alias '%s'",
                 tostring(alias))
         end,
     }
@@ -149,15 +149,15 @@ local function create(modConfig, backend, storage)
 
         local node = type(alias) == "string" and aliasNodes[alias] or nil
         if not node then
-            internal.violate("store.unknown_table_alias", "store.table: unknown storage alias '%s'", tostring(alias))
+            logging.violate("store.unknown_table_alias", "store.table: unknown storage alias '%s'", tostring(alias))
             return nil
         end
         if node.type ~= "table" or node._isBitAlias then
-            internal.violate("store.invalid_table_alias", "store.table: alias '%s' is not table storage", tostring(alias))
+            logging.violate("store.invalid_table_alias", "store.table: alias '%s' is not table storage", tostring(alias))
             return nil
         end
         if not node._persist and node._stage then
-            internal.violate("store.invalid_table_surface", "store.table: alias '%s' is staged-only; use session.table()",
+            logging.violate("store.invalid_table_surface", "store.table: alias '%s' is staged-only; use session.table()",
                 tostring(alias))
             return nil
         end
@@ -175,7 +175,7 @@ local function create(modConfig, backend, storage)
 
     function store.writeUnstaged(alias, value)
         if not unstagedAliases[alias] then
-            internal.violate(
+            logging.violate(
                 "store.invalid_unstaged_write",
                 "store.writeUnstaged: alias '%s' is not declared with stage = false",
                 tostring(alias)

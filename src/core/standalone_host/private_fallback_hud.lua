@@ -1,21 +1,28 @@
-local internal = AdamantModpackLib_Internal
-internal.fallbackHud = internal.fallbackHud or {}
+local deps = ...
+
+local moduleHost = deps.moduleHost
+local coordinator = deps.coordinator
+local overlays = deps.overlays
+local runtimes = deps.runtimes
+local state = deps.state
 
 local FALLBACK_OWNER = "adamant-lib.fallback-hud"
 local MARKER_TEXT = "Modded"
 
+local fallbackHud = {}
+
 local function isRuntimeUncoordinated(pluginGuid)
-    local moduleHost = public.getLiveModuleHost(pluginGuid)
-    if type(moduleHost) ~= "table" or type(moduleHost.getIdentity) ~= "function" then
+    local host = moduleHost.getLiveHost(pluginGuid)
+    if type(host) ~= "table" or type(host.getIdentity) ~= "function" then
         return false
     end
 
-    local identity = moduleHost.getIdentity() or {}
-    return not (identity.modpack and internal.coordinators[identity.modpack])
+    local identity = host.getIdentity() or {}
+    return not (identity.modpack and coordinator.isRegistered(identity.modpack))
 end
 
 local function shouldShowFallbackMarker()
-    for pluginGuid in pairs(internal.standaloneRuntimes or {}) do
+    for pluginGuid in pairs(runtimes) do
         if isRuntimeUncoordinated(pluginGuid) then
             return true
         end
@@ -23,28 +30,28 @@ local function shouldShowFallbackMarker()
     return false
 end
 
-function internal.fallbackHud.refreshMarker()
-    internal.overlays.dispatchCommit(FALLBACK_OWNER, {})
+function fallbackHud.refreshMarker()
+    overlays.dispatchCommit(FALLBACK_OWNER, {})
 end
 
-function internal.fallbackHud.createMarker()
-    if internal.fallbackHud._initialized then
+function fallbackHud.createMarker()
+    if state.initialized then
         return
     end
-    internal.fallbackHud._initialized = true
-    public.overlays.defineSystem(FALLBACK_OWNER, function(overlays)
-        overlays.createLine("marker", {
+    state.initialized = true
+    overlays.defineSystem(FALLBACK_OWNER, function(registry)
+        registry.createLine("marker", {
             componentName = "ModpackMark_StandaloneLib",
             region = "middleRightStack",
             order = 0,
             visible = shouldShowFallbackMarker,
             minWidth = 80,
         })
-        overlays.onCommit(function(ctx)
+        registry.onCommit(function(ctx)
             ctx.setLine("marker", MARKER_TEXT)
             ctx.refresh("marker")
         end)
     end)
 end
 
-return internal.fallbackHud
+return fallbackHud

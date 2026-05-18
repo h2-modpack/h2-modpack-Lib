@@ -1,7 +1,7 @@
 local deps = ...
 
 local chalk = deps.chalk
-local backendState = deps.state
+local backendCache = setmetatable({}, { __mode = "k" })
 
 local function getConfigBackend(config)
     if not chalk then
@@ -13,7 +13,7 @@ local function getConfigBackend(config)
         return nil
     end
 
-    local backend = backendState.cache[rawConfig]
+    local backend = backendCache[rawConfig]
     if backend then
         return backend
     end
@@ -98,7 +98,7 @@ local function getConfigBackend(config)
     end
 
     backend.rawConfig = rawConfig
-    backendState.cache[rawConfig] = backend
+    backendCache[rawConfig] = backend
     return backend
 end
 

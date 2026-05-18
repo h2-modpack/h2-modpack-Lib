@@ -1,46 +1,74 @@
 local lu = require('luaunit')
+local createLibHarness = require('tests/harness/create_lib_harness')
+local DefaultViolationPolicy = dofile('src/core/logging/policies.lua')
 
 TestLogging = {}
 
-function TestLogging:setUp()
-    self.previousPrint = print
-    self.lines = {}
-    print = function(msg)
-        table.insert(self.lines, msg)
+local ActiveLines = nil
+
+local function CaptureHarnessPrint(harness)
+    local previousPrint = harness.env.print
+    if ActiveLines ~= nil then
+        harness.env.print = function(msg)
+            ActiveLines[#ActiveLines + 1] = msg
+        end
+    end
+    return function()
+        harness.env.print = previousPrint
     end
 end
 
+local function WithLoggingPolicy(policy, callback)
+    local harness = createLibHarness({
+        importOverrides = {
+            ["core/logging/policies.lua"] = policy,
+        },
+    })
+    local restorePrint = CaptureHarnessPrint(harness)
+    local ok, err = pcall(callback, harness.logging, harness)
+    restorePrint()
+    if not ok then
+        error(err, 0)
+    end
+end
+
+function TestLogging:setUp()
+    self.harness = createLibHarness()
+    self.lines = {}
+    ActiveLines = self.lines
+    self.restorePrint = CaptureHarnessPrint(self.harness)
+end
+
 function TestLogging:tearDown()
-    print = self.previousPrint
-    AdamantModpackLib_Internal.violationPolicy["test.warn"] = nil
-    AdamantModpackLib_Internal.violationPolicy["test.debug"] = nil
-    AdamantModpackLib_Internal.violationPolicy["test.ignore"] = nil
-    AdamantModpackLib_Internal.violationPolicy["test.error"] = nil
-    AdamantModpackLib_Internal.violationPolicy["test.invalid"] = nil
-    lib.config.DebugMode = false
+    self.restorePrint()
+    self.restorePrint = nil
+    ActiveLines = nil
+    self.harness = nil
 end
 
 function TestLogging:testViolationWarnUsesPolicyId()
-    AdamantModpackLib_Internal.violationPolicy["test.warn"] = {
-        severity = "warn",
-        description = "Test warning policy.",
-    }
+    WithLoggingPolicy({
+        ["test.warn"] = {
+            severity = "warn",
+            description = "Test warning policy.",
+        },
+    }, function(activeLogging)
+        local severity, message = activeLogging.violate("test.warn", "hello %s", "world")
 
-    local severity, message = AdamantModpackLib_Internal.violate("test.warn", "hello %s", "world")
-
-    lu.assertEquals(severity, "warn")
-    lu.assertEquals(message, "[lib] test.warn: hello world")
-    lu.assertEquals(self.lines, { "[lib] test.warn: hello world" })
+        lu.assertEquals(severity, "warn")
+        lu.assertEquals(message, "[lib] test.warn: hello world")
+        lu.assertEquals(self.lines, { "[lib] test.warn: hello world" })
+    end)
 end
 
-function TestLogging:testViolationPolicyCarriesDescriptions()
-    local policy = AdamantModpackLib_Internal.violationPolicy["storage.hash_requires_persist"]
+function TestLogging.testViolationPolicyCarriesDescriptions()
+    local policy = DefaultViolationPolicy["storage.hash_requires_persist"]
 
     lu.assertEquals(policy.severity, "error")
     lu.assertStrContains(policy.description, "persisted")
 end
 
-function TestLogging:testViolationPolicyMatchesSourceCallSites()
+function TestLogging.testViolationPolicyMatchesSourceCallSites()
     local files = {
         "src/core/module_bootstrap/definition.lua",
         "src/core/game_object/game_object.lua",
@@ -76,13 +104,13 @@ function TestLogging:testViolationPolicyMatchesSourceCallSites()
         local handle = assert(io.open(path, "r"))
         local source = handle:read("*a")
         handle:close()
-        for id in string.gmatch(source, "internal%.violate%s*%(%s*[\"']([^\"']+)[\"']") do
-            lu.assertNotNil(AdamantModpackLib_Internal.violationPolicy[id], id)
+        for id in string.gmatch(source, "[%w_]+%.violate%s*%(%s*[\"']([^\"']+)[\"']") do
+            lu.assertNotNil(DefaultViolationPolicy[id], id)
         end
     end
 end
 
-function TestLogging:testViolationPolicyHasNoOrphanIds()
+function TestLogging.testViolationPolicyHasNoOrphanIds()
     local files = {
         "src/core/module_bootstrap/definition.lua",
         "src/core/game_object/game_object.lua",
@@ -119,68 +147,74 @@ function TestLogging:testViolationPolicyHasNoOrphanIds()
         local handle = assert(io.open(path, "r"))
         local source = handle:read("*a")
         handle:close()
-        for id in string.gmatch(source, "internal%.violate%s*%(%s*[\"']([^\"']+)[\"']") do
+        for id in string.gmatch(source, "[%w_]+%.violate%s*%(%s*[\"']([^\"']+)[\"']") do
             referenced[id] = true
         end
     end
 
-    for id in pairs(AdamantModpackLib_Internal.violationPolicy) do
-        if not string.match(id, "^test%.") then
-            lu.assertTrue(referenced[id], id)
-        end
+    for id in pairs(DefaultViolationPolicy) do
+        lu.assertTrue(referenced[id], id)
     end
 end
 
 function TestLogging:testViolationDebugHonorsLibDebugMode()
-    AdamantModpackLib_Internal.violationPolicy["test.debug"] = {
-        severity = "debug",
-        description = "Test debug policy.",
-    }
-
-    AdamantModpackLib_Internal.violate("test.debug", "hidden")
-    lib.config.DebugMode = true
-    AdamantModpackLib_Internal.violate("test.debug", "visible")
+    WithLoggingPolicy({
+        ["test.debug"] = {
+            severity = "debug",
+            description = "Test debug policy.",
+        },
+    }, function(activeLogging, harness)
+        activeLogging.violate("test.debug", "hidden")
+        harness.config.DebugMode = true
+        activeLogging.violate("test.debug", "visible")
+    end)
 
     lu.assertEquals(self.lines, { "[lib] test.debug: visible" })
 end
 
 function TestLogging:testViolationIgnoreReturnsWithoutPrinting()
-    AdamantModpackLib_Internal.violationPolicy["test.ignore"] = {
-        severity = "ignore",
-        description = "Test ignored policy.",
-    }
+    WithLoggingPolicy({
+        ["test.ignore"] = {
+            severity = "ignore",
+            description = "Test ignored policy.",
+        },
+    }, function(activeLogging)
+        local severity, message = activeLogging.violate("test.ignore", "ignored")
 
-    local severity, message = AdamantModpackLib_Internal.violate("test.ignore", "ignored")
-
-    lu.assertEquals(severity, "ignore")
-    lu.assertEquals(message, "[lib] test.ignore: ignored")
-    lu.assertEquals(self.lines, {})
-end
-
-function TestLogging:testViolationErrorRaises()
-    AdamantModpackLib_Internal.violationPolicy["test.error"] = {
-        severity = "error",
-        description = "Test error policy.",
-    }
-
-    lu.assertErrorMsgContains("[lib] test.error: broken", function()
-        AdamantModpackLib_Internal.violate("test.error", "broken")
+        lu.assertEquals(severity, "ignore")
+        lu.assertEquals(message, "[lib] test.ignore: ignored")
+        lu.assertEquals(self.lines, {})
     end)
 end
 
-function TestLogging:testViolationRejectsInvalidSeverity()
-    AdamantModpackLib_Internal.violationPolicy["test.invalid"] = {
-        severity = "trace",
-        description = "Test invalid policy.",
-    }
+function TestLogging.testViolationErrorRaises()
+    WithLoggingPolicy({
+        ["test.error"] = {
+            severity = "error",
+            description = "Test error policy.",
+        },
+    }, function(activeLogging)
+        lu.assertErrorMsgContains("[lib] test.error: broken", function()
+            activeLogging.violate("test.error", "broken")
+        end)
+    end)
+end
 
-    lu.assertErrorMsgContains("violation.invalid_severity", function()
-        AdamantModpackLib_Internal.violate("test.invalid", "broken")
+function TestLogging.testViolationRejectsInvalidSeverity()
+    WithLoggingPolicy({
+        ["test.invalid"] = {
+            severity = "trace",
+            description = "Test invalid policy.",
+        },
+    }, function(activeLogging)
+        lu.assertErrorMsgContains("violation.invalid_severity", function()
+            activeLogging.violate("test.invalid", "broken")
+        end)
     end)
 end
 
 function TestLogging:testViolationRejectsUnknownId()
     lu.assertErrorMsgContains("violation.unknown_id", function()
-        AdamantModpackLib_Internal.violate("test.missing", "broken")
+        self.harness.logging.violate("test.missing", "broken")
     end)
 end

@@ -1,8 +1,9 @@
 local deps = ...
 
-local internal = AdamantModpackLib_Internal
 local retainedState = deps.state
 local renderer = deps.renderer
+local logging = deps.logging
+local overlayOrder = deps.order
 
 local function resolveValue(value)
     if type(value) == "function" then
@@ -29,13 +30,13 @@ end
 
 local function validateName(apiName, name)
     if type(name) ~= "string" or name == "" then
-        internal.violate("overlays.invalid_registration", "lib.overlays.%s: name must be a non-empty string", apiName)
+        logging.violate("overlays.invalid_registration", "lib.overlays.%s: name must be a non-empty string", apiName)
     end
 end
 
 local function validateSpec(apiName, spec)
     if type(spec) ~= "table" then
-        internal.violate("overlays.invalid_registration", "lib.overlays.%s: spec must be a table", apiName)
+        logging.violate("overlays.invalid_registration", "lib.overlays.%s: spec must be a table", apiName)
     end
 end
 
@@ -86,7 +87,7 @@ local function getRegistry(owner, create)
     end
 
     if type(owner) ~= "table" then
-        internal.violate("overlays.invalid_registration", "lib.overlays: owner must be a persistent table or string")
+        logging.violate("overlays.invalid_registration", "lib.overlays: owner must be a persistent table or string")
     end
 
     local registry = retainedState.tableRegistries[owner]
@@ -225,7 +226,7 @@ local function createTableSlot(registry, name, spec, existingRows, existingRowIn
             id = retainedRowId(registry, name, rowIndex),
             componentName = spec.componentName and (spec.componentName .. "_" .. tostring(rowIndex)) or nil,
             region = spec.region,
-            order = (tonumber(spec.order) or public.overlays.order.module) + rowIndex - 1,
+            order = (tonumber(spec.order) or overlayOrder.module) + rowIndex - 1,
             columnGap = spec.columnGap,
             visible = function()
                 return isRegistryVisible(registry, spec.visible) and slot.rows[rowIndex] ~= nil
@@ -318,7 +319,7 @@ local function ensureIntervalDriver()
     retainedState.intervalDriverRegistered = true
     if rom and rom.gui and type(rom.gui.add_always_draw_imgui) == "function" then
         rom.gui.add_always_draw_imgui(function()
-            internal.overlays.dispatchIntervals(os.clock())
+            deps.dispatchIntervals(os.clock())
         end)
     end
 end
@@ -341,14 +342,14 @@ local function declareTable(registry, name, spec)
     validateName("createTable", name)
     validateSpec("createTable", spec)
     if type(spec.columns) ~= "table" or #spec.columns == 0 then
-        internal.violate(
+        logging.violate(
             "overlays.invalid_registration",
             "lib.overlays.createTable: columns must be a non-empty array"
         )
     end
     local maxRows = tonumber(spec.maxRows)
     if not maxRows or maxRows < 1 or math.floor(maxRows) ~= maxRows then
-        internal.violate(
+        logging.violate(
             "overlays.invalid_registration",
             "lib.overlays.createTable: maxRows must be a positive integer"
         )
@@ -373,7 +374,7 @@ end
 
 local function registerCommitProjection(registry, callback)
     if type(callback) ~= "function" then
-        internal.violate("overlays.invalid_registration", "lib.overlays.onCommit: callback must be a function")
+        logging.violate("overlays.invalid_registration", "lib.overlays.onCommit: callback must be a function")
     end
     registry.pendingEvents.commit[#registry.pendingEvents.commit + 1] = callback
 end
@@ -381,11 +382,11 @@ end
 local function registerIntervalProjection(registry, name, seconds, callback, opts)
     validateName("onInterval", name)
     if type(callback) ~= "function" then
-        internal.violate("overlays.invalid_registration", "lib.overlays.onInterval: callback must be a function")
+        logging.violate("overlays.invalid_registration", "lib.overlays.onInterval: callback must be a function")
     end
     seconds = tonumber(seconds)
     if not seconds or seconds <= 0 then
-        internal.violate("overlays.invalid_registration", "lib.overlays.onInterval: seconds must be positive")
+        logging.violate("overlays.invalid_registration", "lib.overlays.onInterval: seconds must be positive")
     end
     registry.pendingEvents.intervals[name] = {
         name = name,
@@ -400,7 +401,7 @@ end
 local function registerAfterHookProjection(registry, path, callback)
     validateName("afterHook", path)
     if type(callback) ~= "function" then
-        internal.violate("overlays.invalid_registration", "lib.overlays.afterHook: callback must be a function")
+        logging.violate("overlays.invalid_registration", "lib.overlays.afterHook: callback must be a function")
     end
     registry.pendingEvents.afterHooks[path] = {
         path = path,
@@ -460,7 +461,7 @@ end
 
 local function refresh(owner, ownerId, authorHost, store, register, opts)
     if type(register) ~= "function" then
-        internal.violate("overlays.invalid_registration", "overlay refresh: register must be a function")
+        logging.violate("overlays.invalid_registration", "overlay refresh: register must be a function")
     end
 
     local registry = getRegistry(owner, true)
@@ -599,6 +600,7 @@ local dispatch = import('core/overlays/private_retained_dispatch.lua', nil, {
     state = retainedState,
     renderer = renderer,
     getRegistry = getRegistry,
+    logging = logging,
 })
 
 return {

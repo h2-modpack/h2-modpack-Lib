@@ -1,7 +1,8 @@
 local deps = ...
 
-local internal = deps.internal
+local logging = deps.logging
 local storage = deps.storage
+local values = deps.values
 local StorageTypes = {}
 
 local function NormalizeInteger(node, value)
@@ -19,7 +20,7 @@ StorageTypes.bool = {
     valueKind = "bool",
     validate = function(node, prefix)
         if node.default ~= nil and type(node.default) ~= "boolean" then
-            internal.violate("storage.invalid_default", "%s: bool default must be boolean, got %s", prefix, type(node.default))
+            logging.violate("storage.invalid_default", "%s: bool default must be boolean, got %s", prefix, type(node.default))
         end
     end,
     normalize = function(_, value)
@@ -40,19 +41,19 @@ StorageTypes.int = {
     valueKind = "int",
     validate = function(node, prefix)
         if node.default ~= nil and type(node.default) ~= "number" then
-            internal.violate("storage.invalid_default", "%s: int default must be number, got %s", prefix, type(node.default))
+            logging.violate("storage.invalid_default", "%s: int default must be number, got %s", prefix, type(node.default))
         end
         if node.min ~= nil and type(node.min) ~= "number" then
-            internal.violate("storage.invalid_axis_type", "%s: int min must be number, got %s", prefix, type(node.min))
+            logging.violate("storage.invalid_axis_type", "%s: int min must be number, got %s", prefix, type(node.min))
         end
         if node.max ~= nil and type(node.max) ~= "number" then
-            internal.violate("storage.invalid_axis_type", "%s: int max must be number, got %s", prefix, type(node.max))
+            logging.violate("storage.invalid_axis_type", "%s: int max must be number, got %s", prefix, type(node.max))
         end
         if type(node.min) == "number" and type(node.max) == "number" and node.min > node.max then
-            internal.violate("storage.invalid_axis_type", "%s: int min cannot exceed max", prefix)
+            logging.violate("storage.invalid_axis_type", "%s: int min cannot exceed max", prefix)
         end
         if node.width ~= nil and (type(node.width) ~= "number" or node.width < 1) then
-            internal.violate("storage.invalid_axis_type", "%s: int width must be a positive number", prefix)
+            logging.violate("storage.invalid_axis_type", "%s: int width must be a positive number", prefix)
         end
     end,
     normalize = function(node, value)
@@ -81,10 +82,10 @@ StorageTypes.string = {
     valueKind = "string",
     validate = function(node, prefix)
         if node.default ~= nil and type(node.default) ~= "string" then
-            internal.violate("storage.invalid_default", "%s: string default must be string, got %s", prefix, type(node.default))
+            logging.violate("storage.invalid_default", "%s: string default must be string, got %s", prefix, type(node.default))
         end
         if node.maxLen ~= nil and (type(node.maxLen) ~= "number" or node.maxLen < 1) then
-            internal.violate("storage.invalid_axis_type", "%s: string maxLen must be a positive number", prefix)
+            logging.violate("storage.invalid_axis_type", "%s: string maxLen must be a positive number", prefix)
         end
         node._maxLen = math.floor(tonumber(node.maxLen) or 256)
         if node._maxLen < 1 then node._maxLen = 256 end
@@ -104,13 +105,13 @@ StorageTypes.packedInt = {
     valueKind = "int",
     validate = function(node, prefix)
         if node.default ~= nil and type(node.default) ~= "number" then
-            internal.violate("storage.invalid_default", "%s: packedInt default must be number, got %s", prefix, type(node.default))
+            logging.violate("storage.invalid_default", "%s: packedInt default must be number, got %s", prefix, type(node.default))
         end
         if node.width ~= nil and (type(node.width) ~= "number" or node.width < 1 or node.width > 32) then
-            internal.violate("storage.invalid_axis_type", "%s: packedInt width must be a positive number no greater than 32", prefix)
+            logging.violate("storage.invalid_axis_type", "%s: packedInt width must be a positive number no greater than 32", prefix)
         end
         if type(node.bits) ~= "table" or #node.bits == 0 then
-            internal.violate("storage.invalid_schema", "%s: packedInt bits must be a non-empty list", prefix)
+            logging.violate("storage.invalid_schema", "%s: packedInt bits must be a non-empty list", prefix)
         end
     end,
     normalize = function(node, value)
@@ -149,29 +150,29 @@ StorageTypes.table = {
     valueKind = "table",
     validate = function(node, prefix)
         if node.default ~= nil and node._tableDefaultPrepared ~= true then
-            internal.violate("storage.invalid_default", "%s: table roots do not support default; use defaultRows", prefix)
+            logging.violate("storage.invalid_default", "%s: table roots do not support default; use defaultRows", prefix)
         end
         if node.minRows ~= nil and (type(node.minRows) ~= "number" or node.minRows < 0) then
-            internal.violate("storage.invalid_axis_type", "%s: table minRows must be a non-negative number", prefix)
+            logging.violate("storage.invalid_axis_type", "%s: table minRows must be a non-negative number", prefix)
         end
         if node.maxRows ~= nil and (type(node.maxRows) ~= "number" or node.maxRows < 0) then
-            internal.violate("storage.invalid_axis_type", "%s: table maxRows must be a non-negative number", prefix)
+            logging.violate("storage.invalid_axis_type", "%s: table maxRows must be a non-negative number", prefix)
         end
         if node.defaultRows ~= nil and (type(node.defaultRows) ~= "number" or node.defaultRows < 0) then
-            internal.violate("storage.invalid_axis_type", "%s: table defaultRows must be a non-negative number", prefix)
+            logging.violate("storage.invalid_axis_type", "%s: table defaultRows must be a non-negative number", prefix)
         end
         if type(node.minRows) == "number" and type(node.maxRows) == "number" and node.minRows > node.maxRows then
-            internal.violate("storage.invalid_axis_type", "%s: table minRows cannot exceed maxRows", prefix)
+            logging.violate("storage.invalid_axis_type", "%s: table minRows cannot exceed maxRows", prefix)
         end
         if type(node.row) ~= "table" or #node.row == 0 then
-            internal.violate("storage.invalid_table_row", "%s: table row must be a non-empty storage schema", prefix)
+            logging.violate("storage.invalid_table_row", "%s: table row must be a non-empty storage schema", prefix)
         end
     end,
     normalize = function(node, value)
         return storage.table.NormalizeTableValue(node, value)
     end,
     equals = function(node, a, b)
-        return internal.values.deepEqual(
+        return values.deepEqual(
             storage.table.NormalizeTableValue(node, a),
             storage.table.NormalizeTableValue(node, b)
         )

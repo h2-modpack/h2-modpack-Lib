@@ -1,4 +1,8 @@
-local internal = AdamantModpackLib_Internal
+local deps = ...
+
+local logging = deps.logging
+local moduleHost = deps.moduleHost
+local moduleState = deps.moduleState
 
 ---@class ModuleCreateOpts
 ---@field pluginGuid string
@@ -28,14 +32,14 @@ local KnownModuleOpts = {
 local function ValidateKnownOpts(opts)
     for key in pairs(opts) do
         if not KnownModuleOpts[key] then
-            internal.violate("host.unknown_opt", "createModule: unknown option '%s'", tostring(key))
+            logging.violate("host.unknown_opt", "createModule: unknown option '%s'", tostring(key))
         end
     end
 end
 
 local function GetStructuralBaseline(pluginGuid)
-    local previousHost = internal.liveModuleHosts and internal.liveModuleHosts[pluginGuid] or nil
-    local previousState = internal.moduleHost.getState(previousHost)
+    local previousHost = moduleHost.getLiveHost(pluginGuid)
+    local previousState = moduleHost.getState(previousHost)
     local previousDefinition = previousState and previousState.definition or nil
     local previousFingerprint = previousDefinition and previousDefinition._structuralFingerprint or nil
     if previousFingerprint == nil then
@@ -53,23 +57,23 @@ end
 ---@return ManagedStore store
 function public.createModule(opts)
     if type(opts) ~= "table" then
-        internal.violate("host.invalid_create_opts", "createModule: opts must be a table")
+        logging.violate("host.invalid_create_opts", "createModule: opts must be a table")
     end
     ValidateKnownOpts(opts)
     if type(opts.config) ~= "table" then
-        internal.violate("host.invalid_create_opts", "createModule: config is required")
+        logging.violate("host.invalid_create_opts", "createModule: config is required")
     end
     if type(opts.pluginGuid) ~= "string" or opts.pluginGuid == "" then
-        internal.violate("host.invalid_create_opts", "createModule: pluginGuid is required")
+        logging.violate("host.invalid_create_opts", "createModule: pluginGuid is required")
     end
 
-    local definition = internal.moduleHost.prepareDefinition(GetStructuralBaseline(opts.pluginGuid), opts.definition, {
+    local definition = moduleHost.prepareDefinition(GetStructuralBaseline(opts.pluginGuid), opts.definition, {
         hasQuickContent = type(opts.drawQuickContent) == "function",
     })
-    local state = internal.moduleState.create(opts.config, definition)
+    local state = moduleState.create(opts.config, definition)
     local store = state.store
     local session = state.session
-    local _, authorHost = internal.moduleHost.create({
+    local _, authorHost = moduleHost.create({
         definition = definition,
         pluginGuid = opts.pluginGuid,
         store = store,
@@ -98,6 +102,6 @@ function public.tryCreateModule(opts)
     end
 
     local err = tostring(host)
-    internal.violate("host.create_failed", "createModule failed; skipping module: %s", err)
+    logging.violate("host.create_failed", "createModule failed; skipping module: %s", err)
     return nil, nil, err
 end

@@ -1,8 +1,13 @@
 local deps = ...
 
-local internal = AdamantModpackLib_Internal
 local rendererState = deps.state
 local isUiSuppressed = deps.isUiSuppressed
+local logging = deps.logging
+local hooks = deps.hooks
+local values = deps.values
+local overlayOrder = deps.order
+local physicalHookOwner = deps.physicalHookOwner
+local overlayGameDeps = deps.gameDeps
 
 local refreshStackRows
 
@@ -41,13 +46,6 @@ local function sanitizeComponentName(id)
     return "AdamantOverlay_" .. tostring(id):gsub("[^%w_%-]", "_")
 end
 
-local function getGameValue(name)
-    if rom and rom.game and rom.game[name] ~= nil then
-        return rom.game[name]
-    end
-    return _G[name]
-end
-
 local function resolveValue(value)
     if type(value) == "function" then
         return value()
@@ -61,7 +59,7 @@ local function isEntryVisible(entry)
 end
 
 local function isGameHudVisible()
-    return getGameValue("ShowingCombatUI") == true
+    return overlayGameDeps.ShowingCombatUI() == true
 end
 
 local function isVisible(entry)
@@ -81,17 +79,17 @@ local function isColumnVisible(rowVisible, column)
 end
 
 local function overlayOrderBand(order)
-    if order >= public.overlays.order.debug then
+    if order >= overlayOrder.debug then
         return "debug"
     end
-    if order >= public.overlays.order.module then
+    if order >= overlayOrder.module then
         return "module"
     end
     return "framework"
 end
 
 local function sanitizeStackRowTextArgs(textArgs)
-    local sanitized = internal.values.deepCopy(textArgs or {})
+    local sanitized = values.deepCopy(textArgs or {})
     sanitized.FontSize = nil
     sanitized.Justification = nil
     sanitized.VerticalJustification = nil
@@ -120,19 +118,19 @@ local function layoutSignature(layout)
 end
 
 local function ensureComponentData(entry)
-    local screenData = getGameValue("ScreenData")
+    local screenData = overlayGameDeps.ScreenData()
     if not (screenData and screenData.HUD and screenData.HUD.ComponentData) then
         return false
     end
 
-    local data = internal.values.deepCopy(entry.layout or {})
+    local data = values.deepCopy(entry.layout or {})
     data.Name = data.Name or "BlankObstacle"
     data.GroupName = data.GroupName or "HUD_Overlay"
     data.Alpha = data.Alpha or 1.0
     data.AlphaTarget = data.AlphaTarget or 1.0
-    data.TextArgs = internal.values.deepCopy(DEFAULT_TEXT_ARGS)
+    data.TextArgs = values.deepCopy(DEFAULT_TEXT_ARGS)
     for key, value in pairs(entry.textArgs or {}) do
-        data.TextArgs[key] = internal.values.deepCopy(value)
+        data.TextArgs[key] = values.deepCopy(value)
     end
     data.TextArgs.Text = ""
     screenData.HUD.ComponentData[entry.componentName] = data
@@ -140,15 +138,14 @@ local function ensureComponentData(entry)
 end
 
 local function discardExistingComponent(entry)
-    local hudScreen = getGameValue("HUDScreen")
+    local hudScreen = overlayGameDeps.HUDScreen()
     local component = hudScreen and hudScreen.Components and hudScreen.Components[entry.componentName]
     if not component then
         return
     end
 
-    local destroy = getGameValue("Destroy")
-    if type(destroy) == "function" and component.Id ~= nil then
-        destroy({ Id = component.Id })
+    if component.Id ~= nil then
+        overlayGameDeps.Destroy({ Id = component.Id })
     end
     hudScreen.Components[entry.componentName] = nil
     entry.displayedText = nil
@@ -165,23 +162,23 @@ local function ensureComponent(entry)
 
     ensureComponentData(entry)
 
-    local hudScreen = getGameValue("HUDScreen")
+    local hudScreen = overlayGameDeps.HUDScreen()
     if not hudScreen or not hudScreen.Components then
         return nil
     end
 
     local component = hudScreen.Components[entry.componentName]
-    local createComponentFromData = getGameValue("CreateComponentFromData")
-    local screenData = getGameValue("ScreenData")
-    if not component and type(createComponentFromData) == "function"
-        and screenData and screenData.HUD and screenData.HUD.ComponentData then
+    local screenData = overlayGameDeps.ScreenData()
+    if not component and screenData and screenData.HUD and screenData.HUD.ComponentData then
 
         local componentData = screenData.HUD.ComponentData[entry.componentName]
         if componentData then
-            component = createComponentFromData(screenData.HUD.ComponentData, componentData)
-            component.Screen = hudScreen
-            hudScreen.Components[entry.componentName] = component
-            entry.componentLayoutSignature = layoutSignature(entry.layout)
+            component = overlayGameDeps.CreateComponentFromData(screenData.HUD.ComponentData, componentData)
+            if component then
+                component.Screen = hudScreen
+                hudScreen.Components[entry.componentName] = component
+                entry.componentLayoutSignature = layoutSignature(entry.layout)
+            end
         end
     end
 
@@ -205,10 +202,7 @@ local function applyVisibility(entry, component, force)
         return
     end
 
-    local setAlpha = getGameValue("SetAlpha")
-    if type(setAlpha) == "function" then
-        setAlpha({ Id = component.Id, Fraction = nextVisible and 1.0 or 0.0, Duration = 0.0 })
-    end
+    overlayGameDeps.SetAlpha({ Id = component.Id, Fraction = nextVisible and 1.0 or 0.0, Duration = 0.0 })
     entry.displayedVisible = nextVisible
 end
 
@@ -223,7 +217,7 @@ local function updateText(entry, force)
         return
     end
 
-    getGameValue("ModifyTextBox")({ Id = component.Id, Text = nextText })
+    overlayGameDeps.ModifyTextBox({ Id = component.Id, Text = nextText })
     entry.displayedText = nextText
     if not isVisible(entry) then
         applyVisibility(entry, component, true)
@@ -346,16 +340,16 @@ local function refreshVisibility()
 end
 
 local function ensureGameHooks()
-    internal.hooks.installPhysicalWrap(internal, "StartRoomPresentation", "overlays:roomPresentation",
+    hooks.installPhysicalWrap(physicalHookOwner, "StartRoomPresentation", "overlays:roomPresentation",
         function(base, currentRun, currentRoom, metaPointsAwarded)
             base(currentRun, currentRoom, metaPointsAwarded)
             refreshVisibility()
         end)
-    internal.hooks.installPhysicalWrap(internal, "ShowCombatUI", "overlays:showCombatUI", function(base, flag, args)
+    hooks.installPhysicalWrap(physicalHookOwner, "ShowCombatUI", "overlays:showCombatUI", function(base, flag, args)
         base(flag, args)
         refreshVisibility()
     end)
-    internal.hooks.installPhysicalWrap(internal, "HideCombatUI", "overlays:hideCombatUI", function(base, flag, args)
+    hooks.installPhysicalWrap(physicalHookOwner, "HideCombatUI", "overlays:hideCombatUI", function(base, flag, args)
         base(flag, args)
         refreshVisibility()
     end)
@@ -415,10 +409,10 @@ end
 
 local function createTextElement(opts)
     if type(opts) ~= "table" then
-        internal.violate("overlays.invalid_registration", "overlay renderer: hud text opts must be a table")
+        logging.violate("overlays.invalid_registration", "overlay renderer: hud text opts must be a table")
     end
     if type(opts.id) ~= "string" or opts.id == "" then
-        internal.violate("overlays.invalid_registration", "overlay renderer: hud text id must be a non-empty string")
+        logging.violate("overlays.invalid_registration", "overlay renderer: hud text id must be a non-empty string")
     end
 
     local entry = {
@@ -445,18 +439,18 @@ end
 
 local function createStackRow(opts)
     if type(opts) ~= "table" then
-        internal.violate("overlays.invalid_registration", "overlay renderer: stacked row opts must be a table")
+        logging.violate("overlays.invalid_registration", "overlay renderer: stacked row opts must be a table")
     end
     if type(opts.id) ~= "string" or opts.id == "" then
-        internal.violate("overlays.invalid_registration", "overlay renderer: stacked row id must be a non-empty string")
+        logging.violate("overlays.invalid_registration", "overlay renderer: stacked row id must be a non-empty string")
     end
     if type(opts.columns) ~= "table" or #opts.columns == 0 then
-        internal.violate("overlays.invalid_registration", "overlay renderer: stacked row columns must be a non-empty array")
+        logging.violate("overlays.invalid_registration", "overlay renderer: stacked row columns must be a non-empty array")
     end
 
     local region = opts.region or "middleRightStack"
     if REGIONS[region] == nil then
-        internal.violate(
+        logging.violate(
             "overlays.invalid_registration",
             "overlay renderer: unknown stacked region '%s'",
             tostring(region)
@@ -468,7 +462,7 @@ local function createStackRow(opts)
     local columns = {}
     for index, column in ipairs(opts.columns) do
         if type(column) ~= "table" then
-            internal.violate(
+            logging.violate(
                 "overlays.invalid_registration",
                 "overlay renderer: stacked row column #%d must be a table",
                 index
@@ -498,7 +492,7 @@ local function createStackRow(opts)
     local entry = {
         id = opts.id,
         region = region,
-        order = tonumber(opts.order) or public.overlays.order.module,
+        order = tonumber(opts.order) or overlayOrder.module,
         visible = opts.visible,
         columns = columns,
         setLayout = function(layout, textArgs)
@@ -509,7 +503,7 @@ local function createStackRow(opts)
                     column.handle.setVisible(false)
                     goto continue
                 end
-                local columnTextArgs = internal.values.deepCopy(textArgs or {})
+                local columnTextArgs = values.deepCopy(textArgs or {})
                 local justification = column.justify or columnTextArgs.Justification
                 if justification then
                     columnTextArgs.Justification = justification

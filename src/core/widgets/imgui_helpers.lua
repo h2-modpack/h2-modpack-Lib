@@ -1,17 +1,17 @@
-public.imguiHelpers = public.imguiHelpers or {}
+local imguiHelpers = {}
 
 -- The ReturnOfModding Lua binding exposes these flag values as raw integer
 -- parameters, but does not consistently expose the C++ enum tables at runtime.
-public.imguiHelpers.ImGuiComboFlags = {
+imguiHelpers.ImGuiComboFlags = {
     None = 0,
     NoPreview = 64,
 }
 
-public.imguiHelpers.ImGuiCol = {
+imguiHelpers.ImGuiCol = {
     Text = 0,
 }
 
-public.imguiHelpers.ImGuiTreeNodeFlags = {
+imguiHelpers.ImGuiTreeNodeFlags = {
     None = 0,
     Selected = 1,
     Framed = 2,
@@ -30,10 +30,14 @@ public.imguiHelpers.ImGuiTreeNodeFlags = {
     CollapsingHeader = 26,
 }
 
-function public.imguiHelpers.unpackColor(color)
+function imguiHelpers.unpackColor(color)
     return color[1], color[2], color[3], color[4]
 end
 
-function public.imguiHelpers.textColored(ui, color, text)
+function imguiHelpers.textColored(ui, color, text)
     ui.TextColored(color[1], color[2], color[3], color[4], text)
 end
+
+public.imguiHelpers = imguiHelpers
+
+return imguiHelpers

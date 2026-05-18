@@ -1,17 +1,12 @@
 local lu = require('luaunit')
+local createLibHarness = require('tests/harness/create_lib_harness')
 
 TestIntegrations = {}
 
 function TestIntegrations:setUp()
-    lib.integrations.unregisterProvider("ProviderA")
-    lib.integrations.unregisterProvider("ProviderB")
-    lib.integrations.unregisterProvider("ProviderC")
-end
-
-function TestIntegrations:tearDown()
-    lib.integrations.unregisterProvider("ProviderA")
-    lib.integrations.unregisterProvider("ProviderB")
-    lib.integrations.unregisterProvider("ProviderC")
+    self.harness = createLibHarness()
+    self.public = self.harness.public.integrations
+    self.integrations = self.harness.integrations
 end
 
 function TestIntegrations:testRegisterAndGetIntegration()
@@ -19,8 +14,8 @@ function TestIntegrations:testRegisterAndGetIntegration()
         isActive = function() return true end,
     }
 
-    local registered = lib.integrations.register("test.example", "ProviderA", api)
-    local found, providerId = lib.integrations.get("test.example")
+    local registered = self.public.register("test.example", "ProviderA", api)
+    local found, providerId = self.public.get("test.example")
 
     lu.assertEquals(registered, api)
     lu.assertEquals(found, api)
@@ -31,11 +26,11 @@ function TestIntegrations:testRegisterReplacesSameProviderWithoutDuplicatingList
     local first = { value = 1 }
     local second = { value = 2 }
 
-    lib.integrations.register("test.example", "ProviderA", first)
-    lib.integrations.register("test.example", "ProviderA", second)
+    self.public.register("test.example", "ProviderA", first)
+    self.public.register("test.example", "ProviderA", second)
 
-    local found, providerId = lib.integrations.get("test.example")
-    local providers = lib.integrations.list("test.example")
+    local found, providerId = self.public.get("test.example")
+    local providers = self.public.list("test.example")
 
     lu.assertEquals(found, second)
     lu.assertEquals(providerId, "ProviderA")
@@ -47,84 +42,86 @@ function TestIntegrations:testGetReturnsMostRecentlyRegisteredProvider()
     local first = { value = 1 }
     local second = { value = 2 }
 
-    lib.integrations.register("test.example", "ProviderA", first)
-    lib.integrations.register("test.example", "ProviderB", second)
+    self.public.register("test.example", "ProviderA", first)
+    self.public.register("test.example", "ProviderB", second)
 
-    local found, providerId = lib.integrations.get("test.example")
+    local found, providerId = self.public.get("test.example")
 
     lu.assertEquals(found, second)
     lu.assertEquals(providerId, "ProviderB")
 end
 
 function TestIntegrations:testInvokeCallsMostRecentProviderMethod()
-    lib.integrations.register("test.example", "ProviderA", {
+    self.public.register("test.example", "ProviderA", {
         value = function()
             return "first"
         end,
     })
-    lib.integrations.register("test.example", "ProviderB", {
+    self.public.register("test.example", "ProviderB", {
         value = function(suffix)
             return "second:" .. suffix
         end,
     })
 
-    local result, providerId = lib.integrations.invoke("test.example", "value", "fallback", "x")
+    local result, providerId = self.public.invoke("test.example", "value", "fallback", "x")
 
     lu.assertEquals(result, "second:x")
     lu.assertEquals(providerId, "ProviderB")
 end
 
 function TestIntegrations:testInvokeUsesCurrentProviderAfterReregister()
-    lib.integrations.register("test.example", "ProviderA", {
+    self.public.register("test.example", "ProviderA", {
         value = function()
             return "first"
         end,
     })
 
-    lu.assertEquals(lib.integrations.invoke("test.example", "value", "fallback"), "first")
+    lu.assertEquals(self.public.invoke("test.example", "value", "fallback"), "first")
 
-    lib.integrations.register("test.example", "ProviderA", {
+    self.public.register("test.example", "ProviderA", {
         value = function()
             return "second"
         end,
     })
 
-    lu.assertEquals(lib.integrations.invoke("test.example", "value", "fallback"), "second")
+    lu.assertEquals(self.public.invoke("test.example", "value", "fallback"), "second")
 end
 
 function TestIntegrations:testInvokeReturnsFallbackForMissingProviderOrMethod()
-    lu.assertEquals(lib.integrations.invoke("test.missing", "value", "fallback"), "fallback")
+    lu.assertEquals(self.public.invoke("test.missing", "value", "fallback"), "fallback")
 
-    lib.integrations.register("test.example", "ProviderA", {})
+    self.public.register("test.example", "ProviderA", {})
 
-    local result, providerId = lib.integrations.invoke("test.example", "value", "fallback")
+    local result, providerId = self.public.invoke("test.example", "value", "fallback")
 
     lu.assertEquals(result, "fallback")
     lu.assertEquals(providerId, "ProviderA")
 end
 
 function TestIntegrations:testInvokeReturnsFallbackWhenProviderMethodFails()
-    CaptureWarnings()
-    lib.integrations.register("test.example", "ProviderA", {
+    local warnings = {}
+    self.harness.env.print = function(message)
+        warnings[#warnings + 1] = message
+    end
+    self.public.register("test.example", "ProviderA", {
         value = function()
             error("boom")
         end,
     })
 
-    local result, providerId = lib.integrations.invoke("test.example", "value", "fallback")
+    local result, providerId = self.public.invoke("test.example", "value", "fallback")
 
     lu.assertEquals(result, "fallback")
     lu.assertEquals(providerId, "ProviderA")
-    lu.assertEquals(#Warnings, 1)
-    lu.assertStrContains(Warnings[1], "test.example.value provider 'ProviderA' failed")
-    RestoreWarnings()
+    lu.assertEquals(#warnings, 1)
+    lu.assertStrContains(warnings[1], "test.example.value provider 'ProviderA' failed")
 end
 
 function TestIntegrations:testListReturnsRegistrationOrder()
-    lib.integrations.register("test.example", "ProviderA", { value = 1 })
-    lib.integrations.register("test.example", "ProviderB", { value = 2 })
+    self.public.register("test.example", "ProviderA", { value = 1 })
+    self.public.register("test.example", "ProviderB", { value = 2 })
 
-    local providers = lib.integrations.list("test.example")
+    local providers = self.public.list("test.example")
 
     lu.assertEquals(#providers, 2)
     lu.assertEquals(providers[1].providerId, "ProviderA")
@@ -135,13 +132,13 @@ function TestIntegrations:testUnregisterRemovesOneProvider()
     local first = { value = 1 }
     local second = { value = 2 }
 
-    lib.integrations.register("test.example", "ProviderA", first)
-    lib.integrations.register("test.example", "ProviderB", second)
+    self.public.register("test.example", "ProviderA", first)
+    self.public.register("test.example", "ProviderB", second)
 
-    lu.assertTrue(lib.integrations.unregister("test.example", "ProviderB"))
+    lu.assertTrue(self.public.unregister("test.example", "ProviderB"))
 
-    local found, providerId = lib.integrations.get("test.example")
-    local providers = lib.integrations.list("test.example")
+    local found, providerId = self.public.get("test.example")
+    local providers = self.public.list("test.example")
 
     lu.assertEquals(found, first)
     lu.assertEquals(providerId, "ProviderA")
@@ -149,16 +146,16 @@ function TestIntegrations:testUnregisterRemovesOneProvider()
 end
 
 function TestIntegrations:testUnregisterProviderRemovesProviderAcrossIntegrationIds()
-    lib.integrations.register("test.one", "ProviderA", { value = 1 })
-    lib.integrations.register("test.two", "ProviderA", { value = 2 })
-    lib.integrations.register("test.two", "ProviderB", { value = 3 })
+    self.public.register("test.one", "ProviderA", { value = 1 })
+    self.public.register("test.two", "ProviderA", { value = 2 })
+    self.public.register("test.two", "ProviderB", { value = 3 })
 
-    local removed = lib.integrations.unregisterProvider("ProviderA")
+    local removed = self.public.unregisterProvider("ProviderA")
 
     lu.assertEquals(removed, 2)
-    lu.assertNil(lib.integrations.get("test.one"))
+    lu.assertNil(self.public.get("test.one"))
 
-    local found, providerId = lib.integrations.get("test.two")
+    local found, providerId = self.public.get("test.two")
     lu.assertEquals(found.value, 3)
     lu.assertEquals(providerId, "ProviderB")
 end
@@ -168,30 +165,29 @@ function TestIntegrations:testHostInstallStagesProvidersUntilCommit()
     local providerId = "StagedProvider"
     local previous = { value = "previous" }
     local replacement = { value = "replacement" }
-    lib.integrations.register(id, providerId, previous)
+    self.public.register(id, providerId, previous)
 
     local observedDuringInstall = nil
-    local receipt = AdamantModpackLib_Internal.integrations.installForHost({}, function()
-        lib.integrations.register(id, providerId, replacement)
-        observedDuringInstall = lib.integrations.get(id)
+    local receipt = self.integrations.installForHost({}, function()
+        self.public.register(id, providerId, replacement)
+        observedDuringInstall = self.public.get(id)
     end)
 
     lu.assertEquals(observedDuringInstall, previous)
-    lu.assertEquals(lib.integrations.get(id), previous)
+    lu.assertEquals(self.public.get(id), previous)
 
     local ok, err = receipt.commit()
     lu.assertTrue(ok, tostring(err))
-    lu.assertEquals(lib.integrations.get(id), replacement)
+    lu.assertEquals(self.public.get(id), replacement)
 
     ok, err = receipt.dispose()
     lu.assertTrue(ok, tostring(err))
-    lu.assertEquals(lib.integrations.get(id), previous)
-    lib.integrations.unregisterProvider(providerId)
+    lu.assertEquals(self.public.get(id), previous)
 end
 
 function TestIntegrations:testMissingIntegrationReturnsNilAndEmptyList()
-    local found, providerId = lib.integrations.get("test.missing")
-    local providers = lib.integrations.list("test.missing")
+    local found, providerId = self.public.get("test.missing")
+    local providers = self.public.list("test.missing")
 
     lu.assertNil(found)
     lu.assertNil(providerId)

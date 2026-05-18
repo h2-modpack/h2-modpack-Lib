@@ -1,18 +1,20 @@
-local lu = require('luaunit')
+local lu = require("luaunit")
+local createModuleHostHarness = require("tests/harness/create_module_host_harness")
 
-TestDefinitionContract = {}
+TestModuleHost_DefinitionContract = {}
 
-function TestDefinitionContract:setUp()
-    CaptureWarnings()
+function TestModuleHost_DefinitionContract:setUp()
+    self.h = createModuleHostHarness()
+    self.h:captureWarnings()
 end
 
-function TestDefinitionContract:tearDown()
-    RestoreWarnings()
+function TestModuleHost_DefinitionContract:tearDown()
+    self.h:restoreWarnings()
 end
 
-function TestDefinitionContract:testCreateStoreErrorsOnUnknownTopLevelDefinitionKey()
+function TestModuleHost_DefinitionContract:testCreateStoreErrorsOnUnknownTopLevelDefinitionKey()
     lu.assertErrorMsgContains("unknown definition key 'ui'", function()
-        AdamantModpackLib_Internal.moduleHost.prepareDefinition({}, {
+        self.h:prepareDefinition({}, {
             id = "Example",
             name = "Example",
             storage = {
@@ -23,9 +25,9 @@ function TestDefinitionContract:testCreateStoreErrorsOnUnknownTopLevelDefinition
     end)
 end
 
-function TestDefinitionContract:testValidateDefinitionErrorsOnOldVocabularyKeysAsUnknown()
+function TestModuleHost_DefinitionContract:testValidateDefinitionErrorsOnOldVocabularyKeysAsUnknown()
     lu.assertErrorMsgContains("unknown definition key 'category'", function()
-        AdamantModpackLib_Internal.moduleHost.prepareDefinition({}, {
+        self.h:prepareDefinition({}, {
             modpack = "test-pack",
             id = "ExampleSpecial",
             name = "Example Special",
@@ -37,9 +39,9 @@ function TestDefinitionContract:testValidateDefinitionErrorsOnOldVocabularyKeysA
     end)
 end
 
-function TestDefinitionContract:testPrepareDefinitionRejectsBehaviorFieldsAsUnknownKeys()
+function TestModuleHost_DefinitionContract:testPrepareDefinitionRejectsBehaviorFieldsAsUnknownKeys()
     lu.assertErrorMsgContains("unknown definition key 'affectsRunData'", function()
-        AdamantModpackLib_Internal.moduleHost.prepareDefinition({}, {
+        self.h:prepareDefinition({}, {
             id = "Example",
             name = "Example",
             affectsRunData = true,
@@ -47,11 +49,10 @@ function TestDefinitionContract:testPrepareDefinitionRejectsBehaviorFieldsAsUnkn
     end)
 
     lu.assertErrorMsgContains("unknown definition key 'apply'", function()
-        AdamantModpackLib_Internal.moduleHost.prepareDefinition({}, {
+        self.h:prepareDefinition({}, {
             id = "Example",
             name = "Example",
             apply = function() end,
         })
     end)
 end
-

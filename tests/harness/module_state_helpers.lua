@@ -1,0 +1,133 @@
+local createLibHarness = require('tests/harness/create_lib_harness')
+
+local helpers = {}
+helpers.createLibHarness = createLibHarness
+
+function helpers.prepareDefinition(harness, definition)
+    definition.id = definition.id or "SessionTest"
+    definition.name = definition.name or "Session Test"
+    return harness.moduleHost.prepareDefinition({}, definition)
+end
+
+function helpers.createModuleState(harness, config, definition)
+    local state = harness.moduleState.create(config, definition)
+    return state.store, state.session
+end
+
+function helpers.getHostLifecycle(harness)
+    return assert(harness.imports["core/module_bootstrap/private_host_lifecycle.lua"], "host lifecycle service missing")
+end
+
+function helpers.withLoggingPolicy(policy, callback)
+    local harness = createLibHarness({
+        importOverrides = {
+            ["core/logging/policies.lua"] = policy,
+        },
+    })
+    return callback(harness)
+end
+
+function helpers.withCapturedPrint(harness, callback)
+    local previousPrint = harness.env.print
+    local lines = {}
+    harness.config.DebugMode = true
+    harness.env.print = function(msg)
+        lines[#lines + 1] = msg
+    end
+
+    local ok, err = pcall(callback, lines)
+    harness.env.print = previousPrint
+    harness.config.DebugMode = false
+    if not ok then
+        error(err, 0)
+    end
+    return lines
+end
+
+function helpers.makeScalarDefinition(harness)
+    return helpers.prepareDefinition(harness, {
+        storage = {
+            { type = "int", alias = "MaxGods", default = 3, min = 1, max = 9 },
+        },
+    })
+end
+
+function helpers.makePackedDefinition(harness)
+    return helpers.prepareDefinition(harness, {
+        storage = {
+            {
+                type = "packedInt",
+                alias = "Packed",
+                bits = {
+                    { alias = "EnabledBit", offset = 0, width = 1, type = "bool", default = false },
+                    { alias = "ModeBits", offset = 1, width = 2, type = "int", default = 0 },
+                },
+            },
+        },
+    })
+end
+
+function helpers.makeTransientDefinition(harness)
+    return helpers.prepareDefinition(harness, {
+        storage = {
+            { type = "string", alias = "FilterText", persist = false, hash = false, default = "", maxLen = 64 },
+            { type = "string", alias = "FilterMode", persist = false, hash = false, default = "all", maxLen = 16 },
+            { type = "string", alias = "SummaryText", persist = false, hash = false, default = "", maxLen = 128 },
+        },
+    })
+end
+
+function helpers.makeRuntimeDefinition(harness)
+    return helpers.prepareDefinition(harness, {
+        storage = {
+            { type = "bool", alias = "RecordingArmed", default = false, stage = false, hash = false },
+            { type = "int", alias = "RunMarker", default = 0, min = 0, max = 99, stage = false, hash = false },
+        },
+    })
+end
+
+function helpers.makeTableDefinition(harness)
+    return helpers.prepareDefinition(harness, {
+        storage = {
+            {
+                type = "table",
+                alias = "Tiers",
+                minRows = 0,
+                maxRows = 3,
+                defaultRows = 1,
+                row = {
+                    { type = "bool", alias = "Enabled", default = true },
+                    { type = "int", alias = "Limit", default = 2, min = 0, max = 5 },
+                    { type = "string", alias = "Note", default = "", maxLen = 64 },
+                    {
+                        type = "packedInt",
+                        alias = "PackedChoices",
+                        bits = {
+                            { alias = "ChoiceA", offset = 0, width = 1, type = "bool", default = false },
+                            { alias = "ChoiceMode", offset = 1, width = 2, type = "int", default = 0 },
+                        },
+                    },
+                },
+            },
+        },
+    })
+end
+
+function helpers.makeMinRowsTableDefinition(harness)
+    return helpers.prepareDefinition(harness, {
+        storage = {
+            {
+                type = "table",
+                alias = "Rows",
+                minRows = 1,
+                maxRows = 2,
+                defaultRows = 1,
+                row = {
+                    { type = "int", alias = "Count", default = 0, min = 0, max = 5 },
+                },
+            },
+        },
+    })
+end
+
+return helpers

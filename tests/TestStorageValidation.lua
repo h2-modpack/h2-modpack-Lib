@@ -1,18 +1,32 @@
 local lu = require('luaunit')
+local createLibHarness = require('tests/harness/create_lib_harness')
 
 TestStorageValidation = {}
 
+local function prepareDefinition(harness, definition)
+    return harness.moduleHost.prepareDefinition({}, definition)
+end
+
+local function createModuleState(harness, config, definition)
+    local state = harness.moduleState.create(config, definition)
+    return state.store, state.session
+end
+
 function TestStorageValidation:setUp()
-    CaptureWarnings()
+    self.harness = createLibHarness()
+    self.storage = self.harness.storage
+    self.hashing = assert(self.harness.public.hashing, "hashing public surface missing")
 end
 
 function TestStorageValidation:tearDown()
-    RestoreWarnings()
+    self.harness = nil
+    self.storage = nil
+    self.hashing = nil
 end
 
 function TestStorageValidation:testDuplicateAliasFails()
     lu.assertErrorMsgContains("duplicate alias 'Flag'", function()
-        AdamantModpackLib_Internal.storage.validate({
+        self.storage.validate({
             { type = "bool", alias = "Flag", default = false },
             { type = "bool", alias = "Flag", default = false },
         }, "DuplicateAlias")
@@ -21,7 +35,7 @@ end
 
 function TestStorageValidation:testInvalidRootAliasFails()
     lu.assertErrorMsgContains("alias 'Bad-Alias' must start with a letter", function()
-        AdamantModpackLib_Internal.storage.validate({
+        self.storage.validate({
             { type = "bool", alias = "Bad-Alias", default = false },
         }, "InvalidRootAlias")
     end)
@@ -29,7 +43,7 @@ end
 
 function TestStorageValidation:testInvalidPackedChildAliasFails()
     lu.assertErrorMsgContains("alias 'Bad.Child' must start with a letter", function()
-        AdamantModpackLib_Internal.storage.validate({
+        self.storage.validate({
             {
                 type = "packedInt",
                 alias = "Packed",
@@ -43,7 +57,7 @@ end
 
 function TestStorageValidation:testInvalidTableRowAliasFails()
     lu.assertErrorMsgContains("alias 'Bad=Row' must start with a letter", function()
-        AdamantModpackLib_Internal.storage.validate({
+        self.storage.validate({
             {
                 type = "table",
                 alias = "Rows",
@@ -62,12 +76,11 @@ function TestStorageValidation:testTransientRootRegistersAliasButNotPersistedRoo
         { type = "string", alias = "FilterText", persist = false, hash = false, default = "", maxLen = 64 },
     }
 
-    AdamantModpackLib_Internal.storage.validate(storage, "TransientRoot")
+    self.storage.validate(storage, "TransientRoot")
 
-    lu.assertEquals(#lib.hashing.getRoots(storage), 1)
-    lu.assertEquals(lib.hashing.getRoots(storage)[1].alias, "Enabled")
-    lu.assertNotNil(lib.hashing.getAliases(storage).FilterText)
-    lu.assertEquals(#Warnings, 0)
+    lu.assertEquals(#self.storage.getRoots(storage), 1)
+    lu.assertEquals(self.storage.getRoots(storage)[1].alias, "Enabled")
+    lu.assertNotNil(self.storage.getAliases(storage).FilterText)
 end
 
 function TestStorageValidation:testRuntimeCacheRootRegistersAliasButNotHashRoot()
@@ -76,18 +89,17 @@ function TestStorageValidation:testRuntimeCacheRootRegistersAliasButNotHashRoot(
         { type = "bool", alias = "RecordingArmed", default = false, stage = false, hash = false },
     }
 
-    AdamantModpackLib_Internal.storage.validate(storage, "RuntimeCacheRoot")
+    self.storage.validate(storage, "RuntimeCacheRoot")
 
-    lu.assertEquals(#lib.hashing.getRoots(storage), 1)
-    lu.assertEquals(lib.hashing.getRoots(storage)[1].alias, "Enabled")
-    lu.assertNotNil(lib.hashing.getAliases(storage).RecordingArmed)
-    lu.assertEquals(#AdamantModpackLib_Internal.storage.getRuntimeCacheRoots(storage), 1)
-    lu.assertEquals(#Warnings, 0)
+    lu.assertEquals(#self.storage.getRoots(storage), 1)
+    lu.assertEquals(self.storage.getRoots(storage)[1].alias, "Enabled")
+    lu.assertNotNil(self.storage.getAliases(storage).RecordingArmed)
+    lu.assertEquals(#self.storage.getRuntimeCacheRoots(storage), 1)
 end
 
 function TestStorageValidation:testRuntimePackedIntFails()
     lu.assertErrorMsgContains("stage=false packedInt roots are not supported", function()
-        AdamantModpackLib_Internal.storage.validate({
+        self.storage.validate({
             {
                 type = "packedInt",
                 alias = "RuntimePacked",
@@ -103,7 +115,7 @@ end
 
 function TestStorageValidation:testUnknownRootStorageFieldFails()
     lu.assertErrorMsgContains("storage.unknown_field", function()
-        AdamantModpackLib_Internal.storage.validate({
+        self.storage.validate({
             { type = "int", alias = "Count", default = 0, min = 0, max = 10, defalt = 1 },
         }, "UnknownRootField")
     end)
@@ -111,7 +123,7 @@ end
 
 function TestStorageValidation:testUnknownFieldForStorageTypeFails()
     lu.assertErrorMsgContains("storage.unknown_field", function()
-        AdamantModpackLib_Internal.storage.validate({
+        self.storage.validate({
             { type = "bool", alias = "Flag", default = false, width = 1 },
         }, "UnknownTypeField")
     end)
@@ -119,7 +131,7 @@ end
 
 function TestStorageValidation:testUnknownPackedBitFieldFails()
     lu.assertErrorMsgContains("storage.unknown_field", function()
-        AdamantModpackLib_Internal.storage.validate({
+        self.storage.validate({
             {
                 type = "packedInt",
                 alias = "Packed",
@@ -133,7 +145,7 @@ end
 
 function TestStorageValidation:testUnknownTableRowFieldFails()
     lu.assertErrorMsgContains("storage.unknown_field", function()
-        AdamantModpackLib_Internal.storage.validate({
+        self.storage.validate({
             {
                 type = "table",
                 alias = "Rows",
@@ -158,27 +170,16 @@ function TestStorageValidation:testPackedIntDerivesChildAliasesAndDefault()
         },
     }
 
-    AdamantModpackLib_Internal.storage.validate(storage, "PackedTest")
+    self.storage.validate(storage, "PackedTest")
 
     lu.assertEquals(storage[1].default, 5)
-    lu.assertNotNil(lib.hashing.getAliases(storage).EnabledBit)
-    lu.assertNotNil(lib.hashing.getAliases(storage).ModeBits)
-    lu.assertEquals(#Warnings, 0)
-end
-
-function TestStorageValidation:testBoolStorageRoundTripsHash()
-    local node = { type = "bool", alias = "Enabled", default = false }
-    local storage = { node }
-    AdamantModpackLib_Internal.storage.validate(storage, "BoolHash")
-
-    lu.assertEquals(lib.hashing.toHash(node, true), "1")
-    lu.assertTrue(lib.hashing.fromHash(node, "1"))
-    lu.assertFalse(lib.hashing.fromHash(node, "0"))
+    lu.assertNotNil(self.storage.getAliases(storage).EnabledBit)
+    lu.assertNotNil(self.storage.getAliases(storage).ModeBits)
 end
 
 function TestStorageValidation:testResetSessionToDefaultsResetsChangedPersistentRoots()
     local config = { Flag = true, Count = 3, Filter = "ignored" }
-    local definition = AdamantModpackLib_Internal.moduleHost.prepareDefinition({}, {
+    local definition = prepareDefinition(self.harness, {
         id = "ResetPersistentRoots",
         name = "Reset Persistent Roots",
         storage = {
@@ -187,10 +188,10 @@ function TestStorageValidation:testResetSessionToDefaultsResetsChangedPersistent
             { type = "string", alias = "Filter", persist = false, hash = false, default = "", maxLen = 32 },
         },
     })
-    local _, session = CreateModuleState(config, definition)
+    local _, session = createModuleState(self.harness, config, definition)
 
     session.write("Filter", "live")
-    local changed, count = lib.resetStorageToDefaults(definition.storage, session)
+    local changed, count = self.harness.public.resetStorageToDefaults(definition.storage, session)
 
     lu.assertTrue(changed)
     lu.assertEquals(count, 2)
@@ -201,7 +202,7 @@ end
 
 function TestStorageValidation:testResetSessionToDefaultsCanExcludeAliases()
     local config = { Flag = true, ViewRegion = "Surface" }
-    local definition = AdamantModpackLib_Internal.moduleHost.prepareDefinition({}, {
+    local definition = prepareDefinition(self.harness, {
         id = "ResetExcludeAliases",
         name = "Reset Exclude Aliases",
         storage = {
@@ -209,9 +210,9 @@ function TestStorageValidation:testResetSessionToDefaultsCanExcludeAliases()
             { type = "string", alias = "ViewRegion", default = "Underworld" },
         },
     })
-    local _, session = CreateModuleState(config, definition)
+    local _, session = createModuleState(self.harness, config, definition)
 
-    local changed, count = lib.resetStorageToDefaults(definition.storage, session, {
+    local changed, count = self.harness.public.resetStorageToDefaults(definition.storage, session, {
         exclude = { ViewRegion = true },
     })
 

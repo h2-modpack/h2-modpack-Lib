@@ -1,17 +1,23 @@
-local internal = AdamantModpackLib_Internal
-local physicalHooks = import 'core/hooks/private_registry.lua'
+local deps = ...
+local runtime = deps.runtime
+local physicalHooks = import('core/hooks/private_registry.lua', nil, {
+    modutil = deps.modutil,
+    logging = deps.logging,
+})
 
 -- `moduleDispatchers` own the physical ModUtil adapter for each path.
 -- `moduleSlots` choose which host for a plugin is currently visible to those adapters.
-internal.hooks.moduleSlots = internal.hooks.moduleSlots or {}
-internal.hooks.moduleDispatchers = internal.hooks.moduleDispatchers or {
+-- Both tables are hot-reload-stable because physical wrappers close over them.
+runtime.hooks = runtime.hooks or {}
+runtime.hooks.moduleSlots = runtime.hooks.moduleSlots or {}
+runtime.hooks.moduleDispatchers = runtime.hooks.moduleDispatchers or {
     wrap = {},
     override = {},
     contextWrap = {},
 }
 
-local moduleSlots = internal.hooks.moduleSlots
-local moduleDispatchers = internal.hooks.moduleDispatchers
+local moduleSlots = runtime.hooks.moduleSlots
+local moduleDispatchers = runtime.hooks.moduleDispatchers
 
 local function getModuleSlot(pluginGuid)
     local slot = moduleSlots[pluginGuid]

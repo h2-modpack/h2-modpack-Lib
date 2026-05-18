@@ -1,7 +1,7 @@
 local deps = ...
 
-local internal = AdamantModpackLib_Internal
 local getRegistry = deps.getRegistry
+local logging = deps.logging
 local renderer = deps.renderer
 
 local function createProjectionContext(registry)
@@ -27,7 +27,7 @@ local function createProjectionContext(registry)
         if authorHost and type(authorHost.log) == "function" then
             return authorHost.log(fmt, ...)
         end
-        print(internal.formatLogMessage("[overlays:" .. tostring(registry.ownerId) .. "] ", fmt, ...))
+        print(logging.formatLogMessage("[overlays:" .. tostring(registry.ownerId) .. "] ", fmt, ...))
     end
 
     function ctx.logIf(fmt, ...)

@@ -1,11 +1,11 @@
-local internal = AdamantModpackLib_Internal
+local deps = ...
+local runtime = deps.runtime
 
-internal.integrations = internal.integrations or {
-    registry = {},
-}
-internal.integrations.registry = internal.integrations.registry or {}
+-- Hot-reload-stable integration registry.
+runtime.integrations = runtime.integrations or {}
+runtime.integrations.registry = runtime.integrations.registry or {}
 
-local registry = internal.integrations.registry
+local registry = runtime.integrations.registry
 
 local function GetRegistry()
     return registry

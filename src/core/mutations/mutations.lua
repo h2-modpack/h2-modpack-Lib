@@ -1,18 +1,23 @@
-local internal = AdamantModpackLib_Internal
+local deps = ...
 
-public.mutation = public.mutation or {}
-internal.mutation = internal.mutation or {}
+local logging = deps.logging
+local values = deps.values
+local hostState = deps.hostState
+local coordinator = deps.coordinator
+local SetupRunData = deps.gameDeps.runData.SetupRunData
 
-AdamantModpackLib_MutationState = AdamantModpackLib_MutationState or {
-    pluginRuntime = {},
-    planExecutors = setmetatable({}, { __mode = "k" }),
-}
-local mutationState = AdamantModpackLib_MutationState
+local runtime = deps.runtime
+-- Hot-reload-stable mutation runtime. Active plans must remain revertible
+-- across Lib re-imports because they may already be applied to run data.
+runtime.mutation = runtime.mutation or {}
+local mutationState = runtime.mutation
 mutationState.pluginRuntime = mutationState.pluginRuntime or {}
 mutationState.planExecutors = mutationState.planExecutors or setmetatable({}, { __mode = "k" })
 
-local values = internal.values
-public.mutation.createBackup = nil
+local mutation = {}
+local mutationPublic = public.mutation or {}
+public.mutation = mutationPublic
+mutationPublic.createBackup = nil
 
 ---@class MutationPlan
 ---@field set fun(self: MutationPlan, tbl: table, key: any, value: any): MutationPlan
@@ -26,7 +31,7 @@ public.mutation.createBackup = nil
 local planExecutors = mutationState.planExecutors
 
 ---@return function backup, function restore
-function internal.mutation.createBackup()
+function mutation.createBackup()
     local NIL = {}
     local savedValues = {}
 
@@ -63,8 +68,8 @@ function internal.mutation.createBackup()
 end
 
 ---@return MutationPlan
-function public.mutation.createPlan()
-    local backup, restore = internal.mutation.createBackup()
+function mutation.createPlan()
+    local backup, restore = mutation.createBackup()
     local operations = {}
     local applied = false
     local plan = {}
@@ -255,6 +260,10 @@ function public.mutation.createPlan()
     return plan --[[@as MutationPlan]]
 end
 
+function mutationPublic.createPlan()
+    return mutation.createPlan()
+end
+
 local function GetPlanExecutor(plan, action)
     local executor = planExecutors[plan]
     if not executor then
@@ -263,11 +272,11 @@ local function GetPlanExecutor(plan, action)
     return executor[action]
 end
 
-function internal.mutation.applyPlan(plan)
+function mutation.applyPlan(plan)
     return GetPlanExecutor(plan, "apply")()
 end
 
-function internal.mutation.revertPlan(plan)
+function mutation.revertPlan(plan)
     return GetPlanExecutor(plan, "revert")()
 end
 
@@ -278,7 +287,7 @@ end
 
 local function GetRuntimeKey(pluginGuid)
     if type(pluginGuid) ~= "string" or pluginGuid == "" then
-        internal.violate("mutation.invalid_runtime_key", "mutation lifecycle requires pluginGuid")
+        logging.violate("mutation.invalid_runtime_key", "mutation lifecycle requires pluginGuid")
     end
     return "plugin:" .. pluginGuid, mutationState.pluginRuntime
 end
@@ -298,18 +307,18 @@ local function SetRuntimeState(pluginGuid, state)
 end
 
 local function SetActiveMutationPlan(pluginGuid, plan)
-    local runtime = GetRuntimeState(pluginGuid) or {}
-    runtime.plan = plan
-    SetRuntimeState(pluginGuid, runtime)
+    local runtimeState = GetRuntimeState(pluginGuid) or {}
+    runtimeState.plan = plan
+    SetRuntimeState(pluginGuid, runtimeState)
 end
 
 local function CaptureActiveMutation(pluginGuid)
-    local runtime = GetRuntimeState(pluginGuid)
-    if not runtime then
+    local runtimeState = GetRuntimeState(pluginGuid)
+    if not runtimeState then
         return nil
     end
     return {
-        plan = runtime.plan,
+        plan = runtimeState.plan,
     }
 end
 
@@ -322,7 +331,7 @@ local function RestoreActiveMutation(pluginGuid, snapshot)
         return true, nil
     end
 
-    local okPlan, errPlan = pcall(internal.mutation.applyPlan, snapshot.plan)
+    local okPlan, errPlan = pcall(mutation.applyPlan, snapshot.plan)
     if not okPlan then
         return false, errPlan
     end
@@ -337,14 +346,14 @@ local function BuildMutationPlan(mutationBundle, authorHost, store)
         return nil
     end
 
-    local plan = public.mutation.createPlan()
+    local plan = mutation.createPlan()
     builder(plan, authorHost, store)
     return plan
 end
 
 local function IsEnabledForSync(def, store)
     local packId = def and def.modpack or nil
-    local coord = packId and internal.coordinators and internal.coordinators[packId] or nil
+    local coord = packId and coordinator and coordinator.getConfig and coordinator.getConfig(packId) or nil
     if coord and not coord.ModEnabled then
         return false
     end
@@ -354,22 +363,16 @@ local function IsEnabledForSync(def, store)
     return store.read("Enabled") == true
 end
 
-local function SetupRunData()
-    if rom and rom.game and type(rom.game.SetupRunData) == "function" then
-        rom.game.SetupRunData()
-    end
-end
-
 local function RevertActivePlan(pluginGuid)
-    local runtime = GetRuntimeState(pluginGuid)
-    local activePlan = runtime and runtime.plan or nil
+    local runtimeState = GetRuntimeState(pluginGuid)
+    local activePlan = runtimeState and runtimeState.plan or nil
     if not activePlan then
         return true, nil, false
     end
 
-    local okPlan, errPlan = pcall(internal.mutation.revertPlan, activePlan)
-    runtime.plan = nil
-    SetRuntimeState(pluginGuid, runtime)
+    local okPlan, errPlan = pcall(mutation.revertPlan, activePlan)
+    runtimeState.plan = nil
+    SetRuntimeState(pluginGuid, runtimeState)
     if not okPlan then
         return false, errPlan, true
     end
@@ -396,7 +399,7 @@ end
 --- Returns whether a module declares that it affects live run data.
 ---@param mutationBundle table|nil Candidate mutation bundle.
 ---@return boolean affects True when the definition opts into run-data mutation behavior.
-function internal.mutation.affectsRunData(mutationBundle)
+function mutation.affectsRunData(mutationBundle)
     return mutationBundle
         and (mutationBundle.affectsRunData == true or type(mutationBundle.patchMutation) == "function")
         or false
@@ -430,7 +433,7 @@ local function ApplyMutation(pluginGuid, def, mutationBundle, authorHost, store)
     end
 
     if not inferred then
-        if not internal.mutation.affectsRunData(mutationBundle) then
+        if not mutation.affectsRunData(mutationBundle) then
             return true, nil
         end
         return failApply(tostring(defLabel) .. ": no supported mutation lifecycle found")
@@ -443,7 +446,7 @@ local function ApplyMutation(pluginGuid, def, mutationBundle, authorHost, store)
         end
         local builtPlan = result
         if builtPlan then
-            local okApply, errApply = pcall(internal.mutation.applyPlan, builtPlan)
+            local okApply, errApply = pcall(mutation.applyPlan, builtPlan)
             if not okApply then
                 return failApply(errApply)
             end
@@ -454,21 +457,21 @@ local function ApplyMutation(pluginGuid, def, mutationBundle, authorHost, store)
     return true, nil
 end
 
-function internal.mutation.applyForPlugin(pluginGuid, def, mutationBundle, authorHost, store)
+function mutation.applyForPlugin(pluginGuid, def, mutationBundle, authorHost, store)
     return ApplyMutation(pluginGuid, def, mutationBundle, authorHost, store)
 end
 
-function internal.mutation.syncForHost(host, mutationBundle, authorHost, store)
-    local hostState = internal.moduleHost and internal.moduleHost.getState and internal.moduleHost.getState(host) or nil
-    if not hostState then
-        internal.violate("mutation.invalid_runtime_key", "mutation sync requires a module host")
+function mutation.syncForHost(host, mutationBundle, authorHost, store)
+    local state = hostState.get(host)
+    if not state then
+        logging.violate("mutation.invalid_runtime_key", "mutation sync requires a module host")
     end
 
-    local pluginGuid = hostState.pluginGuid
-    local def = hostState.definition
+    local pluginGuid = state.pluginGuid
+    local def = state.definition
     local enabled = IsEnabledForSync(def, store)
     local inferred, info = InferMutation(mutationBundle)
-    local affectsRunData = internal.mutation.affectsRunData(mutationBundle)
+    local affectsRunData = mutation.affectsRunData(mutationBundle)
     local defLabel = def and (def.name or def.id) or "module"
     local candidatePlan = nil
 
@@ -493,7 +496,7 @@ function internal.mutation.syncForHost(host, mutationBundle, authorHost, store)
         local rollbackErrors = {}
 
         if appliedCandidate and candidatePlan then
-            local okRevert, errRevert = pcall(internal.mutation.revertPlan, candidatePlan)
+            local okRevert, errRevert = pcall(mutation.revertPlan, candidatePlan)
             if not okRevert then
                 rollbackErrors[#rollbackErrors + 1] = "candidate revert failed: " .. tostring(errRevert)
             end
@@ -540,7 +543,7 @@ function internal.mutation.syncForHost(host, mutationBundle, authorHost, store)
             revertedPrevious = didRevert == true
 
             if candidatePlan then
-                local okApply, errApply = pcall(internal.mutation.applyPlan, candidatePlan)
+                local okApply, errApply = pcall(mutation.applyPlan, candidatePlan)
                 if not okApply then
                     return restorePrevious(errApply, revertedPrevious)
                 end
@@ -587,7 +590,7 @@ local function RevertActive(pluginGuid)
     return ok, err
 end
 
-function internal.mutation.revertActiveForPlugin(pluginGuid)
+function mutation.revertActiveForPlugin(pluginGuid)
     return RevertActive(pluginGuid)
 end
 
@@ -606,7 +609,7 @@ local function RevertMutation(pluginGuid, def, mutationBundle)
         if not okActive then
             return false, errActive
         end
-        if didActive or not internal.mutation.affectsRunData(mutationBundle) then
+        if didActive or not mutation.affectsRunData(mutationBundle) then
             return true, nil
         end
         return false, tostring(defLabel) .. ": no supported mutation lifecycle found"
@@ -622,7 +625,7 @@ local function RevertMutation(pluginGuid, def, mutationBundle)
     return true, nil
 end
 
-function internal.mutation.revertForPlugin(pluginGuid, def, mutationBundle, authorHost, store)
+function mutation.revertForPlugin(pluginGuid, def, mutationBundle, authorHost, store)
     return RevertMutation(pluginGuid, def, mutationBundle, authorHost, store)
 end
 
@@ -637,6 +640,8 @@ local function ReapplyMutation(pluginGuid, def, mutationBundle, authorHost, stor
     return ApplyMutation(pluginGuid, def, mutationBundle, authorHost, store)
 end
 
-function internal.mutation.reapplyForPlugin(pluginGuid, def, mutationBundle, authorHost, store)
+function mutation.reapplyForPlugin(pluginGuid, def, mutationBundle, authorHost, store)
     return ReapplyMutation(pluginGuid, def, mutationBundle, authorHost, store)
 end
+
+return mutation

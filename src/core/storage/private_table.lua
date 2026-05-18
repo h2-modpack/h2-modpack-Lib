@@ -1,6 +1,6 @@
 local deps = ...
 
-local internal = deps.internal
+local logging = deps.logging
 local storageInternal = deps.storage
 local StorageTypes = deps.types
 local values = deps.values
@@ -49,7 +49,7 @@ local function writeRowRootValue(root, row, value)
 end
 
 local function unknownRowAlias(node, rowAlias)
-    internal.violate(
+    logging.violate(
         "storage.unknown_table_row_alias",
         "table storage '%s': unknown row alias '%s'",
         tostring(node.alias),
@@ -84,7 +84,7 @@ end
 
 local function validateTableReceiver(node, handle, receiver, methodName)
     if receiver ~= handle then
-        internal.violate(
+        logging.violate(
             "storage.invalid_table_handle_args",
             "table storage '%s': invalid receiver for %s",
             tostring(node.alias),
@@ -95,7 +95,7 @@ end
 
 local function validateRowIndex(node, rowIndex, methodName)
     if type(rowIndex) ~= "number" then
-        internal.violate(
+        logging.violate(
             "storage.invalid_table_handle_args",
             "table storage '%s': %s expects numeric rowIndex",
             tostring(node.alias),
@@ -106,7 +106,7 @@ end
 
 local function validateRowAlias(node, alias, methodName)
     if type(alias) ~= "string" or alias == "" then
-        internal.violate(
+        logging.violate(
             "storage.invalid_table_handle_args",
             "table storage '%s': %s expects non-empty row alias",
             tostring(node.alias),
@@ -132,20 +132,20 @@ local function PrepareTableNode(node, prefix)
         local rowPrefix = prefix .. " row[" .. index .. "]"
         if type(rowNode) == "table" then
             if rowNode.type == "table" then
-                internal.violate("storage.invalid_table_row", "%s: nested table storage is not supported", rowPrefix)
+                logging.violate("storage.invalid_table_row", "%s: nested table storage is not supported", rowPrefix)
             end
             if rowNode.persist ~= nil then
-                internal.violate(
+                logging.violate(
                     "storage.invalid_table_row",
                     "%s: row storage cannot declare persist; table root owns persistence",
                     rowPrefix
                 )
             end
             if rowNode.stage ~= nil then
-                internal.violate("storage.invalid_table_row", "%s: row storage cannot declare stage; table root owns staging", rowPrefix)
+                logging.violate("storage.invalid_table_row", "%s: row storage cannot declare stage; table root owns staging", rowPrefix)
             end
             if rowNode.hash ~= nil then
-                internal.violate("storage.invalid_table_row", "%s: row storage cannot declare hash; table root owns hashing", rowPrefix)
+                logging.violate("storage.invalid_table_row", "%s: row storage cannot declare hash; table root owns hashing", rowPrefix)
             end
         end
     end
@@ -283,7 +283,7 @@ local function CreateTableHandle(node, opts)
 
     local function writeRows(rows)
         if opts.writeRoot == nil then
-            internal.violate("storage.readonly_table_handle", "table storage handle is read-only")
+            logging.violate("storage.readonly_table_handle", "table storage handle is read-only")
         end
         return opts.writeRoot(node, NormalizeTableValue(node, rows))
     end

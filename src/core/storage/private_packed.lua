@@ -1,6 +1,6 @@
 local deps = ...
 
-local internal = deps.internal
+local logging = deps.logging
 local storage = deps.storage
 local StorageTypes = deps.types
 local EMPTY_LIST = {}
@@ -24,7 +24,7 @@ end
 local function ValidateKnownPackedBitFields(node, prefix)
     for key in pairs(node) do
         if not IsInternalField(key) and not PackedBitFields[key] then
-            internal.violate("storage.unknown_field", "%s: unknown packed bit field '%s'", prefix, tostring(key))
+            logging.violate("storage.unknown_field", "%s: unknown packed bit field '%s'", prefix, tostring(key))
         end
     end
 end
@@ -75,28 +75,28 @@ local function validatePackedBits(node, prefix)
         local bitPrefix = prefix .. " bits[" .. index .. "]"
         ValidateKnownPackedBitFields(bitNode, bitPrefix)
         if type(bitNode.alias) ~= "string" or bitNode.alias == "" then
-            internal.violate("storage.invalid_packed_bit", "%s: packed bit alias must be a non-empty string", bitPrefix)
+            logging.violate("storage.invalid_packed_bit", "%s: packed bit alias must be a non-empty string", bitPrefix)
         elseif seenAliases[bitNode.alias] then
-            internal.violate("storage.duplicate_alias", "%s: duplicate packed bit alias '%s'", bitPrefix, bitNode.alias)
+            logging.violate("storage.duplicate_alias", "%s: duplicate packed bit alias '%s'", bitPrefix, bitNode.alias)
         else
             seenAliases[bitNode.alias] = true
         end
         if type(bitNode.offset) ~= "number" or bitNode.offset < 0 then
-            internal.violate("storage.invalid_packed_bit", "%s: packed bit offset must be a non-negative number", bitPrefix)
+            logging.violate("storage.invalid_packed_bit", "%s: packed bit offset must be a non-negative number", bitPrefix)
         end
         if type(bitNode.width) ~= "number" or bitNode.width < 1 then
-            internal.violate("storage.invalid_packed_bit", "%s: packed bit width must be a positive number", bitPrefix)
+            logging.violate("storage.invalid_packed_bit", "%s: packed bit width must be a positive number", bitPrefix)
         end
 
         if type(bitNode.offset) == "number" and type(bitNode.width) == "number" then
             local offset = math.floor(bitNode.offset)
             local width = math.floor(bitNode.width)
             if offset + width > 32 then
-                internal.violate("storage.invalid_packed_bit", "%s: packed bit offset + width must stay within 32 bits", bitPrefix)
+                logging.violate("storage.invalid_packed_bit", "%s: packed bit offset + width must stay within 32 bits", bitPrefix)
             end
             for bit = offset, offset + width - 1 do
                 if occupiedBits[bit] then
-                    internal.violate("storage.invalid_packed_bit", "%s: packed bit overlaps bit %d", bitPrefix, bit)
+                    logging.violate("storage.invalid_packed_bit", "%s: packed bit overlaps bit %d", bitPrefix, bit)
                 else
                     occupiedBits[bit] = true
                 end
@@ -107,7 +107,7 @@ local function validatePackedBits(node, prefix)
 
         local valueType = bitNode.type or (bitNode.width == 1 and "bool" or "int")
         if valueType ~= "bool" and valueType ~= "int" then
-            internal.violate("storage.invalid_packed_bit", "%s: packed bit type must be 'bool' or 'int'", bitPrefix)
+            logging.violate("storage.invalid_packed_bit", "%s: packed bit type must be 'bool' or 'int'", bitPrefix)
         end
         bitNode.type = valueType
         local storageType = StorageTypes[valueType]

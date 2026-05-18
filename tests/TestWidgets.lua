@@ -1,113 +1,16 @@
-local lu = require('luaunit')
+local lu = require("luaunit")
+local createWidgetHarness = require("tests/harness/create_widget_harness")
 
 TestWidgets = {}
 
-local function makeSession(value)
-    local actions = {}
-    return {
-        read = function()
-            return value
-        end,
-        write = function(_, nextValue)
-            value = nextValue
-        end,
-        stageAction = function(actionKey, actionValue)
-            actions[actionKey] = actionValue
-        end,
-        readAction = function(actionKey)
-            return actions[actionKey]
-        end,
-    }
-end
-
-local function makeDropdownImgui()
-    local state = {
-        beginComboId = nil,
-        beginComboPreview = nil,
-        customPreviewCalls = 0,
-        customPreviewText = nil,
-    }
-
-    local imgui = {
-        GetCursorPosX = function() return 0 end,
-        SetCursorPosX = function() end,
-        AlignTextToFramePadding = function() end,
-        Text = function() end,
-        IsItemHovered = function() return false end,
-        SetTooltip = function() end,
-        SameLine = function() end,
-        Button = function() return false end,
-        Dummy = function() end,
-        PushItemWidth = function() end,
-        PopItemWidth = function() end,
-        BeginCombo = function(id, preview)
-            state.beginComboId = id
-            state.beginComboPreview = preview
-            return false
-        end,
-        GetWindowDrawList = function()
-            state.customPreviewCalls = state.customPreviewCalls + 1
-            return {}
-        end,
-        GetStyle = function()
-            return {
-                FramePadding = { x = 4, y = 3 },
-                ItemInnerSpacing = { x = 4, y = 4 },
-            }
-        end,
-        GetItemRectMin = function() return 0, 0 end,
-        GetItemRectMax = function() return 200, 24 end,
-        CalcTextSize = function(text) return #(tostring(text or "")) * 8, 16 end,
-        GetFrameHeight = function() return 20 end,
-        GetColorU32 = function() return 1 end,
-        PushClipRect = function() end,
-        ImDrawListAddText = function(_, _, _, _, text)
-            state.customPreviewText = text
-        end,
-        PopClipRect = function() end,
-    }
-
-    return imgui, state
-end
-
-local function makeStepperImgui(clickedLabel)
-    local clickedButtons = {}
-    local imgui = makeDropdownImgui()
-    imgui.Button = function(label)
-        clickedButtons[#clickedButtons + 1] = label
-        return label == clickedLabel
-    end
-    return imgui, clickedButtons
-end
-
-local function makePackedStore()
-    local storage = {
-        {
-            type = "packedInt",
-            alias = "Packed",
-            bits = {
-                { alias = "First", offset = 0, width = 1, type = "bool", default = false },
-                { alias = "Second", offset = 1, width = 1, type = "bool", default = false },
-            },
-        },
-    }
-    local definition = AdamantModpackLib_Internal.moduleHost.prepareDefinition({}, {
-        modpack = "test-pack",
-        id = "PackedWidgetTest",
-        name = "Packed Widget Test",
-        storage = storage,
-    })
-    local config = { Enabled = false, DebugMode = false, Packed = 0 }
-    local _, session = CreateModuleState(config, definition)
-    lu.assertEquals(session.getAliasSchema("Packed").alias, "Packed")
-    lu.assertEquals(session.getAliasSchema("Second").alias, "Second")
-    return session
+function TestWidgets:setUp()
+    self.h = createWidgetHarness()
 end
 
 function TestWidgets:testPlainDropdownUsesNativePreview()
-    local imgui, state = makeDropdownImgui()
+    local imgui, state = self.h.makeDropdownImgui()
 
-    lib.widgets.dropdown(imgui, makeSession(2), "Mode", {
+    self.h.widgets.dropdown(imgui, self.h.createValueSession(2), "Mode", {
         label = "Mode",
         values = { 1, 2 },
         displayValues = {
@@ -123,9 +26,9 @@ function TestWidgets:testPlainDropdownUsesNativePreview()
 end
 
 function TestWidgets:testColoredDropdownUsesCustomPreview()
-    local imgui, state = makeDropdownImgui()
+    local imgui, state = self.h.makeDropdownImgui()
 
-    lib.widgets.dropdown(imgui, makeSession(2), "Mode", {
+    self.h.widgets.dropdown(imgui, self.h.createValueSession(2), "Mode", {
         label = "Mode",
         values = { 1, 2 },
         displayValues = {
@@ -144,10 +47,10 @@ function TestWidgets:testColoredDropdownUsesCustomPreview()
 end
 
 function TestWidgets:testStepperSupportsCalcTextSizeNumberReturn()
-    local imgui = makeDropdownImgui()
+    local imgui = self.h.makeDropdownImgui()
 
     local ok = pcall(function()
-        lib.widgets.stepper(imgui, makeSession(3), "Runs", {
+        self.h.widgets.stepper(imgui, self.h.createValueSession(3), "Runs", {
             label = "Runs",
             min = 1,
             max = 10,
@@ -159,10 +62,10 @@ function TestWidgets:testStepperSupportsCalcTextSizeNumberReturn()
 end
 
 function TestWidgets:testStepperUsesStableButtonIdsAndWritesIncrement()
-    local imgui, clickedButtons = makeStepperImgui("+##Runs_inc")
-    local session = makeSession(3)
+    local imgui, clickedButtons = self.h.makeStepperImgui("+##Runs_inc")
+    local session = self.h.createValueSession(3)
 
-    local changed = lib.widgets.stepper(imgui, session, "Runs", {
+    local changed = self.h.widgets.stepper(imgui, session, "Runs", {
         label = "Runs",
         min = 1,
         max = 10,
@@ -176,11 +79,11 @@ function TestWidgets:testStepperUsesStableButtonIdsAndWritesIncrement()
 end
 
 function TestWidgets:testPackedDropdownResolvesChildrenFromSessionSchema()
-    local session = makePackedStore()
+    local session = self.h.createPackedSession()
     session.write("Second", true)
-    local imgui, state = makeDropdownImgui()
+    local imgui, state = self.h.makeDropdownImgui()
 
-    lib.widgets.packedDropdown(imgui, session, "Packed", {
+    self.h.widgets.packedDropdown(imgui, session, "Packed", {
         label = "Packed",
         displayValues = {
             Second = "Second Choice",
@@ -192,8 +95,7 @@ function TestWidgets:testPackedDropdownResolvesChildrenFromSessionSchema()
 end
 
 function TestWidgets:testPackedDropdownAcceptsTableRowHandle()
-    local definition = AdamantModpackLib_Internal.moduleHost.prepareDefinition({}, {
-        modpack = "test-pack",
+    local definition = self.h.prepareDefinition({
         id = "PackedWidgetRowTest",
         name = "Packed Widget Row Test",
         storage = {
@@ -214,12 +116,12 @@ function TestWidgets:testPackedDropdownAcceptsTableRowHandle()
             },
         },
     })
-    local _, session = CreateModuleState({}, definition)
+    local _, session = self.h.createModuleState({}, definition)
     local row = session.table("Rows"):rowHandle(1)
     row.write("Second", true)
-    local imgui, state = makeDropdownImgui()
+    local imgui, state = self.h.makeDropdownImgui()
 
-    lib.widgets.packedDropdown(imgui, row, "Packed", {
+    self.h.widgets.packedDropdown(imgui, row, "Packed", {
         label = "Packed",
         displayValues = {
             Second = "Second Choice",
@@ -230,10 +132,10 @@ function TestWidgets:testPackedDropdownAcceptsTableRowHandle()
 end
 
 function TestWidgets:testPackedDropdownSupportsExplicitControlId()
-    local session = makePackedStore()
-    local imgui, state = makeDropdownImgui()
+    local session = self.h.createPackedSession()
+    local imgui, state = self.h.makeDropdownImgui()
 
-    lib.widgets.packedDropdown(imgui, session, "Packed", {
+    self.h.widgets.packedDropdown(imgui, session, "Packed", {
         id = "Packed_Row_2",
         label = "Packed",
     })
@@ -242,15 +144,15 @@ function TestWidgets:testPackedDropdownSupportsExplicitControlId()
 end
 
 function TestWidgets:testButtonStagesSessionAction()
-    local session = makeSession()
+    local session = self.h.createValueSession()
     local clickedLabels = {}
-    local imgui = makeDropdownImgui()
+    local imgui = self.h.makeDropdownImgui()
     imgui.Button = function(label)
         clickedLabels[#clickedLabels + 1] = label
         return true
     end
 
-    local clicked = lib.widgets.button(imgui, session, "Start", {
+    local clicked = self.h.widgets.button(imgui, session, "Start", {
         id = "start_recording",
         action = "recording",
         value = { kind = "start" },

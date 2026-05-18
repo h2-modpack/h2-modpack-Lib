@@ -1,8 +1,13 @@
-local internal = AdamantModpackLib_Internal
-local registry = import 'core/integrations/private_registry.lua'
+local deps = ...
 
+local logging = deps.logging
+local runtime = deps.runtime
+local registry = import('core/integrations/private_registry.lua', nil, {
+    runtime = runtime,
+})
+
+local integrations = {}
 public.integrations = public.integrations or {}
-internal.integrations = internal.integrations or {}
 
 local ActiveHostInstallStack = {}
 
@@ -39,15 +44,15 @@ local function recordStagedRegistration(install, id, providerId, api)
     return api
 end
 
-function internal.integrations.installForHost(host, register, authorHost, store)
+function integrations.installForHost(host, register, authorHost, store)
     if register == nil then
         return makeNoopReceipt()
     end
     if type(host) ~= "table" then
-        internal.violate("integrations.invalid_args", "internal.integrations.installForHost: host is required")
+        logging.violate("integrations.invalid_args", "integrations.installForHost: host is required")
     end
     if type(register) ~= "function" then
-        internal.violate("integrations.invalid_args", "internal.integrations.installForHost: register must be a function")
+        logging.violate("integrations.invalid_args", "integrations.installForHost: register must be a function")
     end
 
     local install = {
@@ -124,13 +129,13 @@ end
 ---@return table api The registered API table.
 function public.integrations.register(id, providerId, api)
     if type(id) ~= "string" or id == "" then
-        internal.violate("integrations.invalid_args", "lib.integrations.register: id must be a non-empty string")
+        logging.violate("integrations.invalid_args", "lib.integrations.register: id must be a non-empty string")
     end
     if type(providerId) ~= "string" or providerId == "" then
-        internal.violate("integrations.invalid_args", "lib.integrations.register: providerId must be a non-empty string")
+        logging.violate("integrations.invalid_args", "lib.integrations.register: providerId must be a non-empty string")
     end
     if type(api) ~= "table" then
-        internal.violate("integrations.invalid_args", "lib.integrations.register: api must be a table")
+        logging.violate("integrations.invalid_args", "lib.integrations.register: api must be a table")
     end
 
     local activeInstall = ActiveHostInstallStack[#ActiveHostInstallStack]
@@ -147,10 +152,10 @@ end
 ---@return boolean removed True when a provider was removed.
 function public.integrations.unregister(id, providerId)
     if type(id) ~= "string" or id == "" then
-        internal.violate("integrations.invalid_args", "lib.integrations.unregister: id must be a non-empty string")
+        logging.violate("integrations.invalid_args", "lib.integrations.unregister: id must be a non-empty string")
     end
     if type(providerId) ~= "string" or providerId == "" then
-        internal.violate("integrations.invalid_args", "lib.integrations.unregister: providerId must be a non-empty string")
+        logging.violate("integrations.invalid_args", "lib.integrations.unregister: providerId must be a non-empty string")
     end
 
     local bucket = registry.getBucket(id, false)
@@ -164,7 +169,7 @@ end
 ---@return number count Number of removed provider registrations.
 function public.integrations.unregisterProvider(providerId)
     if type(providerId) ~= "string" or providerId == "" then
-        internal.violate(
+        logging.violate(
             "integrations.invalid_args",
             "lib.integrations.unregisterProvider: providerId must be a non-empty string"
         )
@@ -187,7 +192,7 @@ end
 ---@return string|nil providerId Provider id for the returned API.
 function public.integrations.get(id)
     if type(id) ~= "string" or id == "" then
-        internal.violate("integrations.invalid_args", "lib.integrations.get: id must be a non-empty string")
+        logging.violate("integrations.invalid_args", "lib.integrations.get: id must be a non-empty string")
     end
 
     return registry.getPreferredProvider(id)
@@ -202,10 +207,10 @@ end
 ---@return string|nil providerId Provider id that handled the call.
 function public.integrations.invoke(id, methodName, fallback, ...)
     if type(id) ~= "string" or id == "" then
-        internal.violate("integrations.invalid_args", "lib.integrations.invoke: id must be a non-empty string")
+        logging.violate("integrations.invalid_args", "lib.integrations.invoke: id must be a non-empty string")
     end
     if type(methodName) ~= "string" or methodName == "" then
-        internal.violate("integrations.invalid_args", "lib.integrations.invoke: methodName must be a non-empty string")
+        logging.violate("integrations.invalid_args", "lib.integrations.invoke: methodName must be a non-empty string")
     end
 
     local api, providerId = registry.getPreferredProvider(id)
@@ -216,7 +221,7 @@ function public.integrations.invoke(id, methodName, fallback, ...)
 
     local ok, result = pcall(method, ...)
     if not ok then
-        internal.violate(
+        logging.violate(
             "integrations.provider_failed",
             "%s.%s provider '%s' failed: %s",
             tostring(id),
@@ -234,7 +239,7 @@ end
 ---@return table[] providers Array of `{ providerId = string, api = table }` entries.
 function public.integrations.list(id)
     if type(id) ~= "string" or id == "" then
-        internal.violate("integrations.invalid_args", "lib.integrations.list: id must be a non-empty string")
+        logging.violate("integrations.invalid_args", "lib.integrations.list: id must be a non-empty string")
     end
 
     local bucket = registry.getBucket(id, false)
@@ -255,3 +260,5 @@ function public.integrations.list(id)
 
     return providers
 end
+
+return integrations

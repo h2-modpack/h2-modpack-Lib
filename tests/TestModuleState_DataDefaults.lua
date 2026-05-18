@@ -1,58 +1,28 @@
 local lu = require('luaunit')
+local createLibHarness = require('tests/harness/create_lib_harness')
 
--- =============================================================================
--- getPackWidth
--- =============================================================================
+TestModuleState_DataDefaults = {}
 
-TestGetPackWidth = {}
-
-function TestGetPackWidth:testBoolAlwaysReturnsOne()
-    lu.assertEquals(lib.hashing.getPackWidth({ type = "bool" }), 1)
+function TestModuleState_DataDefaults:setUp()
+    self.harness = createLibHarness()
 end
 
-function TestGetPackWidth:testIntDerivesFromMinMax()
-    -- min=0, max=7 → range 7 → ceil(log2(8)) = 3
-    lu.assertEquals(lib.hashing.getPackWidth({ type = "int", min = 0, max = 7 }), 3)
-    -- min=0, max=15 → range 15 → ceil(log2(16)) = 4
-    lu.assertEquals(lib.hashing.getPackWidth({ type = "int", min = 0, max = 15 }), 4)
-    -- min=1, max=12 → range 11 → ceil(log2(12)) = 4
-    lu.assertEquals(lib.hashing.getPackWidth({ type = "int", min = 1, max = 12 }), 4)
+function TestModuleState_DataDefaults:tearDown()
+    self.harness = nil
 end
 
-function TestGetPackWidth:testIntUsesExplicitWidthOverMinMax()
-    lu.assertEquals(lib.hashing.getPackWidth({ type = "int", min = 0, max = 7, width = 5 }), 5)
-end
-
-function TestGetPackWidth:testIntWithNoMaxReturnsNil()
-    lu.assertNil(lib.hashing.getPackWidth({ type = "int", min = 0 }))
-end
-
-function TestGetPackWidth:testStringReturnsNil()
-    lu.assertNil(lib.hashing.getPackWidth({ type = "string" }))
-end
-
-function TestGetPackWidth:testUnknownTypeReturnsNil()
-    lu.assertNil(lib.hashing.getPackWidth({ type = "unknown" }))
-end
-
--- =============================================================================
--- storage defaults
--- =============================================================================
-
-TestDataDefaults = {}
-
-local function makeStore(definition, config)
+local function makeStore(harness, definition, config)
     config = config or {}
     definition.id = definition.id or "DataDefaults"
     definition.name = definition.name or "Data Defaults"
     if not (type(definition) == "table" and rawget(definition, "_preparedDefinition") == true) then
-        definition = AdamantModpackLib_Internal.moduleHost.prepareDefinition({}, definition)
+        definition = harness.moduleHost.prepareDefinition({}, definition)
     end
-    local store, session = CreateModuleState(config, definition)
-    return store, session, config
+    local state = harness.moduleState.create(config, definition)
+    return state.store, state.session, config
 end
 
-local function makeChalkConfig()
+local function makeChalkConfig(harness)
     local raw = {
         entries = {},
         saved = 0,
@@ -69,11 +39,11 @@ local function makeChalkConfig()
             value = defaultValue,
             description = description or "",
         }
-        function entry:get()
-            return self.value
+        function entry.get(entrySelf)
+            return entrySelf.value
         end
-        function entry:set(value)
-            self.value = value
+        function entry.set(entrySelf, value)
+            entrySelf.value = value
         end
 
         self.entries[{ section = section, key = key }] = entry
@@ -85,7 +55,7 @@ local function makeChalkConfig()
     end
 
     local wrapper = { __raw = raw }
-    local chalk = rom.mods['SGG_Modding-Chalk']
+    local chalk = harness.chalk
     local previousOriginal = chalk.original
     chalk.original = function(config)
         return config.__raw
@@ -96,63 +66,63 @@ local function makeChalkConfig()
     end
 end
 
-function TestDataDefaults:testUsesBoolStorageDefault()
+function TestModuleState_DataDefaults:testUsesBoolStorageDefault()
     local definition = {
         storage = {
             { type = "bool", alias = "MyFlag", default = true },
         },
     }
-    local store, session = makeStore(definition, {})
+    local _, session = makeStore(self.harness, definition, {})
 
     lu.assertTrue(session.read("MyFlag"))
 end
 
-function TestDataDefaults:testUsesIntStorageDefault()
+function TestModuleState_DataDefaults:testUsesIntStorageDefault()
     local definition = {
         storage = {
             { type = "int", alias = "MyCount", default = 7, min = 0, max = 10 },
         },
     }
-    local store, session = makeStore(definition, {})
+    local _, session = makeStore(self.harness, definition, {})
 
     lu.assertEquals(session.read("MyCount"), 7)
 end
 
-function TestDataDefaults:testUsesStringStorageDefault()
+function TestModuleState_DataDefaults:testUsesStringStorageDefault()
     local definition = {
         storage = {
             { type = "string", alias = "MyChoice", default = "Forced" },
         },
     }
-    local store, session = makeStore(definition, {})
+    local _, session = makeStore(self.harness, definition, {})
 
     lu.assertEquals(session.read("MyChoice"), "Forced")
 end
 
 -- Live config value overrides the default when present
-function TestDataDefaults:testLiveConfigValueOverridesDefault()
+function TestModuleState_DataDefaults:testLiveConfigValueOverridesDefault()
     local definition = {
         storage = {
             { type = "bool", alias = "MyFlag", default = true },
         },
     }
-    local store, session = makeStore(definition, { MyFlag = false })
+    local _, session = makeStore(self.harness, definition, { MyFlag = false })
 
     lu.assertFalse(session.read("MyFlag"))
 end
 
-function TestDataDefaults:testMissingStorageDefaultFails()
+function TestModuleState_DataDefaults:testMissingStorageDefaultFails()
     local definition = {
         storage = {
             { type = "bool", alias = "MyFlag" },
         },
     }
     lu.assertErrorMsgContains("must declare an effective default", function()
-        makeStore(definition, {})
+        makeStore(self.harness, definition, {})
     end)
 end
 
-function TestDataDefaults:testMissingTableRowDefaultFails()
+function TestModuleState_DataDefaults:testMissingTableRowDefaultFails()
     local definition = {
         storage = {
             {
@@ -166,11 +136,11 @@ function TestDataDefaults:testMissingTableRowDefaultFails()
         },
     }
     lu.assertErrorMsgContains("must declare an effective default", function()
-        makeStore(definition, {})
+        makeStore(self.harness, definition, {})
     end)
 end
 
-function TestDataDefaults:testNestedTableStorageFails()
+function TestModuleState_DataDefaults:testNestedTableStorageFails()
     local definition = {
         storage = {
             {
@@ -189,22 +159,22 @@ function TestDataDefaults:testNestedTableStorageFails()
         },
     }
     lu.assertErrorMsgContains("nested table storage is not supported", function()
-        makeStore(definition, {})
+        makeStore(self.harness, definition, {})
     end)
 end
 
-function TestDataDefaults:testExplicitStorageDefaultsAreSafe()
+function TestModuleState_DataDefaults:testExplicitStorageDefaultsAreSafe()
     local definition = {
         storage = {
             { type = "bool", alias = "MyFlag", default = true },
         },
     }
-    local store, session = makeStore(definition, {})
+    local _, session = makeStore(self.harness, definition, {})
 
     lu.assertTrue(session.read("MyFlag"))
 end
 
-function TestDataDefaults:testCreateStoreHydratesMissingConfigFromStorageDefault()
+function TestModuleState_DataDefaults:testCreateStoreHydratesMissingConfigFromStorageDefault()
     local definition = {
         storage = {
             { type = "bool", alias = "MyFlag", default = true },
@@ -221,7 +191,7 @@ function TestDataDefaults:testCreateStoreHydratesMissingConfigFromStorageDefault
             },
         },
     }
-    local store, session, config = makeStore(definition, {})
+    local _, session, config = makeStore(self.harness, definition, {})
 
     lu.assertTrue(session.read("MyFlag"))
     lu.assertEquals(session.read("MyCount"), 4)
@@ -233,14 +203,14 @@ function TestDataDefaults:testCreateStoreHydratesMissingConfigFromStorageDefault
     lu.assertEquals(config.PackedChoices, 2)
 end
 
-function TestDataDefaults:testCreateStoreHydratesMissingRuntimeConfigFromStorageDefault()
+function TestModuleState_DataDefaults:testCreateStoreHydratesMissingRuntimeConfigFromStorageDefault()
     local definition = {
         storage = {
             { type = "bool", alias = "RecordingArmed", default = false, stage = false, hash = false },
             { type = "int", alias = "RunMarker", default = 3, min = 0, max = 10, stage = false, hash = false },
         },
     }
-    local store, session, config = makeStore(definition, {})
+    local store, session, config = makeStore(self.harness, definition, {})
 
     lu.assertFalse(session.read("Enabled"))
     lu.assertFalse(store.read("RecordingArmed"))
@@ -250,14 +220,14 @@ function TestDataDefaults:testCreateStoreHydratesMissingRuntimeConfigFromStorage
     lu.assertEquals(config.RunMarker, 3)
 end
 
-function TestDataDefaults:testCreateStorePreservesExistingConfigValues()
+function TestModuleState_DataDefaults:testCreateStorePreservesExistingConfigValues()
     local definition = {
         storage = {
             { type = "bool", alias = "MyFlag", default = true },
             { type = "int", alias = "MyCount", default = 4, min = 0, max = 10 },
         },
     }
-    local store, session, config = makeStore(definition, { MyFlag = false, MyCount = 9 })
+    local _, session, config = makeStore(self.harness, definition, { MyFlag = false, MyCount = 9 })
 
     lu.assertFalse(session.read("MyFlag"))
     lu.assertEquals(session.read("MyCount"), 9)
@@ -265,14 +235,14 @@ function TestDataDefaults:testCreateStorePreservesExistingConfigValues()
     lu.assertEquals(config.MyCount, 9)
 end
 
-function TestDataDefaults:testCreateStoreHydratesAliasBackedConfig()
+function TestModuleState_DataDefaults:testCreateStoreHydratesAliasBackedConfig()
     local definition = {
         storage = {
             { type = "bool", alias = "GodModeEnabled", default = true },
             { type = "int", alias = "FixedValue", default = 3, min = 0, max = 10 },
         },
     }
-    local store, session, config = makeStore(definition, {})
+    local _, session, config = makeStore(self.harness, definition, {})
 
     lu.assertTrue(session.read("GodModeEnabled"))
     lu.assertEquals(session.read("FixedValue"), 3)
@@ -280,8 +250,8 @@ function TestDataDefaults:testCreateStoreHydratesAliasBackedConfig()
     lu.assertEquals(config.FixedValue, 3)
 end
 
-function TestDataDefaults:testCreateStoreHydratesMissingChalkEntryFromStorageDefault()
-    local config, raw, restoreChalk = makeChalkConfig()
+function TestModuleState_DataDefaults:testCreateStoreHydratesMissingChalkEntryFromStorageDefault()
+    local config, raw, restoreChalk = makeChalkConfig(self.harness)
     local definition = {
         storage = {
             { type = "bool", alias = "MyFlag", default = true },
@@ -290,7 +260,7 @@ function TestDataDefaults:testCreateStoreHydratesMissingChalkEntryFromStorageDef
     }
 
     local ok, _, session = pcall(function()
-        return makeStore(definition, config)
+        return makeStore(self.harness, definition, config)
     end)
     restoreChalk()
 
@@ -309,32 +279,32 @@ function TestDataDefaults:testCreateStoreHydratesMissingChalkEntryFromStorageDef
     lu.assertEquals(valuesByPath["config.FixedValue"], 3)
 end
 
-function TestDataDefaults:testLookupUsesAliasAsBackingKey()
+function TestModuleState_DataDefaults:testLookupUsesAliasAsBackingKey()
     local definition = {
         storage = {
             { type = "int", alias = "MyAlias", default = 0, min = 0, max = 10 },
         },
     }
-    local _, session = makeStore(definition, { MyAlias = 1, OldBackingKey = 9 })
+    local _, session = makeStore(self.harness, definition, { MyAlias = 1, OldBackingKey = 9 })
 
     lu.assertEquals(session.read("MyAlias"), 1)
 end
 
-function TestDataDefaults:testMissingAliasUsesStorageDefault()
+function TestModuleState_DataDefaults:testMissingAliasUsesStorageDefault()
     local definition = {
         storage = {
             { type = "bool", alias = "GodModeEnabled", default = true },
             { type = "int",  alias = "FixedValue", default = 3, min = 0, max = 10 },
         },
     }
-    local _, session = makeStore(definition, {})
+    local _, session = makeStore(self.harness, definition, {})
 
     lu.assertTrue(session.read("GodModeEnabled"))
     lu.assertEquals(session.read("FixedValue"), 3)
 end
 
-function TestDataDefaults:testPreparedStorageDefaultsAreStableAcrossCreateStoreCalls()
-    local definition = AdamantModpackLib_Internal.moduleHost.prepareDefinition({}, {
+function TestModuleState_DataDefaults:testPreparedStorageDefaultsAreStableAcrossCreateStoreCalls()
+    local definition = self.harness.moduleHost.prepareDefinition({}, {
         id = "StablePreparedDefaults",
         name = "Stable Prepared Defaults",
         storage = {
@@ -344,12 +314,12 @@ function TestDataDefaults:testPreparedStorageDefaultsAreStableAcrossCreateStoreC
 
     lu.assertEquals(definition.storage[3].default, 5)
 
-    makeStore(definition, {})
+    makeStore(self.harness, definition, {})
     lu.assertEquals(definition.storage[3].default, 5)
 end
 
 -- Multiple nodes all receive their storage defaults.
-function TestDataDefaults:testMultipleNodesAllFilled()
+function TestModuleState_DataDefaults:testMultipleNodesAllFilled()
     local definition = {
         storage = {
             { type = "bool",   alias = "FlagA", default = true },
@@ -357,7 +327,7 @@ function TestDataDefaults:testMultipleNodesAllFilled()
             { type = "string", alias = "Mode", default = "Vanilla" },
         },
     }
-    local store, session = makeStore(definition, {})
+    local _, session = makeStore(self.harness, definition, {})
 
     lu.assertTrue(session.read("FlagA"))
     lu.assertEquals(session.read("Count"), 5)

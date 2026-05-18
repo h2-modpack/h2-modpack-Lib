@@ -1,103 +1,21 @@
 local lu = require("luaunit")
+local createOverlayHarness = require("tests/harness/create_overlay_harness")
 
 TestOverlays = {}
 
 function TestOverlays:setUp()
-    self.previousScreenData = ScreenData
-    self.previousHudScreen = HUDScreen
-    self.previousModifyTextBox = ModifyTextBox
-    self.previousSetAlpha = SetAlpha
-    self.previousCreateComponentFromData = CreateComponentFromData
-    self.previousDestroy = Destroy
-    self.previousShowingCombatUI = ShowingCombatUI
-    self.previousModUtil = modutil
-    self.previousRomModUtil = rom.mods["SGG_Modding-ModUtil"]
-    self.previousHooks = AdamantModpackLib_Internal.__adamantHooks
-    self.overlayState = AdamantModpackLib_OverlayState
-    self.rendererState = self.overlayState.renderer
-    self.retainedState = self.overlayState.retained
-    self.previousRendererTextElements = self.rendererState.textElements
-    self.previousRendererStackRows = self.rendererState.stackRows
-    self.previousRetainedTableRegistries = self.retainedState.tableRegistries
-    self.previousRetainedExplicitRegistries = self.retainedState.explicitRegistries
-    self.previousRetainedNextOwnerId = self.retainedState.nextOwnerId
-    self.previousRetainedIntervalDriverRegistered = self.retainedState.intervalDriverRegistered
-    self.previousUiSuppressors = self.overlayState.uiSuppressors
-    self.previousNextUiSuppressorId = self.overlayState.nextUiSuppressorId
-
-    AdamantModpackLib_Internal.__adamantHooks = nil
-    self.rendererState.textElements = {}
-    self.rendererState.stackRows = {}
-    self.retainedState.tableRegistries = setmetatable({}, { __mode = "k" })
-    self.retainedState.explicitRegistries = {}
-    self.retainedState.nextOwnerId = 0
-    self.retainedState.intervalDriverRegistered = true
-    self.overlayState.uiSuppressors = {}
-    self.overlayState.nextUiSuppressorId = 0
-    ShowingCombatUI = true
-    ScreenData = {
-        HUD = {
-            ComponentData = {},
-        },
-    }
-    HUDScreen = {
-        Components = {},
-    }
-    ModifyTextBox = function() end
-    SetAlpha = function() end
-    CreateComponentFromData = function(_, data)
-        return {
-            Id = data.Name,
-        }
-    end
-    Destroy = function() end
+    self.h = createOverlayHarness()
 end
 
-function TestOverlays:tearDown()
-    ScreenData = self.previousScreenData
-    HUDScreen = self.previousHudScreen
-    ModifyTextBox = self.previousModifyTextBox
-    SetAlpha = self.previousSetAlpha
-    CreateComponentFromData = self.previousCreateComponentFromData
-    Destroy = self.previousDestroy
-    ShowingCombatUI = self.previousShowingCombatUI
-    modutil = self.previousModUtil
-    rom.mods["SGG_Modding-ModUtil"] = self.previousRomModUtil
-    AdamantModpackLib_Internal.__adamantHooks = self.previousHooks
-    self.rendererState.textElements = self.previousRendererTextElements
-    self.rendererState.stackRows = self.previousRendererStackRows
-    self.retainedState.tableRegistries = self.previousRetainedTableRegistries
-    self.retainedState.explicitRegistries = self.previousRetainedExplicitRegistries
-    self.retainedState.nextOwnerId = self.previousRetainedNextOwnerId
-    self.retainedState.intervalDriverRegistered = self.previousRetainedIntervalDriverRegistered
-    self.overlayState.uiSuppressors = self.previousUiSuppressors
-    self.overlayState.nextUiSuppressorId = self.previousNextUiSuppressorId
+function TestOverlays:dispatch(owner)
+    return self.h.overlays.dispatchCommit(owner, {})
 end
 
-local function dispatch(owner)
-    AdamantModpackLib_Internal.overlays.dispatchCommit(owner, {})
-end
-
-local function createHostWithOverlays(pluginGuid, registerOverlays)
-    local definition = AdamantModpackLib_Internal.moduleHost.prepareDefinition({}, {
-        id = "OverlayHost",
-        name = "Overlay Host",
-        storage = {},
-    })
-    local store, session = CreateModuleState({
-        Enabled = true,
-        DebugMode = false,
-    }, definition)
-    local host, authorHost = AdamantModpackLib_Internal.moduleHost.create({
-        pluginGuid = pluginGuid,
-        definition = definition,
-        store = store,
-        session = session,
-        registerOverlays = registerOverlays,
-        drawTab = function() end,
-    })
-    authorHost.tryActivate()
-    return host
+function TestOverlays:activateHostWithOverlays(pluginGuid, registerOverlays, opts)
+    local host, authorHost, store, session = self.h.createHostWithOverlays(pluginGuid, registerOverlays, opts)
+    local ok, err = authorHost.tryActivate()
+    lu.assertTrue(ok, tostring(err))
+    return host, authorHost, store, session
 end
 
 function TestOverlays:testRetainedLineUsesHudComponentAndVisibilityHooks()
@@ -107,28 +25,19 @@ function TestOverlays:testRetainedLineUsesHudComponentAndVisibilityHooks()
     local text = "Ready"
     local visible = true
 
-    local testModUtil = {
-        mod = {
-            Path = {
-                Wrap = function(path, handler)
-                    if path == "StartRoomPresentation" then
-                        wrappedStartRoomPresentation = handler
-                    end
-                end,
-            },
-        },
-    }
-    modutil = testModUtil
-    rom.mods["SGG_Modding-ModUtil"] = testModUtil
-
-    ModifyTextBox = function(args)
+    self.h.modutil.mod.Path.Wrap = function(path, handler)
+        if path == "StartRoomPresentation" then
+            wrappedStartRoomPresentation = handler
+        end
+    end
+    self.h.game.modifyTextBox = function(args)
         modified[#modified + 1] = args
     end
-    SetAlpha = function(args)
+    self.h.game.setAlpha = function(args)
         alphas[#alphas + 1] = args
     end
 
-    lib.overlays.defineSystem("test.overlay.line", function(overlays)
+    self.h.overlayPublic.defineSystem("test.overlay.line", function(overlays)
         overlays.createLine("message", {
             componentName = "TestOverlay",
             region = "middleRightStack",
@@ -146,19 +55,19 @@ function TestOverlays:testRetainedLineUsesHudComponentAndVisibilityHooks()
         end)
     end)
 
-    local componentData = ScreenData.HUD.ComponentData.AdamantOverlay_TestOverlay_text
+    local componentData = self.h.game.screenData.HUD.ComponentData.AdamantOverlay_TestOverlay_text
     lu.assertNotNil(wrappedStartRoomPresentation)
     lu.assertEquals(componentData.TextArgs.Text, "")
     lu.assertEquals(componentData.TextArgs.Color, { 0.5, 0.5, 0.5, 1 })
     lu.assertEquals(modified[#modified].Text, "Ready")
 
     text = "Updated"
-    dispatch("test.overlay.line")
+    self:dispatch("test.overlay.line")
 
     lu.assertEquals(modified[#modified].Text, "Updated")
 
     visible = false
-    dispatch("test.overlay.line")
+    self:dispatch("test.overlay.line")
 
     lu.assertEquals(alphas[#alphas].Fraction, 0.0)
 
@@ -169,7 +78,7 @@ function TestOverlays:testRetainedLineUsesHudComponentAndVisibilityHooks()
 end
 
 function TestOverlays:testRetainedLinesUseStableMiddleRightOrderingAndBands()
-    lib.overlays.defineSystem("test.overlay.order", function(overlays)
+    self.h.overlayPublic.defineSystem("test.overlay.order", function(overlays)
         overlays.createLine("module", {
             componentName = "ModuleOverlay",
             region = "middleRightStack",
@@ -178,13 +87,13 @@ function TestOverlays:testRetainedLinesUseStableMiddleRightOrderingAndBands()
         overlays.createLine("framework", {
             componentName = "FrameworkOverlay",
             region = "middleRightStack",
-            order = lib.overlays.order.framework + 1,
+            order = self.h.overlayPublic.order.framework + 1,
             minWidth = 80,
         })
         overlays.createLine("debug", {
             componentName = "DebugOverlay",
             region = "middleRightStack",
-            order = lib.overlays.order.debug,
+            order = self.h.overlayPublic.order.debug,
             minWidth = 80,
         })
         overlays.onCommit(function(ctx)
@@ -195,13 +104,13 @@ function TestOverlays:testRetainedLinesUseStableMiddleRightOrderingAndBands()
         end)
     end)
 
-    lu.assertEquals(ScreenData.HUD.ComponentData.AdamantOverlay_FrameworkOverlay_text.Y, 200)
-    lu.assertEquals(ScreenData.HUD.ComponentData.AdamantOverlay_ModuleOverlay_text.Y, 240)
-    lu.assertEquals(ScreenData.HUD.ComponentData.AdamantOverlay_DebugOverlay_text.Y, 280)
+    lu.assertEquals(self.h.game.screenData.HUD.ComponentData.AdamantOverlay_FrameworkOverlay_text.Y, 200)
+    lu.assertEquals(self.h.game.screenData.HUD.ComponentData.AdamantOverlay_ModuleOverlay_text.Y, 240)
+    lu.assertEquals(self.h.game.screenData.HUD.ComponentData.AdamantOverlay_DebugOverlay_text.Y, 280)
 end
 
 function TestOverlays:testRetainedTableUsesStableColumnSpacing()
-    local host = createHostWithOverlays("test.overlay.table", function(overlays)
+    local host = self:activateHostWithOverlays("test.overlay.table", function(overlays)
         overlays.createTable("timer", {
             componentName = "TimerTable",
             region = "middleRightStack",
@@ -233,10 +142,10 @@ function TestOverlays:testRetainedTableUsesStableColumnSpacing()
             ctx.refresh("timer")
         end)
     end)
-    dispatch(host)
+    self:dispatch(host)
 
-    local label = ScreenData.HUD.ComponentData.AdamantOverlay_TimerTable_1_label
-    local time = ScreenData.HUD.ComponentData.AdamantOverlay_TimerTable_1_time
+    local label = self.h.game.screenData.HUD.ComponentData.AdamantOverlay_TimerTable_1_label
+    local time = self.h.game.screenData.HUD.ComponentData.AdamantOverlay_TimerTable_1_time
     lu.assertEquals(label.RightOffset, 112)
     lu.assertEquals(time.RightOffset, 10)
     lu.assertEquals(label.Y, 200)
@@ -247,11 +156,11 @@ end
 
 function TestOverlays:testUiSuppressionTokenGloballyHidesAndRestoresRetainedOverlays()
     local alphas = {}
-    SetAlpha = function(args)
+    self.h.game.setAlpha = function(args)
         alphas[#alphas + 1] = args
     end
 
-    lib.overlays.defineSystem("test.overlay.suppression", function(overlays)
+    self.h.overlayPublic.defineSystem("test.overlay.suppression", function(overlays)
         overlays.createLine("line", {
             componentName = "SuppressedOverlay",
             region = "middleRightStack",
@@ -263,21 +172,21 @@ function TestOverlays:testUiSuppressionTokenGloballyHidesAndRestoresRetainedOver
         end)
     end)
 
-    lu.assertFalse(lib.overlays.isUiSuppressed())
+    lu.assertFalse(self.h.overlayPublic.isUiSuppressed())
 
-    local firstToken = lib.overlays.suppressForUi()
-    lu.assertTrue(lib.overlays.isUiSuppressed())
+    local firstToken = self.h.overlayPublic.suppressForUi()
+    lu.assertTrue(self.h.overlayPublic.isUiSuppressed())
     lu.assertEquals(alphas[#alphas].Fraction, 0.0)
 
-    local secondToken = lib.overlays.suppressForUi()
+    local secondToken = self.h.overlayPublic.suppressForUi()
     firstToken.release()
-    lu.assertTrue(lib.overlays.isUiSuppressed())
+    lu.assertTrue(self.h.overlayPublic.isUiSuppressed())
     lu.assertEquals(alphas[#alphas].Fraction, 0.0)
 
     secondToken.release()
-    lu.assertFalse(lib.overlays.isUiSuppressed())
+    lu.assertFalse(self.h.overlayPublic.isUiSuppressed())
     lu.assertEquals(alphas[#alphas].Fraction, 1.0)
 
     secondToken.release()
-    lu.assertFalse(lib.overlays.isUiSuppressed())
+    lu.assertFalse(self.h.overlayPublic.isUiSuppressed())
 end

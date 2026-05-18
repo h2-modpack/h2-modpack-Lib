@@ -1,31 +1,34 @@
-local internal = AdamantModpackLib_Internal
-internal.storage = internal.storage or {}
+local deps = ...
+
+local logging = deps.logging
+local values = deps.values
+local storage = {}
 
 local typesModule = import('core/storage/private_types.lua', nil, {
-    internal = internal,
-    storage = internal.storage,
+    logging = logging,
+    storage = storage,
+    values = values,
 })
-internal.storage.types = typesModule.types
-internal.storage.NormalizeInteger = typesModule.NormalizeInteger
+storage.types = typesModule.types
+storage.NormalizeInteger = typesModule.NormalizeInteger
 
 local packed = import('core/storage/private_packed.lua', nil, {
-    internal = internal,
-    storage = internal.storage,
-    types = internal.storage.types,
+    logging = logging,
+    storage = storage,
+    types = storage.types,
 })
-internal.storage.packed = packed
+storage.packed = packed
 
 local tableStorage = import('core/storage/private_table.lua', nil, {
-    internal = internal,
-    storage = internal.storage,
-    types = internal.storage.types,
-    values = internal.values,
+    logging = logging,
+    storage = storage,
+    types = storage.types,
+    values = values,
 })
-internal.storage.table = tableStorage
+storage.table = tableStorage
 
-local StorageTypes = internal.storage.types
-local NormalizeInteger = internal.storage.NormalizeInteger
-local values = internal.values
+local StorageTypes = storage.types
+local NormalizeInteger = storage.NormalizeInteger
 
 -- Storage schemas are prepared once by prepareDefinition, then treated as
 -- runtime-stable metadata by store/session/Framework consumers. Validation is
@@ -139,7 +142,7 @@ end
 local function ValidateKnownFields(node, allowedFields, prefix)
     for key in pairs(node) do
         if not IsInternalField(key) and not allowedFields[key] and not CommonNodeFields[key] then
-            internal.violate("storage.unknown_field", "%s: unknown storage field '%s'", prefix, tostring(key))
+            logging.violate("storage.unknown_field", "%s: unknown storage field '%s'", prefix, tostring(key))
         end
     end
 end
@@ -150,23 +153,23 @@ end
 
 local function ValidateAliasIdentifier(alias, prefix)
     if not IsStableIdentifier(alias) then
-        internal.violate("storage.invalid_node", "%s: alias '%s' %s",
+        logging.violate("storage.invalid_node", "%s: alias '%s' %s",
             prefix, tostring(alias), StableIdentifierDescription)
     end
 end
 
-local function PreparePackedChildAlias(bitNode, root, storage, seenAliases, seenRootKeys, prefix)
+local function PreparePackedChildAlias(bitNode, root, storageSchema, seenAliases, seenRootKeys, prefix)
     if type(bitNode.alias) ~= "string" or bitNode.alias == "" then
         return
     end
     ValidateAliasIdentifier(bitNode.alias, prefix)
 
     if seenAliases[bitNode.alias] then
-        internal.violate("storage.duplicate_alias", "%s: duplicate alias '%s'", prefix, bitNode.alias)
+        logging.violate("storage.duplicate_alias", "%s: duplicate alias '%s'", prefix, bitNode.alias)
     end
     local ownerKey = seenRootKeys[bitNode.alias]
     if ownerKey and ownerKey ~= root._storageKey then
-        internal.violate("storage.duplicate_alias", "%s: alias '%s' conflicts with root alias '%s'", prefix, bitNode.alias, ownerKey)
+        logging.violate("storage.duplicate_alias", "%s: alias '%s' conflicts with root alias '%s'", prefix, bitNode.alias, ownerKey)
     end
 
     local storageType = StorageTypes[bitNode.type]
@@ -195,15 +198,15 @@ local function PreparePackedChildAlias(bitNode, root, storage, seenAliases, seen
     end
 
     seenAliases[child.alias] = true
-    storage._aliasNodes[child.alias] = child
+    storageSchema._aliasNodes[child.alias] = child
     root._bitAliases[#root._bitAliases + 1] = child
 end
 
-local function ValidatePersistedDefaults(storage, label)
+local function ValidatePersistedDefaults(storageSchema, label)
     local prefix = label or "storage"
-    for _, root in ipairs(rawget(storage, "_persistRootNodes") or {}) do
+    for _, root in ipairs(rawget(storageSchema, "_persistRootNodes") or {}) do
         if root.default == nil then
-            internal.violate(
+            logging.violate(
                 "storage.missing_persisted_default",
                 "%s: persisted storage alias '%s' must declare an effective default",
                 prefix,
@@ -214,49 +217,49 @@ local function ValidatePersistedDefaults(storage, label)
 end
 
 --- Validates a storage schema and prepares its root, alias, and packed-bit metadata in place.
----@param storage StorageSchema Ordered list of storage root descriptors to validate.
+---@param storageSchema StorageSchema Ordered list of storage root descriptors to validate.
 ---@param label string Validation label used to prefix warnings.
-function internal.storage.validate(storage, label)
-    if type(storage) ~= "table" then
-        internal.violate("storage.invalid_schema", "%s: storage is not a table", label)
+function storage.validate(storageSchema, label)
+    if type(storageSchema) ~= "table" then
+        logging.violate("storage.invalid_schema", "%s: storage is not a table", label)
     end
 
-    storage._rootNodes = {}
-    storage._persistRootNodes = {}
-    storage._stageRootNodes = {}
-    storage._runtimeCacheRootNodes = {}
-    storage._aliasNodes = {}
+    storageSchema._rootNodes = {}
+    storageSchema._persistRootNodes = {}
+    storageSchema._stageRootNodes = {}
+    storageSchema._runtimeCacheRootNodes = {}
+    storageSchema._aliasNodes = {}
 
     local seenAliases = {}
     local seenRootKeys = {}
 
-    for index, node in ipairs(storage) do
+    for index, node in ipairs(storageSchema) do
         local prefix = label .. " storage #" .. index
         if type(node) ~= "table" then
-            internal.violate("storage.invalid_node", "%s: storage entry is not a table", prefix)
+            logging.violate("storage.invalid_node", "%s: storage entry is not a table", prefix)
         elseif not node.type then
-            internal.violate("storage.invalid_node", "%s: missing type", prefix)
+            logging.violate("storage.invalid_node", "%s: missing type", prefix)
         else
             local storageType = StorageTypes[node.type]
             local persist = node.persist ~= false
             local stage = node.stage ~= false
             local hash = node.hash ~= false
             if not storageType then
-                internal.violate("storage.invalid_node", "%s: unknown storage type '%s'", prefix, tostring(node.type))
+                logging.violate("storage.invalid_node", "%s: unknown storage type '%s'", prefix, tostring(node.type))
             elseif node.persist ~= nil and type(node.persist) ~= "boolean" then
-                internal.violate("storage.invalid_axis_type", "%s: persist must be boolean when provided", prefix)
+                logging.violate("storage.invalid_axis_type", "%s: persist must be boolean when provided", prefix)
             elseif node.stage ~= nil and type(node.stage) ~= "boolean" then
-                internal.violate("storage.invalid_axis_type", "%s: stage must be boolean when provided", prefix)
+                logging.violate("storage.invalid_axis_type", "%s: stage must be boolean when provided", prefix)
             elseif node.hash ~= nil and type(node.hash) ~= "boolean" then
-                internal.violate("storage.invalid_axis_type", "%s: hash must be boolean when provided", prefix)
+                logging.violate("storage.invalid_axis_type", "%s: hash must be boolean when provided", prefix)
             elseif type(node.alias) ~= "string" or node.alias == "" then
-                internal.violate("storage.invalid_node", "%s: missing alias", prefix)
+                logging.violate("storage.invalid_node", "%s: missing alias", prefix)
             elseif hash and not persist then
-                internal.violate("storage.hash_requires_persist", "%s: hash=true requires persist=true", prefix)
+                logging.violate("storage.hash_requires_persist", "%s: hash=true requires persist=true", prefix)
             elseif hash and not stage then
-                internal.violate("storage.hash_requires_stage", "%s: hash=true requires stage=true", prefix)
+                logging.violate("storage.hash_requires_stage", "%s: hash=true requires stage=true", prefix)
             elseif not stage and node.type == "packedInt" then
-                internal.violate("storage.packed_requires_stage", "%s: stage=false packedInt roots are not supported", prefix)
+                logging.violate("storage.packed_requires_stage", "%s: stage=false packedInt roots are not supported", prefix)
             else
                 ValidateKnownFields(node, RootNodeFieldsByType[node.type] or {}, prefix)
                 storageType.validate(node, prefix)
@@ -277,11 +280,11 @@ function internal.storage.validate(storage, label)
 
                 local aliasValid = false
                 if seenAliases[node.alias] then
-                    internal.violate("storage.duplicate_alias", "%s: duplicate alias '%s'", prefix, node.alias)
+                    logging.violate("storage.duplicate_alias", "%s: duplicate alias '%s'", prefix, node.alias)
                 else
                     aliasValid = true
                     seenAliases[node.alias] = true
-                    storage._aliasNodes[node.alias] = node
+                    storageSchema._aliasNodes[node.alias] = node
                 end
 
                 if node.type == "packedInt" then
@@ -290,7 +293,7 @@ function internal.storage.validate(storage, label)
                         PreparePackedChildAlias(
                             bitNode,
                             node,
-                            storage,
+                            storageSchema,
                             seenAliases,
                             seenRootKeys,
                             prefix .. " bits[" .. bitIndex .. "]"
@@ -317,7 +320,7 @@ function internal.storage.validate(storage, label)
                                     and (normalized == true and 1 or 0)
                                     or normalized
                                 if expected ~= encoded then
-                                    internal.violate(
+                                    logging.violate(
                                         "storage.packed_child_default_mismatch",
                                         "%s: packed child default '%s' does not match packedInt default",
                                         prefix, child.alias)
@@ -330,53 +333,53 @@ function internal.storage.validate(storage, label)
                 end
 
                 if node._persist then
-                    table.insert(storage._persistRootNodes, node)
+                    table.insert(storageSchema._persistRootNodes, node)
                 end
                 if node._stage then
-                    table.insert(storage._stageRootNodes, node)
+                    table.insert(storageSchema._stageRootNodes, node)
                 else
-                    table.insert(storage._runtimeCacheRootNodes, node)
+                    table.insert(storageSchema._runtimeCacheRootNodes, node)
                 end
                 if node._hash and aliasValid then
-                    table.insert(storage._rootNodes, node)
+                    table.insert(storageSchema._rootNodes, node)
                 end
             end
         end
     end
 
-    ValidatePersistedDefaults(storage, label)
+    ValidatePersistedDefaults(storageSchema, label)
 end
 
 --- Returns the prepared hash/profile root nodes for a validated storage schema.
----@param storage StorageSchema Validated storage schema.
+---@param storageSchema StorageSchema Validated storage schema.
 ---@return StorageNode[] roots Prepared list of hash/profile root storage nodes.
-function internal.storage.getRoots(storage)
-    if type(storage) ~= "table" then return {} end
-    return rawget(storage, "_rootNodes") or {}
+function storage.getRoots(storageSchema)
+    if type(storageSchema) ~= "table" then return {} end
+    return rawget(storageSchema, "_rootNodes") or {}
 end
 
 --- Returns prepared persisted root nodes for backing config hydration and access.
----@param storage StorageSchema Validated storage schema.
+---@param storageSchema StorageSchema Validated storage schema.
 ---@return StorageNode[] roots Prepared list of persisted root storage nodes.
-function internal.storage.getPersistRoots(storage)
-    if type(storage) ~= "table" then return {} end
-    return rawget(storage, "_persistRootNodes") or {}
+function storage.getPersistRoots(storageSchema)
+    if type(storageSchema) ~= "table" then return {} end
+    return rawget(storageSchema, "_persistRootNodes") or {}
 end
 
 --- Returns prepared staged root nodes for session/UI state.
----@param storage StorageSchema Validated storage schema.
+---@param storageSchema StorageSchema Validated storage schema.
 ---@return StorageNode[] roots Prepared list of staged root storage nodes.
-function internal.storage.getStageRoots(storage)
-    if type(storage) ~= "table" then return {} end
-    return rawget(storage, "_stageRootNodes") or {}
+function storage.getStageRoots(storageSchema)
+    if type(storageSchema) ~= "table" then return {} end
+    return rawget(storageSchema, "_stageRootNodes") or {}
 end
 
 --- Returns prepared runtime-cache root nodes for a validated storage schema.
----@param storage StorageSchema Validated storage schema.
+---@param storageSchema StorageSchema Validated storage schema.
 ---@return StorageNode[] roots Prepared list of stage=false root storage nodes.
-function internal.storage.getRuntimeCacheRoots(storage)
-    if type(storage) ~= "table" then return {} end
-    return rawget(storage, "_runtimeCacheRootNodes") or {}
+function storage.getRuntimeCacheRoots(storageSchema)
+    if type(storageSchema) ~= "table" then return {} end
+    return rawget(storageSchema, "_runtimeCacheRootNodes") or {}
 end
 
 --- Compares two values using storage-type equality when available, falling back to deep equality.
@@ -384,7 +387,7 @@ end
 ---@param a any First value to compare.
 ---@param b any Second value to compare.
 ---@return boolean equal True when the two values are considered equivalent for the storage node.
-function internal.storage.valuesEqual(node, a, b)
+function storage.valuesEqual(node, a, b)
     local storageType = node and StorageTypes and node.type and StorageTypes[node.type] or nil
     if storageType and storageType.equals ~= nil then
         return storageType.equals(node, a, b)
@@ -392,8 +395,8 @@ function internal.storage.valuesEqual(node, a, b)
     return values.deepEqual(a, b)
 end
 
-function internal.storage.NormalizeStorageValue(node, value)
-    local storageType = node and node.type and internal.storage.types[node.type] or nil
+function storage.NormalizeStorageValue(node, value)
+    local storageType = node and node.type and storage.types[node.type] or nil
     if storageType and storageType.normalize ~= nil then
         return storageType.normalize(node, value)
     end
@@ -405,7 +408,7 @@ end
 ---@param backend table
 ---@param alias string
 ---@return any
-function internal.storage.readAlias(aliasNodes, backend, alias)
+function storage.readAlias(aliasNodes, backend, alias)
     local node = type(alias) == "string" and aliasNodes[alias] or nil
     if not node then
         if backend and backend.onUnknownRead ~= nil then
@@ -430,7 +433,7 @@ end
 ---@param alias string
 ---@param value any
 ---@return boolean changed
-function internal.storage.writeAlias(aliasNodes, backend, alias, value)
+function storage.writeAlias(aliasNodes, backend, alias, value)
     local node = type(alias) == "string" and aliasNodes[alias] or nil
     if not node then
         if backend and backend.onUnknownWrite ~= nil then
@@ -446,15 +449,15 @@ function internal.storage.writeAlias(aliasNodes, backend, alias, value)
     if node._isBitAlias then
         local parent = node.parent
         local currentPacked = backend.readRoot(parent)
-        local normalized = internal.storage.NormalizeStorageValue(node, value)
+        local normalized = storage.NormalizeStorageValue(node, value)
         local currentValue = packed.DecodePackedChild(node, currentPacked)
-        if internal.storage.valuesEqual(node, currentValue, normalized) then
+        if storage.valuesEqual(node, currentValue, normalized) then
             return false
         end
 
         local encoded = node.type == "bool" and (normalized and 1 or 0) or normalized
         local nextPacked = packed.writePackedBits(currentPacked, node.offset, node.width, encoded)
-        if internal.storage.valuesEqual(parent, currentPacked, nextPacked) then
+        if storage.valuesEqual(parent, currentPacked, nextPacked) then
             if backend.writeAliasValue ~= nil then
                 backend.writeAliasValue(node, normalized)
             end
@@ -472,9 +475,11 @@ function internal.storage.writeAlias(aliasNodes, backend, alias, value)
 end
 
 --- Returns the prepared alias map for a validated storage schema.
----@param storage StorageSchema Validated storage schema.
+---@param storageSchema StorageSchema Validated storage schema.
 ---@return table<string, StorageNode|PackedBitNode> aliases Map from storage alias to prepared storage node.
-function internal.storage.getAliases(storage)
-    if type(storage) ~= "table" then return {} end
-    return rawget(storage, "_aliasNodes") or {}
+function storage.getAliases(storageSchema)
+    if type(storageSchema) ~= "table" then return {} end
+    return rawget(storageSchema, "_aliasNodes") or {}
 end
+
+return storage

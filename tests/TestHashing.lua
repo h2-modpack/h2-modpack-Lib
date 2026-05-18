@@ -1,8 +1,21 @@
 local lu = require('luaunit')
+local createLibHarness = require('tests/harness/create_lib_harness')
 
 TestHashing = {}
 
-local function prepareStorage()
+function TestHashing:setUp()
+    self.harness = createLibHarness()
+    self.storage = self.harness.storage
+    self.hashing = assert(self.harness.public.hashing, "hashing public surface missing")
+end
+
+function TestHashing:tearDown()
+    self.harness = nil
+    self.storage = nil
+    self.hashing = nil
+end
+
+local function prepareStorage(storageService)
     local storage = {
         { type = "bool", alias = "EnabledFlag", default = false },
         { type = "int", alias = "Count", default = 1, min = 0, max = 7 },
@@ -18,14 +31,25 @@ local function prepareStorage()
             },
         },
     }
-    AdamantModpackLib_Internal.storage.validate(storage, "HashingTest")
+    storageService.validate(storage, "HashingTest")
     return storage
 end
 
+function TestHashing:testPackWidthDerivesFromRawNodeShape()
+    lu.assertEquals(self.hashing.getPackWidth({ type = "bool" }), 1)
+    lu.assertEquals(self.hashing.getPackWidth({ type = "int", min = 0, max = 7 }), 3)
+    lu.assertEquals(self.hashing.getPackWidth({ type = "int", min = 0, max = 15 }), 4)
+    lu.assertEquals(self.hashing.getPackWidth({ type = "int", min = 1, max = 12 }), 4)
+    lu.assertEquals(self.hashing.getPackWidth({ type = "int", min = 0, max = 7, width = 5 }), 5)
+    lu.assertNil(self.hashing.getPackWidth({ type = "int", min = 0 }))
+    lu.assertNil(self.hashing.getPackWidth({ type = "string" }))
+    lu.assertNil(self.hashing.getPackWidth({ type = "unknown" }))
+end
+
 function TestHashing:testRootsExcludeTransientNodesAndAliasesIncludePackedBits()
-    local storage = prepareStorage()
-    local roots = lib.hashing.getRoots(storage)
-    local aliases = lib.hashing.getAliases(storage)
+    local storage = prepareStorage(self.storage)
+    local roots = self.hashing.getRoots(storage)
+    local aliases = self.hashing.getAliases(storage)
 
     lu.assertEquals(#roots, 4)
     lu.assertEquals(roots[1].alias, "EnabledFlag")
@@ -37,44 +61,46 @@ function TestHashing:testRootsExcludeTransientNodesAndAliasesIncludePackedBits()
 end
 
 function TestHashing:testHashCodecRoundTripsSupportedStorageTypes()
-    local storage = prepareStorage()
-    local aliases = lib.hashing.getAliases(storage)
+    local storage = prepareStorage(self.storage)
+    local aliases = self.hashing.getAliases(storage)
 
-    lu.assertEquals(lib.hashing.toHash(aliases.EnabledFlag, true), "1")
-    lu.assertTrue(lib.hashing.fromHash(aliases.EnabledFlag, "1"))
-    lu.assertEquals(lib.hashing.toHash(aliases.Count, 6), "6")
-    lu.assertEquals(lib.hashing.fromHash(aliases.Count, "99"), 7)
-    lu.assertEquals(lib.hashing.toHash(aliases.Name, "Athena"), "Athena")
-    lu.assertEquals(lib.hashing.fromHash(aliases.Name, "Apollo"), "Apollo")
-    lu.assertEquals(lib.hashing.toHash({ type = "unknown" }, "x"), nil)
-    lu.assertEquals(lib.hashing.fromHash({ type = "unknown" }, "x"), nil)
+    lu.assertEquals(self.hashing.toHash(aliases.EnabledFlag, true), "1")
+    lu.assertEquals(self.hashing.toHash(aliases.EnabledFlag, false), "0")
+    lu.assertTrue(self.hashing.fromHash(aliases.EnabledFlag, "1"))
+    lu.assertFalse(self.hashing.fromHash(aliases.EnabledFlag, "0"))
+    lu.assertEquals(self.hashing.toHash(aliases.Count, 6), "6")
+    lu.assertEquals(self.hashing.fromHash(aliases.Count, "99"), 7)
+    lu.assertEquals(self.hashing.toHash(aliases.Name, "Athena"), "Athena")
+    lu.assertEquals(self.hashing.fromHash(aliases.Name, "Apollo"), "Apollo")
+    lu.assertEquals(self.hashing.toHash({ type = "unknown" }, "x"), nil)
+    lu.assertEquals(self.hashing.fromHash({ type = "unknown" }, "x"), nil)
 end
 
 function TestHashing:testPackWidthAndPackedBitReadWrite()
-    local storage = prepareStorage()
-    local aliases = lib.hashing.getAliases(storage)
+    local storage = prepareStorage(self.storage)
+    local aliases = self.hashing.getAliases(storage)
 
-    lu.assertEquals(lib.hashing.getPackWidth(aliases.EnabledFlag), 1)
-    lu.assertEquals(lib.hashing.getPackWidth(aliases.Count), 3)
-    lu.assertEquals(lib.hashing.getPackWidth(aliases.Name), nil)
-    lu.assertEquals(lib.hashing.getPackWidth(aliases.Packed), 3)
+    lu.assertEquals(self.hashing.getPackWidth(aliases.EnabledFlag), 1)
+    lu.assertEquals(self.hashing.getPackWidth(aliases.Count), 3)
+    lu.assertEquals(self.hashing.getPackWidth(aliases.Name), nil)
+    lu.assertEquals(self.hashing.getPackWidth(aliases.Packed), 3)
 
     local packed = 0
-    packed = lib.hashing.writePackedBits(packed, 0, 1, 1)
-    packed = lib.hashing.writePackedBits(packed, 1, 2, 3)
+    packed = self.hashing.writePackedBits(packed, 0, 1, 1)
+    packed = self.hashing.writePackedBits(packed, 1, 2, 3)
 
     lu.assertEquals(packed, 7)
-    lu.assertEquals(lib.hashing.readPackedBits(packed, 0, 1), 1)
-    lu.assertEquals(lib.hashing.readPackedBits(packed, 1, 2), 3)
+    lu.assertEquals(self.hashing.readPackedBits(packed, 0, 1), 1)
+    lu.assertEquals(self.hashing.readPackedBits(packed, 1, 2), 3)
 
-    packed = lib.hashing.writePackedBits(packed, 1, 2, 99)
-    lu.assertEquals(lib.hashing.readPackedBits(packed, 1, 2), 3)
+    packed = self.hashing.writePackedBits(packed, 1, 2, 99)
+    lu.assertEquals(self.hashing.readPackedBits(packed, 1, 2), 3)
 end
 
 function TestHashing:testPackedAliasesResolveFromPreparedNode()
-    local storage = prepareStorage()
-    local aliases = lib.hashing.getAliases(storage)
-    local packedAliases = AdamantModpackLib_Internal.storage.packed.getPackedAliases(aliases.Packed)
+    local storage = prepareStorage(self.storage)
+    local aliases = self.hashing.getAliases(storage)
+    local packedAliases = self.storage.packed.getPackedAliases(aliases.Packed)
 
     lu.assertEquals(#packedAliases, 2)
     lu.assertEquals(packedAliases[1].alias, "EnabledBit")

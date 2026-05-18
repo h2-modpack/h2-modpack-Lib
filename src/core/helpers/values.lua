@@ -1,7 +1,6 @@
-local internal = AdamantModpackLib_Internal
-internal.values = internal.values or {}
+local values = {}
 
-function internal.values.readPath(tbl, key)
+function values.readPath(tbl, key)
     if type(key) == "table" then
         if #key == 0 then return nil, nil, nil end
         for i = 1, #key - 1 do
@@ -13,7 +12,7 @@ function internal.values.readPath(tbl, key)
     return tbl[key], tbl, key
 end
 
-function internal.values.writePath(tbl, key, value)
+function values.writePath(tbl, key, value)
     if type(key) == "table" then
         for i = 1, #key - 1 do
             tbl[key[i]] = tbl[key[i]] or {}
@@ -25,7 +24,7 @@ function internal.values.writePath(tbl, key, value)
     tbl[key] = value
 end
 
-function internal.values.deepCopy(value, seen)
+function values.deepCopy(value, seen)
     if type(value) ~= "table" then
         return value
     end
@@ -38,12 +37,12 @@ function internal.values.deepCopy(value, seen)
     local copy = {}
     seen[value] = copy
     for key, child in pairs(value) do
-        copy[internal.values.deepCopy(key, seen)] = internal.values.deepCopy(child, seen)
+        copy[values.deepCopy(key, seen)] = values.deepCopy(child, seen)
     end
     return copy
 end
 
-function internal.values.deepEqual(a, b, seen)
+function values.deepEqual(a, b, seen)
     if a == b then return true end
     if type(a) ~= type(b) then return false end
     if type(a) ~= "table" then return false end
@@ -60,7 +59,7 @@ function internal.values.deepEqual(a, b, seen)
     seenForA[b] = true
 
     for key, value in pairs(a) do
-        if not internal.values.deepEqual(value, b[key], seen) then
+        if not values.deepEqual(value, b[key], seen) then
             return false
         end
     end
@@ -71,3 +70,5 @@ function internal.values.deepEqual(a, b, seen)
     end
     return true
 end
+
+return values

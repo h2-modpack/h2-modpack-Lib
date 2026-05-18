@@ -1,6 +1,8 @@
 local deps = ...
-local internal = deps.internal
+local logging = deps.logging
 local mutation = deps.mutation
+local moduleState = deps.moduleState
+local coordinator = deps.coordinator
 local clone = deps.clone
 
 local function hasAction(actions, actionKey)
@@ -36,20 +38,20 @@ local function notifySettingsCommitted(def, settingsObserver, authorHost, store,
 
     local ok, result = pcall(settingsObserver, authorHost, store, commitContext or makeCommitContext(nil, false))
     if not ok then
-        internal.violate("lifecycle.on_settings_committed_failed", "%s: onSettingsCommitted failed: %s",
+        logging.violate("lifecycle.on_settings_committed_failed", "%s: onSettingsCommitted failed: %s",
             tostring(def.name or def.id or "module"),
             tostring(result))
         return true, nil
     end
     if result == false then
-        internal.violate("lifecycle.on_settings_committed_false", "%s: onSettingsCommitted returned false",
+        logging.violate("lifecycle.on_settings_committed_false", "%s: onSettingsCommitted returned false",
             tostring(def.name or def.id or "module"))
     end
     return true, nil
 end
 
 local function isPackEnabled(packId)
-    local coord = packId and internal.coordinators[packId]
+    local coord = packId and coordinator.getConfig(packId)
     if coord and not coord.ModEnabled then
         return false
     end
@@ -70,7 +72,7 @@ local function resyncSession(def, session)
     local mismatches = session.auditMismatches()
     if #mismatches > 0 then
         local name = def and (def.name or def.id) or "module"
-        internal.violate("lifecycle.session_drift_detected", "%s: session drift detected; reloading staged values for: %s",
+        logging.violate("lifecycle.session_drift_detected", "%s: session drift detected; reloading staged values for: %s",
             tostring(name),
             table.concat(mismatches, ", "))
         session._reloadFromConfig()
@@ -110,7 +112,7 @@ local function commitSession(def, mutationBundle, settingsObserver, authorHost, 
 
     local rollbackOk, rollbackErr = mutation.reapplyForPlugin(pluginGuid, def, mutationBundle, authorHost, store)
     if not rollbackOk then
-        internal.violate("lifecycle.session_rollback_reapply_failed", "%s: session rollback reapply failed: %s",
+        logging.violate("lifecycle.session_rollback_reapply_failed", "%s: session rollback reapply failed: %s",
             tostring(def.name or def.id or "module"),
             tostring(rollbackErr))
         return false, tostring(err) .. " (rollback reapply failed: " .. tostring(rollbackErr) .. ")"
@@ -141,12 +143,12 @@ local function setEnabled(def, mutationBundle, authorHost, store, enabled, plugi
         return false, err
     end
 
-    internal.store.writePersisted(store, "Enabled", nextEnabled)
+    moduleState.writePersisted(store, "Enabled", nextEnabled)
     return true, nil
 end
 
 local function setDebugMode(store, enabled)
-    internal.store.writePersisted(store, "DebugMode", enabled == true)
+    moduleState.writePersisted(store, "DebugMode", enabled == true)
 end
 
 return {

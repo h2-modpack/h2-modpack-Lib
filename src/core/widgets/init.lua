@@ -1,5 +1,12 @@
+local deps = ...
+
 public.widgets = public.widgets or {}
-local widgetHelpers = import 'core/widgets/widget_helpers.lua'
+local imguiHelpers = import 'core/widgets/imgui_helpers.lua'
+local widgetHelpers = import('core/widgets/widget_helpers.lua', nil, {
+    logging = deps.logging,
+    storage = deps.storage,
+    imguiHelpers = imguiHelpers,
+})
 import('core/widgets/base.lua', nil, widgetHelpers)
 import('core/widgets/inputs.lua', nil, widgetHelpers)
 import('core/widgets/dropdowns.lua', nil, widgetHelpers)

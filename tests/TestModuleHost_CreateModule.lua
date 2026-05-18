@@ -1,23 +1,25 @@
-local lu = require('luaunit')
+local lu = require("luaunit")
+local createModuleHostHarness = require("tests/harness/create_module_host_harness")
 
-TestCreateModule = {}
+TestModuleHost_CreateModule = {}
 
-function TestCreateModule:setUp()
-    CaptureWarnings()
+function TestModuleHost_CreateModule:setUp()
+    self.h = createModuleHostHarness()
+    self.h:captureWarnings()
 end
 
-function TestCreateModule:tearDown()
-    RestoreWarnings()
+function TestModuleHost_CreateModule:tearDown()
+    self.h:restoreWarnings()
 end
 
-function TestCreateModule:testCreateModuleRunsCanonicalPipeline()
+function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
     local callbackHost = nil
     local drawHost = nil
     local authorSchemaNode = nil
     local authorRowValue = nil
     local config = {}
 
-    local host, store = lib.createModule({
+    local host, store = self.h.public.createModule({
         pluginGuid = "test-create-module",
         config = config,
         definition = {
@@ -48,9 +50,9 @@ function TestCreateModule:testCreateModuleRunsCanonicalPipeline()
         end,
     })
 
-    lu.assertNil(lib.getLiveModuleHost("test-create-module"))
+    lu.assertNil(self.h:liveHost("test-create-module"))
     host.tryActivate()
-    local liveHost = lib.getLiveModuleHost("test-create-module")
+    local liveHost = self.h:liveHost("test-create-module")
     liveHost.drawTab({})
 
     lu.assertEquals(host, callbackHost)
@@ -63,15 +65,15 @@ function TestCreateModule:testCreateModuleRunsCanonicalPipeline()
     lu.assertEquals(authorSchemaNode.alias, "Flag")
     lu.assertEquals(authorSchemaNode.type, "bool")
     lu.assertEquals(authorRowValue, 2)
-    local liveState = AdamantModpackLib_Internal.moduleHost.getState(liveHost)
+    local liveState = self.h.moduleHost.getState(liveHost)
     lu.assertEquals(type(liveState.definition._structuralFingerprint), "string")
 end
 
-function TestCreateModule:testCreateModulePassesRuntimeHandlesToHookRefresh()
+function TestModuleHost_CreateModule:testCreateModulePassesRuntimeHandlesToHookRefresh()
     local hookSawStore = false
     local hookSawHost = false
 
-    local host, store = lib.createModule({
+    local host, store = self.h.public.createModule({
         pluginGuid = "test-create-module-publish-store",
         config = {},
         definition = {
@@ -97,8 +99,8 @@ function TestCreateModule:testCreateModulePassesRuntimeHandlesToHookRefresh()
     lu.assertEquals(store.read("Flag"), true)
 end
 
-function TestCreateModule:testCreateModuleReturnsOnlyAuthorHostSurface()
-    local host = lib.createModule({
+function TestModuleHost_CreateModule:testCreateModuleReturnsOnlyAuthorHostSurface()
+    local host = self.h.public.createModule({
         pluginGuid = "test-create-module-author-surface",
         config = {},
         definition = {
@@ -122,8 +124,8 @@ function TestCreateModule:testCreateModuleReturnsOnlyAuthorHostSurface()
     lu.assertNil(host.setEnabled)
 end
 
-function TestCreateModule:testTryCreateModuleReturnsErrorAndLogsWarning()
-    local host, store, err = lib.tryCreateModule({
+function TestModuleHost_CreateModule:testTryCreateModuleReturnsErrorAndLogsWarning()
+    local host, store, err = self.h.public.tryCreateModule({
         pluginGuid = "test-try-create-module-invalid",
         config = {},
         definition = {
@@ -135,14 +137,14 @@ function TestCreateModule:testTryCreateModuleReturnsErrorAndLogsWarning()
     lu.assertNil(host)
     lu.assertNil(store)
     lu.assertStrContains(err, "definition.missing_name")
-    lu.assertEquals(#Warnings, 1)
-    lu.assertStrContains(Warnings[1], "host.create_failed")
-    lu.assertStrContains(Warnings[1], "definition.missing_name")
-    lu.assertNil(lib.getLiveModuleHost("test-try-create-module-invalid"))
+    lu.assertEquals(#self.h.warnings, 1)
+    lu.assertStrContains(self.h.warnings[1], "host.create_failed")
+    lu.assertStrContains(self.h.warnings[1], "definition.missing_name")
+    lu.assertNil(self.h:liveHost("test-try-create-module-invalid"))
 end
 
-function TestCreateModule:testCreateModuleActivationIsSingleUse()
-    local host = lib.createModule({
+function TestModuleHost_CreateModule:testCreateModuleActivationIsSingleUse()
+    local host = self.h.public.createModule({
         pluginGuid = "test-create-module-single-activate",
         config = {},
         definition = {
@@ -160,9 +162,9 @@ function TestCreateModule:testCreateModuleActivationIsSingleUse()
     lu.assertStrContains(err, "already activated")
 end
 
-function TestCreateModule:testCreateModuleRejectsOwnerOption()
+function TestModuleHost_CreateModule:testCreateModuleRejectsOwnerOption()
     lu.assertErrorMsgContains("unknown option 'owner'", function()
-        lib.createModule({
+        self.h.public.createModule({
             owner = {},
             pluginGuid = "test-create-module-hooks-no-owner",
             config = {},
@@ -175,9 +177,9 @@ function TestCreateModule:testCreateModuleRejectsOwnerOption()
     end)
 end
 
-function TestCreateModule:testCreateModuleTreatsManualMutationAsUnknownOption()
+function TestModuleHost_CreateModule:testCreateModuleTreatsManualMutationAsUnknownOption()
     lu.assertErrorMsgContains("unknown option 'registerManualMutation'", function()
-        lib.createModule({
+        self.h.public.createModule({
             pluginGuid = "test-create-module-manual-mutation-unknown",
             config = {},
             definition = {
@@ -193,8 +195,8 @@ function TestCreateModule:testCreateModuleTreatsManualMutationAsUnknownOption()
     end)
 end
 
-function TestCreateModule:testCreateModuleFingerprintTracksQuickContentPresenceOnly()
-    local stableHost = lib.createModule({
+function TestModuleHost_CreateModule:testCreateModuleFingerprintTracksQuickContentPresenceOnly()
+    local stableHost = self.h.public.createModule({
         pluginGuid = "test-create-module-quick-content-stable",
         config = {},
         definition = {
@@ -207,7 +209,7 @@ function TestCreateModule:testCreateModuleFingerprintTracksQuickContentPresenceO
     })
     stableHost.tryActivate()
 
-    lib.createModule({
+    self.h.public.createModule({
         pluginGuid = "test-create-module-quick-content-stable",
         config = {},
         definition = {
@@ -219,9 +221,9 @@ function TestCreateModule:testCreateModuleFingerprintTracksQuickContentPresenceO
         drawQuickContent = function() end,
     })
 
-    lu.assertEquals(#Warnings, 0)
+    lu.assertEquals(#self.h.warnings, 0)
 
-    local addedHost = lib.createModule({
+    local addedHost = self.h.public.createModule({
         pluginGuid = "test-create-module-quick-content-added",
         config = {},
         definition = {
@@ -233,7 +235,7 @@ function TestCreateModule:testCreateModuleFingerprintTracksQuickContentPresenceO
     })
     addedHost.tryActivate()
 
-    lib.createModule({
+    self.h.public.createModule({
         pluginGuid = "test-create-module-quick-content-added",
         config = {},
         definition = {
@@ -245,6 +247,6 @@ function TestCreateModule:testCreateModuleFingerprintTracksQuickContentPresenceO
         drawQuickContent = function() end,
     })
 
-    lu.assertEquals(#Warnings, 1)
-    lu.assertStrContains(Warnings[1], "structural definition changed during hot reload")
+    lu.assertEquals(#self.h.warnings, 1)
+    lu.assertStrContains(self.h.warnings[1], "structural definition changed during hot reload")
 end

@@ -1,6 +1,6 @@
 local deps = ...
 
-local internal = deps.internal
+local logging = deps.logging
 local storageInternal = deps.storage
 local values = deps.values
 local ClonePersistedValue = values.deepCopy
@@ -141,7 +141,7 @@ local function createSession(modConfig, configBackend, storage)
 
     local function validateActionKey(methodName, actionKey)
         if type(actionKey) ~= "string" or actionKey == "" then
-            internal.violate("session.invalid_action_key", "session.%s: actionKey must be a non-empty string",
+            logging.violate("session.invalid_action_key", "session.%s: actionKey must be a non-empty string",
                 tostring(methodName))
         end
     end
@@ -164,7 +164,7 @@ local function createSession(modConfig, configBackend, storage)
         end,
         canRead = function(node, alias)
             if not node._stage then
-                internal.violate(
+                logging.violate(
                     "session.invalid_read_surface",
                     "session.read: alias '%s' is not staged; use store.read()",
                     tostring(alias)
@@ -174,7 +174,7 @@ local function createSession(modConfig, configBackend, storage)
             return true
         end,
         onUnknownRead = function(alias)
-            internal.violate("session.unknown_read_alias", "session.read: unknown alias '%s'", tostring(alias))
+            logging.violate("session.unknown_read_alias", "session.read: unknown alias '%s'", tostring(alias))
         end,
     }
 
@@ -191,7 +191,7 @@ local function createSession(modConfig, configBackend, storage)
         end,
         canWrite = function(node, alias)
             if not node._stage then
-                internal.violate(
+                logging.violate(
                     "session.invalid_write_surface",
                     "session.write: alias '%s' is not staged; use store.writeUnstaged()",
                     tostring(alias)
@@ -201,7 +201,7 @@ local function createSession(modConfig, configBackend, storage)
             return true
         end,
         onUnknownWrite = function(alias)
-            internal.violate("session.unknown_write_alias", "session.write: unknown alias '%s'", tostring(alias))
+            logging.violate("session.unknown_write_alias", "session.write: unknown alias '%s'", tostring(alias))
         end,
     }
 
@@ -215,7 +215,7 @@ local function createSession(modConfig, configBackend, storage)
             return value
         end,
         __newindex = function()
-            internal.violate("session.readonly_view_write", "session.view is read-only; use session.write")
+            logging.violate("session.readonly_view_write", "session.view is read-only; use session.write")
         end,
         __pairs = function()
             return function(_, key)
@@ -245,15 +245,15 @@ local function createSession(modConfig, configBackend, storage)
 
         local node = type(alias) == "string" and aliasNodes[alias] or nil
         if not node then
-            internal.violate("session.unknown_table_alias", "session.table: unknown alias '%s'", tostring(alias))
+            logging.violate("session.unknown_table_alias", "session.table: unknown alias '%s'", tostring(alias))
             return nil
         end
         if node.type ~= "table" or node._isBitAlias then
-            internal.violate("session.invalid_table_alias", "session.table: alias '%s' is not table storage", tostring(alias))
+            logging.violate("session.invalid_table_alias", "session.table: alias '%s' is not table storage", tostring(alias))
             return nil
         end
         if not node._stage then
-            internal.violate(
+            logging.violate(
                 "session.invalid_table_surface",
                 "session.table: alias '%s' is not staged; use store.table()",
                 tostring(alias)
@@ -278,7 +278,7 @@ local function createSession(modConfig, configBackend, storage)
     local function resetAliasValue(alias)
         local node = aliasNodes[alias]
         if not node then
-            internal.violate("session.unknown_reset_alias", "session.reset: unknown alias '%s'", tostring(alias))
+            logging.violate("session.unknown_reset_alias", "session.reset: unknown alias '%s'", tostring(alias))
             return
         end
 

@@ -1,9 +1,15 @@
 local lu = require('luaunit')
+local createLibHarness = require('tests/harness/create_lib_harness')
 
-TestBackupSystem = {}
+TestMutation_BackupSystem = {}
 
-function TestBackupSystem:testBackupAndRestoreScalar()
-    local backup, restore = AdamantModpackLib_Internal.mutation.createBackup()
+function TestMutation_BackupSystem:setUp()
+    self.harness = createLibHarness()
+    self.mutation = self.harness.mutation
+end
+
+function TestMutation_BackupSystem:testBackupAndRestoreScalar()
+    local backup, restore = self.mutation.createBackup()
     local tbl = { HP = 100, Name = "Player" }
 
     backup(tbl, "HP")
@@ -14,8 +20,8 @@ function TestBackupSystem:testBackupAndRestoreScalar()
     lu.assertEquals(tbl.HP, 100)
 end
 
-function TestBackupSystem:testBackupAndRestoreMultipleKeys()
-    local backup, restore = AdamantModpackLib_Internal.mutation.createBackup()
+function TestMutation_BackupSystem:testBackupAndRestoreMultipleKeys()
+    local backup, restore = self.mutation.createBackup()
     local tbl = { A = 1, B = 2, C = 3 }
 
     backup(tbl, "A", "B")
@@ -25,11 +31,11 @@ function TestBackupSystem:testBackupAndRestoreMultipleKeys()
     restore()
     lu.assertEquals(tbl.A, 1)
     lu.assertEquals(tbl.B, 2)
-    lu.assertEquals(tbl.C, 3) -- untouched
+    lu.assertEquals(tbl.C, 3)
 end
 
-function TestBackupSystem:testBackupNilValue()
-    local backup, restore = AdamantModpackLib_Internal.mutation.createBackup()
+function TestMutation_BackupSystem:testBackupNilValue()
+    local backup, restore = self.mutation.createBackup()
     local tbl = { A = 1 }
 
     backup(tbl, "Missing")
@@ -39,8 +45,8 @@ function TestBackupSystem:testBackupNilValue()
     lu.assertIsNil(tbl.Missing)
 end
 
-function TestBackupSystem:testBackupTable()
-    local backup, restore = AdamantModpackLib_Internal.mutation.createBackup()
+function TestMutation_BackupSystem:testBackupTable()
+    local backup, restore = self.mutation.createBackup()
     local inner = { x = 1, y = 2 }
     local tbl = { Data = inner }
 
@@ -53,20 +59,20 @@ function TestBackupSystem:testBackupTable()
     lu.assertEquals(tbl.Data.y, 2)
 end
 
-function TestBackupSystem:testBackupOnlyFirstCall()
-    local backup, restore = AdamantModpackLib_Internal.mutation.createBackup()
+function TestMutation_BackupSystem:testBackupOnlyFirstCall()
+    local backup, restore = self.mutation.createBackup()
     local tbl = { X = "original" }
 
     backup(tbl, "X")
     tbl.X = "changed"
-    backup(tbl, "X") -- should not overwrite saved value
+    backup(tbl, "X")
 
     restore()
     lu.assertEquals(tbl.X, "original")
 end
 
-function TestBackupSystem:testMultipleTables()
-    local backup, restore = AdamantModpackLib_Internal.mutation.createBackup()
+function TestMutation_BackupSystem:testMultipleTables()
+    local backup, restore = self.mutation.createBackup()
     local t1 = { A = 1 }
     local t2 = { B = 2 }
 
@@ -80,15 +86,15 @@ function TestBackupSystem:testMultipleTables()
     lu.assertEquals(t2.B, 2)
 end
 
-function TestBackupSystem:testIsolatedSystems()
-    local backup1, restore1 = AdamantModpackLib_Internal.mutation.createBackup()
-    local backup2, restore2 = AdamantModpackLib_Internal.mutation.createBackup()
+function TestMutation_BackupSystem:testIsolatedSystems()
+    local backup1, restore1 = self.mutation.createBackup()
+    local _, restore2 = self.mutation.createBackup()
     local tbl = { X = "original" }
 
     backup1(tbl, "X")
     tbl.X = "changed"
 
-    restore2() -- should not affect backup1's state
+    restore2()
     lu.assertEquals(tbl.X, "changed")
 
     restore1()

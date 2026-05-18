@@ -25,13 +25,13 @@ Important consequences:
 - loading a save, starting a run, or returning to title is not a full process restart
 - persistent module globals survive when code reuses them with `X = X or {}`
 
-The stack relies on that persistence for stable internal registries.
+The stack relies on that persistence for stable runtime registries.
 
-## Persistent Internal Globals
+## Persistent Runtime Globals
 
 The stack deliberately stores reload-sensitive state on `_G` tables:
 
-- `AdamantModpackLib_Internal`
+- `AdamantModpackLib_Runtime`
 - `AdamantModpackFramework_Internal`
 
 These tables are initialized with `X = X or {}` so they survive a file reload in the same game process.
@@ -45,9 +45,9 @@ Safe to rebuild on every module `init`:
 - lookup tables derived from current imports
 
 Expected to persist across reloads:
-- Lib coordinator registrations
-- Lib live-host registry keyed by `pluginGuid`
-- Lib hook dispatchers that map each plugin slot to its current host
+- Lib coordinator registrations under `AdamantModpackLib_Runtime.coordinator`
+- Lib live-host registry keyed by `pluginGuid` under `AdamantModpackLib_Runtime.moduleHost`
+- Lib hook dispatchers that map each plugin slot to its current host under `AdamantModpackLib_Runtime.hooks`
 - Framework pack registry and stable GUI callbacks
 - module-owned ROM GUI callbacks that call Lib bridge functions from
   `lib.standaloneUiBridge(pluginGuid)`
@@ -242,7 +242,7 @@ correctness boundary before validating mutation rollback behavior.
 
 ## Coordinator And Standalone Behavior
 
-Coordinator metadata is persisted on `AdamantModpackLib_Internal.coordinators`.
+Coordinator metadata is persisted on `AdamantModpackLib_Runtime.coordinator.coordinators`.
 
 Important consequences:
 - a Lib reload does not forget which packs are coordinated
@@ -317,4 +317,4 @@ coordinated path, use a full reload.
 - keep stable GUI callbacks outside `init`
 - late-read current framework or module state from those stable callbacks when a stale closure would matter
 - do not use raw ModUtil path wraps for repo-owned hot-reload-sensitive hook sites
-- keep persistent internal registries stable across reloads; update their contents in place
+- keep persistent runtime registries stable across reloads; update their contents in place

@@ -1,33 +1,33 @@
-local internal = AdamantModpackLib_Internal
-local storageInternal = internal.storage
-local StorageTypes = storageInternal.types
+local deps = ...
 
-public.hashing = public.hashing or {}
+local storageService = deps.storage
+local StorageTypes = storageService.types
+local hashingPublic = {}
 
 ---@param storage StorageSchema
 ---@return StorageNode[]
-function public.hashing.getRoots(storage)
-    return storageInternal.getRoots(storage)
+function hashingPublic.getRoots(storage)
+    return storageService.getRoots(storage)
 end
 
 ---@param storage StorageSchema
 ---@return table<string, StorageNode|PackedBitNode>
-function public.hashing.getAliases(storage)
-    return storageInternal.getAliases(storage)
+function hashingPublic.getAliases(storage)
+    return storageService.getAliases(storage)
 end
 
 ---@param node StorageNode|PackedBitNode|nil
 ---@param a any
 ---@param b any
 ---@return boolean
-function public.hashing.valuesEqual(node, a, b)
-    return storageInternal.valuesEqual(node, a, b)
+function hashingPublic.valuesEqual(node, a, b)
+    return storageService.valuesEqual(node, a, b)
 end
 
 --- Returns the packed bit width for a node type, or nil when the node is not packable.
 ---@param node StorageNode|PackedBitNode
 ---@return number|nil
-function public.hashing.getPackWidth(node)
+function hashingPublic.getPackWidth(node)
     if type(node) ~= "table" then return nil end
     local storageType = StorageTypes[node.type]
     if storageType and storageType.packWidth then
@@ -39,7 +39,7 @@ end
 ---@param node StorageNode|PackedBitNode
 ---@param value any
 ---@return string|nil
-function public.hashing.toHash(node, value)
+function hashingPublic.toHash(node, value)
     local storageType = node and node.type and StorageTypes[node.type] or nil
     if not storageType then
         return nil
@@ -50,7 +50,7 @@ end
 ---@param node StorageNode|PackedBitNode
 ---@param str string
 ---@return any
-function public.hashing.fromHash(node, str)
+function hashingPublic.fromHash(node, str)
     local storageType = node and node.type and StorageTypes[node.type] or nil
     if not storageType then
         return nil
@@ -62,8 +62,8 @@ end
 ---@param offset number|nil
 ---@param width number|nil
 ---@return number
-function public.hashing.readPackedBits(packed, offset, width)
-    return storageInternal.packed.readPackedBits(packed, offset, width)
+function hashingPublic.readPackedBits(packed, offset, width)
+    return storageService.packed.readPackedBits(packed, offset, width)
 end
 
 ---@param packed number|nil
@@ -71,6 +71,8 @@ end
 ---@param width number|nil
 ---@param value number|nil
 ---@return number
-function public.hashing.writePackedBits(packed, offset, width, value)
-    return storageInternal.packed.writePackedBits(packed, offset, width, value)
+function hashingPublic.writePackedBits(packed, offset, width, value)
+    return storageService.packed.writePackedBits(packed, offset, width, value)
 end
+
+public.hashing = hashingPublic

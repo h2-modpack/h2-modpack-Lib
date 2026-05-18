@@ -1,10 +1,13 @@
-AdamantModpackLib_OverlayState = AdamantModpackLib_OverlayState or {}
+local deps = ...
+local runtime = deps.runtime
 
-local state = AdamantModpackLib_OverlayState
+runtime.overlays = runtime.overlays or {}
+local state = runtime.overlays
 
 state.renderer = state.renderer or {}
 state.renderer.textElements = state.renderer.textElements or {}
 state.renderer.stackRows = state.renderer.stackRows or {}
+state.physicalHookOwner = state.physicalHookOwner or {}
 
 state.uiSuppressors = state.uiSuppressors or {}
 state.nextUiSuppressorId = state.nextUiSuppressorId or 0

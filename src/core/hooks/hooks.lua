@@ -1,18 +1,27 @@
-public.hooks = public.hooks or {}
-public.hooks.Context = public.hooks.Context or {}
-AdamantModpackLib_Internal.hooks = AdamantModpackLib_Internal.hooks or {}
+local deps = ...
 
-local internal = AdamantModpackLib_Internal
-local dispatchers = import 'core/hooks/private_dispatchers.lua'
+local logging = deps.logging
+local hostState = deps.hostState
+local runtime = deps.runtime
+local dispatchers = import('core/hooks/private_dispatchers.lua', nil, {
+    modutil = deps.modutil,
+    logging = logging,
+    runtime = runtime,
+})
+
+local hooks = {}
+local hooksPublic = public.hooks or {}
+hooksPublic.Context = hooksPublic.Context or {}
+public.hooks = hooksPublic
 local ActiveHostInstallStack = {}
 
 local function parseRegistrationArgs(path, keyOrValue, maybeValue, valueName)
     if type(path) ~= "string" or path == "" then
-        internal.violate("hooks.invalid_registration", "lib.hooks: path must be a non-empty string")
+        logging.violate("hooks.invalid_registration", "lib.hooks: path must be a non-empty string")
     end
     if maybeValue == nil then
         if keyOrValue == nil then
-            internal.violate("hooks.invalid_registration", "lib.hooks: %s is required", valueName)
+            logging.violate("hooks.invalid_registration", "lib.hooks: %s is required", valueName)
         end
         return path, keyOrValue
     end
@@ -22,7 +31,7 @@ end
 local function requireActiveInstall(apiName)
     local install = ActiveHostInstallStack[#ActiveHostInstallStack]
     if not install then
-        internal.violate(
+        logging.violate(
             "hooks.no_active_owner",
             "lib.hooks.%s requires an active registerHooks context",
             apiName
@@ -32,11 +41,10 @@ local function requireActiveInstall(apiName)
 end
 
 local function getHostPluginGuid(host)
-    local moduleHost = internal.moduleHost
-    local state = moduleHost and moduleHost.getState and moduleHost.getState(host) or nil
+    local state = hostState.get(host)
     local pluginGuid = state and state.pluginGuid or nil
     if type(pluginGuid) ~= "string" or pluginGuid == "" then
-        internal.violate("hooks.invalid_registration", "internal.hooks.installForHost: host pluginGuid is required")
+        logging.violate("hooks.invalid_registration", "hooks.installForHost: host pluginGuid is required")
     end
     return pluginGuid
 end
@@ -67,23 +75,27 @@ local function recordHookDeclaration(kind, path, key, value)
     return true
 end
 
---- Registers a host-owned ModUtil Path.Wrap handler in the active registerHooks pass.
----@param path string ModUtil path to wrap.
----@param keyOrHandler string|function Explicit hook key, or handler when no key is needed.
----@param maybeHandler function|nil Handler when an explicit key is supplied.
-function public.hooks.Wrap(path, keyOrHandler, maybeHandler)
+function hooks.declareWrap(path, keyOrHandler, maybeHandler)
     requireActiveInstall("Wrap")
     local key, handler = parseRegistrationArgs(path, keyOrHandler, maybeHandler, "handler")
     if type(handler) ~= "function" then
-        internal.violate("hooks.invalid_registration", "lib.hooks.Wrap: handler must be a function")
+        logging.violate("hooks.invalid_registration", "lib.hooks.Wrap: handler must be a function")
     end
     recordHookDeclaration("wrap", path, key, handler)
 end
 
-function internal.hooks.installPhysicalWrap(physicalOwner, path, keyOrHandler, maybeHandler)
+--- Registers a host-owned ModUtil Path.Wrap handler in the active registerHooks pass.
+---@param path string ModUtil path to wrap.
+---@param keyOrHandler string|function Explicit hook key, or handler when no key is needed.
+---@param maybeHandler function|nil Handler when an explicit key is supplied.
+function hooksPublic.Wrap(path, keyOrHandler, maybeHandler)
+    return hooks.declareWrap(path, keyOrHandler, maybeHandler)
+end
+
+function hooks.installPhysicalWrap(physicalOwner, path, keyOrHandler, maybeHandler)
     local key, handler = parseRegistrationArgs(path, keyOrHandler, maybeHandler, "handler")
     if type(handler) ~= "function" then
-        internal.violate("hooks.invalid_registration", "lib.hooks.Wrap: handler must be a function")
+        logging.violate("hooks.invalid_registration", "lib.hooks.Wrap: handler must be a function")
     end
 
     dispatchers.installPhysicalWrap(physicalOwner, path, key, handler)
@@ -93,11 +105,11 @@ end
 ---@param path string ModUtil path to override.
 ---@param keyOrReplacement string|function Explicit hook key, or replacement when no key is needed.
 ---@param maybeReplacement function|nil Replacement when an explicit key is supplied.
-function public.hooks.Override(path, keyOrReplacement, maybeReplacement)
+function hooksPublic.Override(path, keyOrReplacement, maybeReplacement)
     requireActiveInstall("Override")
     local key, replacement = parseRegistrationArgs(path, keyOrReplacement, maybeReplacement, "replacement")
     if type(replacement) ~= "function" then
-        internal.violate("hooks.invalid_registration", "lib.hooks.Override: replacement must be a function")
+        logging.violate("hooks.invalid_registration", "lib.hooks.Override: replacement must be a function")
     end
     recordHookDeclaration("override", path, key, replacement)
 end
@@ -106,25 +118,25 @@ end
 ---@param path string ModUtil path to context-wrap.
 ---@param keyOrContext string|function Explicit hook key, or context function when no key is needed.
 ---@param maybeContext function|nil Context function when an explicit key is supplied.
-function public.hooks.Context.Wrap(path, keyOrContext, maybeContext)
+function hooksPublic.Context.Wrap(path, keyOrContext, maybeContext)
     requireActiveInstall("Context.Wrap")
     local key, context = parseRegistrationArgs(path, keyOrContext, maybeContext, "context")
     if type(context) ~= "function" then
-        internal.violate("hooks.invalid_registration", "lib.hooks.Context.Wrap: context must be a function")
+        logging.violate("hooks.invalid_registration", "lib.hooks.Context.Wrap: context must be a function")
     end
     recordHookDeclaration("contextWrap", path, key, context)
 end
 
-function internal.hooks.installPhysicalContextWrap(physicalOwner, path, keyOrContext, maybeContext)
+function hooks.installPhysicalContextWrap(physicalOwner, path, keyOrContext, maybeContext)
     local key, context = parseRegistrationArgs(path, keyOrContext, maybeContext, "context")
     if type(context) ~= "function" then
-        internal.violate("hooks.invalid_registration", "lib.hooks.Context.Wrap: context must be a function")
+        logging.violate("hooks.invalid_registration", "lib.hooks.Context.Wrap: context must be a function")
     end
 
     dispatchers.installPhysicalContextWrap(physicalOwner, path, key, context)
 end
 
-function internal.hooks.installForHost(host, register, authorHost, store)
+function hooks.installForHost(host, register, authorHost, store)
     local pluginGuid = getHostPluginGuid(host)
     local install = {
         host = host,
@@ -142,7 +154,7 @@ function internal.hooks.installForHost(host, register, authorHost, store)
 
     if register ~= nil then
         if type(register) ~= "function" then
-            internal.violate("hooks.invalid_registration", "internal.hooks.installForHost: register must be a function")
+            logging.violate("hooks.invalid_registration", "hooks.installForHost: register must be a function")
         end
 
         ActiveHostInstallStack[#ActiveHostInstallStack + 1] = install
@@ -180,3 +192,5 @@ function internal.hooks.installForHost(host, register, authorHost, store)
         end,
     }
 end
+
+return hooks

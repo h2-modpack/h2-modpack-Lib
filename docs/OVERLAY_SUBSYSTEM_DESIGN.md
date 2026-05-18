@@ -280,7 +280,7 @@ Overlay refresh is private retained-registry plumbing behind host receipts and
 the narrow system overlay API:
 
 ```lua
-internal.overlays.installForHost(host, registerOverlays, authorHost, store)
+overlays.installForHost(host, registerOverlays, authorHost, store)
 lib.overlays.defineSystem(ownerId, register)
 ```
 

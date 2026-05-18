@@ -1,30 +1,43 @@
-local internal = AdamantModpackLib_Internal
-internal.moduleHost = internal.moduleHost or {}
+local deps = ...
 
-local HostState = setmetatable({}, { __mode = "k" })
+local logging = deps.logging
+local values = deps.values
+local moduleState = deps.moduleState
+local integrations = deps.integrations
+local hooks = deps.hooks
+local overlays = deps.overlays
+local mutation = deps.mutation
+local coordinator = deps.coordinator
+local definition = deps.definition
+local hostState = deps.hostState
+local moduleHost = {
+    prepareDefinition = definition.prepareDefinition,
+}
 local hostLifecycle = import('core/module_bootstrap/private_host_lifecycle.lua', nil, {
-    internal = internal,
-    mutation = internal.mutation,
-    clone = internal.values.deepCopy,
+    logging = logging,
+    mutation = mutation,
+    moduleState = moduleState,
+    coordinator = coordinator,
+    clone = values.deepCopy,
 })
 
-function internal.moduleHost.getState(host)
-    return type(host) == "table" and HostState[host] or nil
+function moduleHost.getState(host)
+    return hostState.get(host)
 end
 
-function internal.moduleHost.addEffectReceipt(host, name, receipt)
-    local state = type(host) == "table" and HostState[host] or nil
+function moduleHost.addEffectReceipt(host, name, receipt)
+    local state = hostState.get(host)
     if not state then
-        internal.violate("host.invalid_activate_opts", "moduleHost.addEffectReceipt: host is required")
+        logging.violate("host.invalid_activate_opts", "moduleHost.addEffectReceipt: host is required")
     end
     if state.activated ~= true then
-        internal.violate("host.not_activated", "moduleHost.addEffectReceipt requires an activated host")
+        logging.violate("host.not_activated", "moduleHost.addEffectReceipt requires an activated host")
     end
     if type(name) ~= "string" or name == "" then
-        internal.violate("host.invalid_activate_opts", "moduleHost.addEffectReceipt: receipt name is required")
+        logging.violate("host.invalid_activate_opts", "moduleHost.addEffectReceipt: receipt name is required")
     end
     if type(receipt) ~= "table" or type(receipt.dispose) ~= "function" then
-        internal.violate("host.invalid_activate_opts", "moduleHost.addEffectReceipt: receipt dispose function is required")
+        logging.violate("host.invalid_activate_opts", "moduleHost.addEffectReceipt: receipt dispose function is required")
     end
 
     state.effectReceipts = state.effectReceipts or {}
@@ -82,7 +95,11 @@ function public.getLiveModuleHost(pluginGuid)
     if type(pluginGuid) ~= "string" or pluginGuid == "" then
         return nil
     end
-    return internal.liveModuleHosts[pluginGuid]
+    return moduleHost.getLiveHost(pluginGuid)
+end
+
+function moduleHost.getLiveHost(pluginGuid)
+    return hostState.getLiveHost(pluginGuid)
 end
 
 local KnownHostOpts = {
@@ -102,7 +119,7 @@ local KnownHostOpts = {
 local function ValidateKnownOpts(opts, context)
     for key in pairs(opts) do
         if not KnownHostOpts[key] then
-            internal.violate("host.unknown_opt", "%s: unknown option '%s'", context, tostring(key))
+            logging.violate("host.unknown_opt", "%s: unknown option '%s'", context, tostring(key))
         end
     end
 end
@@ -111,10 +128,10 @@ local function BuildMutationBundle(opts)
     local patchMutation = opts.registerPatchMutation
 
     if patchMutation ~= nil and type(patchMutation) ~= "function" then
-        internal.violate("host.invalid_create_opts", "moduleHost.create: registerPatchMutation must be a function")
+        logging.violate("host.invalid_create_opts", "moduleHost.create: registerPatchMutation must be a function")
     end
     if opts.onSettingsCommitted ~= nil and type(opts.onSettingsCommitted) ~= "function" then
-        internal.violate("host.invalid_create_opts", "moduleHost.create: onSettingsCommitted must be a function")
+        logging.violate("host.invalid_create_opts", "moduleHost.create: onSettingsCommitted must be a function")
     end
 
     return {
@@ -145,9 +162,9 @@ end
 ---@param opts ModuleHostOpts
 ---@return ModuleHost host Full module host.
 ---@return AuthorHost authorHost Module author host view.
-function internal.moduleHost.create(opts)
+function moduleHost.create(opts)
     if type(opts) ~= "table" then
-        internal.violate("host.invalid_create_opts", "moduleHost.create: opts must be a table")
+        logging.violate("host.invalid_create_opts", "moduleHost.create: opts must be a table")
     end
     ValidateKnownOpts(opts, "moduleHost.create")
     local def = opts.definition
@@ -158,17 +175,17 @@ function internal.moduleHost.create(opts)
     local registerIntegrations = opts.registerIntegrations
     local registerOverlays = opts.registerOverlays
     if type(def) ~= "table" or def._preparedDefinition ~= true then
-        internal.violate("host.invalid_create_opts", "moduleHost.create: prepared definition is required")
+        logging.violate("host.invalid_create_opts", "moduleHost.create: prepared definition is required")
     end
     if type(pluginGuid) ~= "string" or pluginGuid == "" then
-        internal.violate("host.invalid_create_opts", "moduleHost.create: pluginGuid is required")
+        logging.violate("host.invalid_create_opts", "moduleHost.create: pluginGuid is required")
     end
     if not (store and type(store.read) == "function") then
-        internal.violate("host.invalid_create_opts", "moduleHost.create: store is required")
+        logging.violate("host.invalid_create_opts", "moduleHost.create: store is required")
     end
     if not (session and type(session.isDirty) == "function" and type(session.write) == "function"
         and type(session.getAliasSchema) == "function") then
-        internal.violate("host.invalid_create_opts", "moduleHost.create: session is required")
+        logging.violate("host.invalid_create_opts", "moduleHost.create: session is required")
     end
 
     local drawTab = opts.drawTab
@@ -176,19 +193,19 @@ function internal.moduleHost.create(opts)
     local mutationBundle, settingsObserver = BuildMutationBundle(opts)
 
     if type(drawTab) ~= "function" then
-        internal.violate("host.invalid_create_opts", "moduleHost.create: drawTab is required")
+        logging.violate("host.invalid_create_opts", "moduleHost.create: drawTab is required")
     end
     if registerHooks ~= nil then
         if type(registerHooks) ~= "function" then
-            internal.violate("host.invalid_create_opts", "moduleHost.create: registerHooks must be a function")
+            logging.violate("host.invalid_create_opts", "moduleHost.create: registerHooks must be a function")
         end
     end
     if registerIntegrations ~= nil and type(registerIntegrations) ~= "function" then
-        internal.violate("host.invalid_create_opts", "moduleHost.create: registerIntegrations must be a function")
+        logging.violate("host.invalid_create_opts", "moduleHost.create: registerIntegrations must be a function")
     end
     if registerOverlays ~= nil then
         if type(registerOverlays) ~= "function" then
-            internal.violate("host.invalid_create_opts", "moduleHost.create: registerOverlays must be a function")
+            logging.violate("host.invalid_create_opts", "moduleHost.create: registerOverlays must be a function")
         end
     end
     ---@type ModuleHost
@@ -201,7 +218,7 @@ function internal.moduleHost.create(opts)
             observerOk, observerResult = pcall(settingsObserver, activeHost, activeStore, commit)
         end
 
-        local overlayOk, overlayErr = pcall(internal.overlays.dispatchCommit, host, commit)
+        local overlayOk, overlayErr = pcall(overlays.dispatchCommit, host, commit)
         if not observerOk then
             if not overlayOk then
                 error(tostring(observerResult) .. " (overlay dispatch failed: " .. tostring(overlayErr) .. ")", 0)
@@ -214,9 +231,9 @@ function internal.moduleHost.create(opts)
         return observerResult
     end
 
-    local authorSession = internal.moduleState.createAuthorSession(session, {
+    local authorSession = moduleState.createAuthorSession(session, {
         resetToDefaults = function(resetOpts)
-            return public.resetStorageToDefaults(def.storage, session, resetOpts)
+            return moduleState.resetStorageToDefaults(def.storage, session, resetOpts)
         end,
     })
 
@@ -224,9 +241,9 @@ function internal.moduleHost.create(opts)
     local authorHost
 
     local function requireActivated(methodName)
-        local state = HostState[host]
+        local state = hostState.get(host)
         if not state or state.activated ~= true then
-            internal.violate("host.not_activated", "host.%s requires host.tryActivate() before it can run", methodName)
+            logging.violate("host.not_activated", "host.%s requires host.tryActivate() before it can run", methodName)
         end
     end
 
@@ -246,7 +263,7 @@ function internal.moduleHost.create(opts)
     end
 
     function host.affectsRunData()
-        return internal.mutation.affectsRunData(mutationBundle)
+        return mutation.affectsRunData(mutationBundle)
     end
 
     function host.getHashHints()
@@ -295,7 +312,7 @@ function internal.moduleHost.create(opts)
 
     function host.resetToDefaults(resetOpts)
         requireActivated("resetToDefaults")
-        return public.resetStorageToDefaults(def.storage, session, resetOpts)
+        return moduleState.resetStorageToDefaults(def.storage, session, resetOpts)
     end
 
     function host.commitIfDirty()
@@ -325,7 +342,7 @@ function internal.moduleHost.create(opts)
     local logPrefix = "[" .. tostring(def.id or pluginGuid) .. "] "
 
     function host.log(fmt, ...)
-        print(internal.formatLogMessage(logPrefix, fmt, ...))
+        print(logging.formatLogMessage(logPrefix, fmt, ...))
     end
 
     function host.logIf(fmt, ...)
@@ -336,16 +353,16 @@ function internal.moduleHost.create(opts)
 
     function host.applyMutation()
         requireActivated("applyMutation")
-        return internal.mutation.applyForPlugin(pluginGuid, def, mutationBundle, authorHost, store)
+        return mutation.applyForPlugin(pluginGuid, def, mutationBundle, authorHost, store)
     end
 
     function host.revertMutation()
         requireActivated("revertMutation")
-        return internal.mutation.revertForPlugin(pluginGuid, def, mutationBundle, authorHost, store)
+        return mutation.revertForPlugin(pluginGuid, def, mutationBundle, authorHost, store)
     end
 
     function host.tryActivate()
-        return internal.moduleHost.tryActivate(host)
+        return moduleHost.tryActivate(host)
     end
 
     authorHost = CreateAuthorHost(host)
@@ -362,7 +379,7 @@ function internal.moduleHost.create(opts)
         end
     end
 
-    HostState[host] = {
+    hostState.set(host, {
         definition = def,
         mutationBundle = mutationBundle,
         pluginGuid = pluginGuid,
@@ -374,7 +391,7 @@ function internal.moduleHost.create(opts)
         authorHost = authorHost,
         effectReceipts = {},
         activated = false,
-    }
+    })
 
     return host, authorHost
 end
@@ -396,9 +413,9 @@ end
 
 local function warnReceiptDisposal(warningId, warningPrefix, errors)
     if warningId == "host.retire_failed" then
-        internal.violate("host.retire_failed", "%s: %s", warningPrefix, table.concat(errors, "; "))
+        logging.violate("host.retire_failed", "%s: %s", warningPrefix, table.concat(errors, "; "))
     elseif warningId == "host.activation_rollback_failed" then
-        internal.violate("host.activation_rollback_failed", "%s: %s", warningPrefix, table.concat(errors, "; "))
+        logging.violate("host.activation_rollback_failed", "%s: %s", warningPrefix, table.concat(errors, "; "))
     end
 end
 
@@ -426,7 +443,7 @@ local function commitReceipt(entry)
 end
 
 local function retireOldHost(previousHost, replacementLabel)
-    local oldState = HostState[previousHost]
+    local oldState = hostState.get(previousHost)
     local receipts = oldState and oldState.effectReceipts or nil
     if type(receipts) ~= "table" or #receipts == 0 then
         return
@@ -438,10 +455,10 @@ end
 --- Activates a constructed module host by registering external side effects.
 ---@param host ModuleHost
 ---@return AuthorHost host Module author host view.
-function internal.moduleHost.activate(host)
-    local state = type(host) == "table" and HostState[host] or nil
+function moduleHost.activate(host)
+    local state = hostState.get(host)
     if not state then
-        internal.violate("host.invalid_activate_opts", "moduleHost.activate: host is required")
+        logging.violate("host.invalid_activate_opts", "moduleHost.activate: host is required")
     end
 
     local pluginGuid = state.pluginGuid
@@ -453,17 +470,17 @@ function internal.moduleHost.activate(host)
     local def = state.definition
 
     if state.activated == true then
-        internal.violate("host.already_activated", "moduleHost.activate: host is already activated")
+        logging.violate("host.already_activated", "moduleHost.activate: host is already activated")
     end
     if state.activating == true then
-        internal.violate("host.activation_in_progress", "moduleHost.activate: host activation is already in progress")
+        logging.violate("host.activation_in_progress", "moduleHost.activate: host activation is already in progress")
     end
     local identity = host.getIdentity()
     local meta = host.getMeta()
     local packId = identity.modpack
-    local pendingCoordinatorRebuild = internal.pendingCoordinatorRebuilds[def]
+    local pendingCoordinatorRebuild = hostState.getPendingCoordinatorRebuild(def)
     local hasPendingCoordinatorRebuild = pendingCoordinatorRebuild ~= nil
-    local previousHost = internal.liveModuleHosts[pluginGuid]
+    local previousHost = hostState.getLiveHost(pluginGuid)
     local candidateReceipts = {}
     local retireReceipts = {}
     local published = false
@@ -482,18 +499,18 @@ function internal.moduleHost.activate(host)
     end
 
     local ok, err = pcall(function()
-        addReceipt("integrations", internal.integrations.installForHost(host, registerIntegrations, authorHost, store), true)
-        addReceipt("hooks", internal.hooks.installForHost(host, registerHooks, authorHost, store), true)
-        addReceipt("overlays", internal.overlays.installForHost(host, registerOverlays, authorHost, store), true)
+        addReceipt("integrations", integrations.installForHost(host, registerIntegrations, authorHost, store), true)
+        addReceipt("hooks", hooks.installForHost(host, registerHooks, authorHost, store), true)
+        addReceipt("overlays", overlays.installForHost(host, registerOverlays, authorHost, store), true)
 
         if not hasPendingCoordinatorRebuild then
-            addReceipt("mutation", internal.mutation.syncForHost(host, state.mutationBundle, authorHost, store), false)
+            addReceipt("mutation", mutation.syncForHost(host, state.mutationBundle, authorHost, store), false)
         elseif hasPendingCoordinatorRebuild then
-            local requested = public.coordinator.requestRebuild(packId, pendingCoordinatorRebuild)
+            local requested = coordinator.requestRebuild(packId, pendingCoordinatorRebuild)
             if requested then
-                internal.pendingCoordinatorRebuilds[def] = nil
+                hostState.setPendingCoordinatorRebuild(def, nil)
             else
-                internal.violate(
+                logging.violate(
                     "host.structural_rebuild_unavailable",
                     "%s structural definition changed during hot reload; full reload required",
                     tostring(meta.name or identity.id or "module"))
@@ -521,7 +538,7 @@ function internal.moduleHost.activate(host)
         state.effectReceipts = retireReceipts
         state.activating = false
         state.activated = true
-        internal.liveModuleHosts[pluginGuid] = host
+        hostState.setLiveHost(pluginGuid, host)
         published = true
     end)
 
@@ -531,7 +548,7 @@ function internal.moduleHost.activate(host)
         disposeReceipts(candidateReceipts, "host.activation_rollback_failed",
             tostring(meta.name or identity.id or "module") .. " activation rollback failed")
         if published then
-            internal.liveModuleHosts[pluginGuid] = previousHost
+            hostState.setLiveHost(pluginGuid, previousHost)
         end
         error(err, 0)
     end
@@ -545,13 +562,15 @@ end
 ---@param host ModuleHost
 ---@return boolean ok
 ---@return string|nil err
-function internal.moduleHost.tryActivate(host)
-    local ok, err = pcall(internal.moduleHost.activate, host)
+function moduleHost.tryActivate(host)
+    local ok, err = pcall(moduleHost.activate, host)
     if ok then
         return true, nil
     end
 
     err = tostring(err)
-    internal.violate("host.activate_failed", "host.tryActivate failed; skipping module: %s", err)
+    logging.violate("host.activate_failed", "host.tryActivate failed; skipping module: %s", err)
     return false, err
 end
+
+return moduleHost

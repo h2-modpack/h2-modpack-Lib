@@ -1,30 +1,26 @@
-local internal = AdamantModpackLib_Internal
-local chalk = rom.mods['SGG_Modding-Chalk']
+local deps = ...
 
-internal.moduleState = internal.moduleState or {}
-internal.moduleState.backend = internal.moduleState.backend or {}
-internal.moduleState.backend.cache = internal.moduleState.backend.cache or setmetatable({}, { __mode = "k" })
-internal.moduleState.managedStores = internal.moduleState.managedStores or setmetatable({}, { __mode = "k" })
-internal.store = internal.store or {}
+local logging = deps.logging
+local storageService = deps.storage
+local values = deps.values
+local chalk = deps.chalk
+
+local moduleState = {}
 
 local backendModule = import('core/module_state/private_backend.lua', nil, {
     chalk = chalk,
-    state = internal.moduleState.backend,
 })
 
 local managedStore = import('core/module_state/private_store.lua', nil, {
-    internal = internal,
-    storage = internal.storage,
-    values = internal.values,
-    state = {
-        managedStores = internal.moduleState.managedStores,
-    },
+    logging = logging,
+    storage = storageService,
+    values = values,
 })
 
 local sessionModule = import('core/module_state/private_session.lua', nil, {
-    internal = internal,
-    storage = internal.storage,
-    values = internal.values,
+    logging = logging,
+    storage = storageService,
+    values = values,
 })
 
 ---@class ConfigBackendEntry
@@ -75,12 +71,12 @@ local sessionModule = import('core/module_state/private_session.lua', nil, {
 ---@param modConfig table Module config table used for persisted reads and writes.
 ---@param definition ModuleDefinition Prepared module definition declaring storage and mutation behavior.
 ---@return ModuleState state Managed state surfaces for runtime and staged UI access.
-function internal.moduleState.create(modConfig, definition)
+function moduleState.create(modConfig, definition)
     if type(modConfig) ~= "table" then
-        internal.violate("store.invalid_config", "createModuleState expects config to be a table")
+        logging.violate("store.invalid_config", "createModuleState expects config to be a table")
     end
     if type(definition) ~= "table" or definition._preparedDefinition ~= true then
-        internal.violate(
+        logging.violate(
             "store.invalid_create_args",
             "createModuleState expects a prepared definition"
         )
@@ -98,22 +94,22 @@ function internal.moduleState.create(modConfig, definition)
 end
 
 -- Internal API: writes storage through a Lib-created managed store.
-function internal.store.writePersisted(store, alias, value)
+function moduleState.writePersisted(store, alias, value)
     return managedStore.writePersisted(store, alias, value)
 end
 
 -- Internal API: narrows a full staged session to the author-facing UI surface.
-function internal.moduleState.createAuthorSession(session, opts)
+function moduleState.createAuthorSession(session, opts)
     return sessionModule.createAuthorSession(session, opts)
 end
 
 --- Resets persistent storage roots to defaults in a staged session.
 ---@param storage StorageSchema Validated storage schema.
----@param session Session Staged session returned by `internal.moduleState.create`.
+---@param session Session Staged session returned by `moduleState.create`.
 ---@param opts table|nil Optional `{ exclude = { Alias = true } }` map.
 ---@return boolean changed True when at least one alias was reset.
 ---@return number count Number of aliases reset.
-function public.resetStorageToDefaults(storage, session, opts)
+function moduleState.resetStorageToDefaults(storage, session, opts)
     if type(storage) ~= "table" or type(session) ~= "table" then
         return false, 0
     end
@@ -121,11 +117,11 @@ function public.resetStorageToDefaults(storage, session, opts)
     local exclude = type(opts) == "table" and type(opts.exclude) == "table" and opts.exclude or {}
     local count = 0
 
-    for _, node in ipairs(internal.storage.getStageRoots(storage) or {}) do
+    for _, node in ipairs(storageService.getStageRoots(storage) or {}) do
         local alias = node.alias
         if node._persist and alias ~= nil and not exclude[alias] then
             local current = session.read(alias)
-            if not internal.storage.valuesEqual(node, current, node.default) then
+            if not storageService.valuesEqual(node, current, node.default) then
                 session.reset(alias)
                 count = count + 1
             end
@@ -134,3 +130,7 @@ function public.resetStorageToDefaults(storage, session, opts)
 
     return count > 0, count
 end
+
+public.resetStorageToDefaults = moduleState.resetStorageToDefaults
+
+return moduleState

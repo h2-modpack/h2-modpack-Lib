@@ -1,35 +1,32 @@
-local lu = require('luaunit')
+local lu = require("luaunit")
+local createWidgetHarness = require("tests/harness/create_widget_harness")
 
-TestNav = {}
+TestWidgets_Nav = {}
 
-local function makeSession(values)
-    return {
-        read = function(alias)
-            return values[alias]
-        end,
-    }
+function TestWidgets_Nav:setUp()
+    self.h = createWidgetHarness()
 end
 
-function TestNav:testVisibilityConditions()
-    local session = makeSession({
+function TestWidgets_Nav:testVisibilityConditions()
+    local session = self.h.createMapSession({
         Enabled = true,
         Region = "Surface",
         Count = 2,
     })
 
-    lu.assertTrue(lib.nav.isVisible(session, nil))
-    lu.assertTrue(lib.nav.isVisible(session, "Enabled"))
-    lu.assertFalse(lib.nav.isVisible(session, "Missing"))
-    lu.assertTrue(lib.nav.isVisible(session, { alias = "Region", value = "Surface" }))
-    lu.assertFalse(lib.nav.isVisible(session, { alias = "Region", value = "Underworld" }))
-    lu.assertTrue(lib.nav.isVisible(session, { alias = "Count", anyOf = { 1, 2, 3 } }))
-    lu.assertFalse(lib.nav.isVisible(session, { alias = "Count", anyOf = { 4, 5 } }))
-    lu.assertFalse(lib.nav.isVisible(session, { alias = "" }))
-    lu.assertFalse(lib.nav.isVisible(session, { alias = "Count", anyOf = "bad" }))
-    lu.assertTrue(lib.nav.isVisible(session, 42))
+    lu.assertTrue(self.h.nav.isVisible(session, nil))
+    lu.assertTrue(self.h.nav.isVisible(session, "Enabled"))
+    lu.assertFalse(self.h.nav.isVisible(session, "Missing"))
+    lu.assertTrue(self.h.nav.isVisible(session, { alias = "Region", value = "Surface" }))
+    lu.assertFalse(self.h.nav.isVisible(session, { alias = "Region", value = "Underworld" }))
+    lu.assertTrue(self.h.nav.isVisible(session, { alias = "Count", anyOf = { 1, 2, 3 } }))
+    lu.assertFalse(self.h.nav.isVisible(session, { alias = "Count", anyOf = { 4, 5 } }))
+    lu.assertFalse(self.h.nav.isVisible(session, { alias = "" }))
+    lu.assertFalse(self.h.nav.isVisible(session, { alias = "Count", anyOf = "bad" }))
+    lu.assertTrue(self.h.nav.isVisible(session, 42))
 end
 
-function TestNav:testVerticalTabsReturnsSelectedKeyAndDrawsGroupsAndColors()
+function TestWidgets_Nav:testVerticalTabsReturnsSelectedKeyAndDrawsGroupsAndColors()
     local calls = {
         beginChild = 0,
         endChild = 0,
@@ -56,7 +53,7 @@ function TestNav:testVerticalTabsReturnsSelectedKeyAndDrawsGroupsAndColors()
             calls.separators = calls.separators + 1
         end,
         TextDisabled = function(label)
-            table.insert(calls.groups, label)
+            calls.groups[#calls.groups + 1] = label
         end,
         PushStyleColor = function(...)
             calls.pushColors = calls.pushColors + 1
@@ -66,12 +63,12 @@ function TestNav:testVerticalTabsReturnsSelectedKeyAndDrawsGroupsAndColors()
             calls.popColors = calls.popColors + 1
         end,
         Selectable = function(label, selected)
-            table.insert(calls.selectedLabels, { label = label, selected = selected })
+            calls.selectedLabels[#calls.selectedLabels + 1] = { label = label, selected = selected }
             return label == "Second##two"
         end,
     }
 
-    local selected = lib.nav.verticalTabs(imgui, {
+    local selected = self.h.nav.verticalTabs(imgui, {
         id = "modules",
         navWidth = 200,
         height = 300,

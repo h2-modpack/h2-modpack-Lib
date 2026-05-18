@@ -1,119 +1,135 @@
 local lu = require('luaunit')
+local createLibHarness = require('tests/harness/create_lib_harness')
 
-TestDefinitionLifecycle = {}
+TestMutation_DefinitionLifecycle = {}
 
-local function ApplyPlan(plan)
-    return AdamantModpackLib_Internal.mutation.applyPlan(plan)
-end
-
-local function RevertPlan(plan)
-    return AdamantModpackLib_Internal.mutation.revertPlan(plan)
-end
-
-local function PatchMutation(fn)
+local function patchMutation(fn)
     return {
         affectsRunData = true,
         patchMutation = fn,
     }
 end
 
-local function makeStore(enabled)
-    return CreateModuleState({ Enabled = enabled }, AdamantModpackLib_Internal.moduleHost.prepareDefinition({}, {
+local function createModuleState(harness, config, definition)
+    local state = harness.moduleState.create(config, definition)
+    return state.store, state.session
+end
+
+function TestMutation_DefinitionLifecycle:setUp()
+    self.harness = createLibHarness()
+    self.public = self.harness.public.mutation
+    self.mutation = self.harness.mutation
+    self.moduleHost = self.harness.moduleHost
+    self.hostLifecycle = self.harness.hostLifecycle
+    self.coordinator = self.harness.public.coordinator
+end
+
+function TestMutation_DefinitionLifecycle:applyPlan(plan)
+    return self.mutation.applyPlan(plan)
+end
+
+function TestMutation_DefinitionLifecycle:revertPlan(plan)
+    return self.mutation.revertPlan(plan)
+end
+
+function TestMutation_DefinitionLifecycle:makeStore(enabled)
+    return createModuleState(self.harness, { Enabled = enabled }, self.moduleHost.prepareDefinition({}, {
         id = "LifecycleStore",
         name = "Lifecycle Store",
         storage = {},
     }))
 end
 
-local function activateMutationHost(pluginGuid, definition, config, patchMutation)
-    local store, session = CreateModuleState(config, definition)
-    local _, authorHost = AdamantModpackLib_Internal.moduleHost.create({
+function TestMutation_DefinitionLifecycle:activateMutationHost(pluginGuid, definition, config, registerPatchMutation)
+    local store, session = createModuleState(self.harness, config, definition)
+    local _, authorHost = self.moduleHost.create({
         pluginGuid = pluginGuid,
         definition = definition,
         store = store,
         session = session,
-        registerPatchMutation = patchMutation,
+        registerPatchMutation = registerPatchMutation,
         drawTab = function() end,
     })
     local ok, err = authorHost.tryActivate()
     return ok, err, store
 end
 
-function TestDefinitionLifecycle:testSetApplyAndRevert()
-    local plan = lib.mutation.createPlan()
+function TestMutation_DefinitionLifecycle:testSetApplyAndRevert()
+    local plan = self.public.createPlan()
     local tbl = { HP = 100 }
 
     plan:set(tbl, "HP", 250)
 
-    lu.assertTrue(ApplyPlan(plan))
+    lu.assertTrue(self:applyPlan(plan))
     lu.assertEquals(tbl.HP, 250)
-    lu.assertTrue(RevertPlan(plan))
+    lu.assertTrue(self:revertPlan(plan))
     lu.assertEquals(tbl.HP, 100)
 end
 
-function TestDefinitionLifecycle:testSetClonesTableValue()
-    local plan = lib.mutation.createPlan()
+function TestMutation_DefinitionLifecycle:testSetClonesTableValue()
+    local plan = self.public.createPlan()
     local replacement = { Damage = 100 }
     local tbl = { Data = { Damage = 10 } }
 
     plan:set(tbl, "Data", replacement)
-    ApplyPlan(plan)
+    self:applyPlan(plan)
     replacement.Damage = 999
 
     lu.assertEquals(tbl.Data.Damage, 100)
-    RevertPlan(plan)
+    self:revertPlan(plan)
     lu.assertEquals(tbl.Data.Damage, 10)
 end
 
-function TestDefinitionLifecycle:testSetManyApplyAndRevert()
-    local plan = lib.mutation.createPlan()
+function TestMutation_DefinitionLifecycle:testSetManyApplyAndRevert()
+    local plan = self.public.createPlan()
     local tbl = { A = 1, B = 2, C = 3 }
 
     plan:setMany(tbl, { A = 10, B = 20 })
-    ApplyPlan(plan)
+    self:applyPlan(plan)
 
     lu.assertEquals(tbl.A, 10)
     lu.assertEquals(tbl.B, 20)
     lu.assertEquals(tbl.C, 3)
 
-    RevertPlan(plan)
+    self:revertPlan(plan)
     lu.assertEquals(tbl.A, 1)
     lu.assertEquals(tbl.B, 2)
     lu.assertEquals(tbl.C, 3)
 end
 
-function TestDefinitionLifecycle:testTransformApplyAndRevert()
-    local plan = lib.mutation.createPlan()
+function TestMutation_DefinitionLifecycle:testTransformApplyAndRevert()
+    local plan = self.public.createPlan()
     local tbl = { Requirements = { "A" } }
+    local deepCopy = self.harness.rom.game.DeepCopyTable
 
     plan:transform(tbl, "Requirements", function(current)
-        local nextValue = rom.game.DeepCopyTable(current)
+        local nextValue = deepCopy(current)
         table.insert(nextValue, "B")
         return nextValue
     end)
 
-    ApplyPlan(plan)
+    self:applyPlan(plan)
     lu.assertEquals(tbl.Requirements, { "A", "B" })
 
-    RevertPlan(plan)
+    self:revertPlan(plan)
     lu.assertEquals(tbl.Requirements, { "A" })
 end
 
-function TestDefinitionLifecycle:testAppendCreatesMissingListAndRestoresNil()
-    local plan = lib.mutation.createPlan()
+function TestMutation_DefinitionLifecycle:testAppendCreatesMissingListAndRestoresNil()
+    local plan = self.public.createPlan()
     local tbl = {}
 
     plan:append(tbl, "Values", "A")
-    ApplyPlan(plan)
+    self:applyPlan(plan)
 
     lu.assertEquals(tbl.Values, { "A" })
 
-    RevertPlan(plan)
+    self:revertPlan(plan)
     lu.assertNil(tbl.Values)
 end
 
-function TestDefinitionLifecycle:testAppendUniqueUsesDeepEquivalenceByDefault()
-    local plan = lib.mutation.createPlan()
+function TestMutation_DefinitionLifecycle:testAppendUniqueUsesDeepEquivalenceByDefault()
+    local plan = self.public.createPlan()
     local tbl = {
         Requirements = {
             { Path = { "CurrentRun", "Hero" }, Value = 1 },
@@ -121,151 +137,151 @@ function TestDefinitionLifecycle:testAppendUniqueUsesDeepEquivalenceByDefault()
     }
 
     plan:appendUnique(tbl, "Requirements", { Path = { "CurrentRun", "Hero" }, Value = 1 })
-    ApplyPlan(plan)
+    self:applyPlan(plan)
 
     lu.assertEquals(#tbl.Requirements, 1)
-    RevertPlan(plan)
+    self:revertPlan(plan)
     lu.assertEquals(#tbl.Requirements, 1)
 end
 
-function TestDefinitionLifecycle:testAppendUniqueCanUseCustomComparator()
-    local plan = lib.mutation.createPlan()
+function TestMutation_DefinitionLifecycle:testAppendUniqueCanUseCustomComparator()
+    local plan = self.public.createPlan()
     local tbl = { Values = { { Name = "A", Count = 1 } } }
 
     plan:appendUnique(tbl, "Values", { Name = "A", Count = 2 }, function(a, b)
         return a.Name == b.Name
     end)
-    ApplyPlan(plan)
+    self:applyPlan(plan)
 
     lu.assertEquals(#tbl.Values, 1)
 end
 
-function TestDefinitionLifecycle:testApplyAndRevertAreRepeatSafe()
-    local plan = lib.mutation.createPlan()
+function TestMutation_DefinitionLifecycle:testApplyAndRevertAreRepeatSafe()
+    local plan = self.public.createPlan()
     local tbl = { Values = {} }
 
     plan:append(tbl, "Values", "A")
-    lu.assertTrue(ApplyPlan(plan))
-    lu.assertFalse(ApplyPlan(plan))
+    lu.assertTrue(self:applyPlan(plan))
+    lu.assertFalse(self:applyPlan(plan))
     lu.assertEquals(tbl.Values, { "A" })
 
-    lu.assertTrue(RevertPlan(plan))
-    lu.assertFalse(RevertPlan(plan))
+    lu.assertTrue(self:revertPlan(plan))
+    lu.assertFalse(self:revertPlan(plan))
     lu.assertEquals(tbl.Values, {})
 end
 
-function TestDefinitionLifecycle:testAppendErrorsOnNonTableTarget()
-    local plan = lib.mutation.createPlan()
+function TestMutation_DefinitionLifecycle:testAppendErrorsOnNonTableTarget()
+    local plan = self.public.createPlan()
     local tbl = { Values = 5 }
 
     plan:append(tbl, "Values", "A")
     lu.assertError(function()
-        ApplyPlan(plan)
+        self:applyPlan(plan)
     end)
 end
 
-function TestDefinitionLifecycle:testAppendUniqueDoesNotAliasInsertedTable()
-    local plan = lib.mutation.createPlan()
+function TestMutation_DefinitionLifecycle:testAppendUniqueDoesNotAliasInsertedTable()
+    local plan = self.public.createPlan()
     local entry = { Name = "A", Meta = { Count = 1 } }
     local tbl = { Values = {} }
 
     plan:appendUnique(tbl, "Values", entry)
-    ApplyPlan(plan)
+    self:applyPlan(plan)
     entry.Meta.Count = 999
 
     lu.assertEquals(tbl.Values[1].Meta.Count, 1)
 end
 
-function TestDefinitionLifecycle:testRemoveElementApplyAndRevert()
-    local plan = lib.mutation.createPlan()
+function TestMutation_DefinitionLifecycle:testRemoveElementApplyAndRevert()
+    local plan = self.public.createPlan()
     local tbl = { Values = { "A", "B", "C" } }
 
     plan:removeElement(tbl, "Values", "B")
-    ApplyPlan(plan)
+    self:applyPlan(plan)
 
     lu.assertEquals(tbl.Values, { "A", "C" })
 
-    RevertPlan(plan)
+    self:revertPlan(plan)
     lu.assertEquals(tbl.Values, { "A", "B", "C" })
 end
 
-function TestDefinitionLifecycle:testRemoveElementCanUseCustomComparator()
-    local plan = lib.mutation.createPlan()
+function TestMutation_DefinitionLifecycle:testRemoveElementCanUseCustomComparator()
+    local plan = self.public.createPlan()
     local tbl = { Values = { { Name = "A", Count = 1 }, { Name = "B", Count = 2 } } }
 
     plan:removeElement(tbl, "Values", { Name = "A", Count = 999 }, function(a, b)
         return a.Name == b.Name
     end)
-    ApplyPlan(plan)
+    self:applyPlan(plan)
 
     lu.assertEquals(#tbl.Values, 1)
     lu.assertEquals(tbl.Values[1].Name, "B")
 end
 
-function TestDefinitionLifecycle:testSetElementApplyAndRevert()
-    local plan = lib.mutation.createPlan()
+function TestMutation_DefinitionLifecycle:testSetElementApplyAndRevert()
+    local plan = self.public.createPlan()
     local tbl = { Values = { "A", "B", "C" } }
 
     plan:setElement(tbl, "Values", "B", "Z")
-    ApplyPlan(plan)
+    self:applyPlan(plan)
 
     lu.assertEquals(tbl.Values, { "A", "Z", "C" })
 
-    RevertPlan(plan)
+    self:revertPlan(plan)
     lu.assertEquals(tbl.Values, { "A", "B", "C" })
 end
 
-function TestDefinitionLifecycle:testSetElementClonesReplacementTable()
-    local plan = lib.mutation.createPlan()
+function TestMutation_DefinitionLifecycle:testSetElementClonesReplacementTable()
+    local plan = self.public.createPlan()
     local replacement = { Name = "Z", Meta = { Count = 10 } }
     local tbl = { Values = { { Name = "A" }, { Name = "B" } } }
 
     plan:setElement(tbl, "Values", { Name = "B" }, replacement, function(a, b)
         return a.Name == b.Name
     end)
-    ApplyPlan(plan)
+    self:applyPlan(plan)
     replacement.Meta.Count = 999
 
     lu.assertEquals(tbl.Values[2].Name, "Z")
     lu.assertEquals(tbl.Values[2].Meta.Count, 10)
 end
 
-function TestDefinitionLifecycle:testRemoveElementErrorsOnNonTableTarget()
-    local plan = lib.mutation.createPlan()
+function TestMutation_DefinitionLifecycle:testRemoveElementErrorsOnNonTableTarget()
+    local plan = self.public.createPlan()
     local tbl = { Values = 5 }
 
     plan:removeElement(tbl, "Values", "A")
     lu.assertError(function()
-        ApplyPlan(plan)
+        self:applyPlan(plan)
     end)
 end
 
-function TestDefinitionLifecycle:testSetElementErrorsOnNonTableTarget()
-    local plan = lib.mutation.createPlan()
+function TestMutation_DefinitionLifecycle:testSetElementErrorsOnNonTableTarget()
+    local plan = self.public.createPlan()
     local tbl = { Values = 5 }
 
     plan:setElement(tbl, "Values", "A", "B")
     lu.assertError(function()
-        ApplyPlan(plan)
+        self:applyPlan(plan)
     end)
 end
 
-function TestDefinitionLifecycle:testAffectsRunDataIgnoresDeprecatedFlag()
-    lu.assertTrue(AdamantModpackLib_Internal.mutation.affectsRunData({ affectsRunData = true }))
-    lu.assertTrue(AdamantModpackLib_Internal.mutation.affectsRunData({ patchMutation = function() end }))
-    lu.assertFalse(AdamantModpackLib_Internal.mutation.affectsRunData({ affectsRunData = false }))
-    lu.assertFalse(AdamantModpackLib_Internal.mutation.affectsRunData({ dataMutation = true }))
-    lu.assertFalse(AdamantModpackLib_Internal.mutation.affectsRunData({}))
+function TestMutation_DefinitionLifecycle:testAffectsRunDataIgnoresDeprecatedFlag()
+    lu.assertTrue(self.mutation.affectsRunData({ affectsRunData = true }))
+    lu.assertTrue(self.mutation.affectsRunData({ patchMutation = function() end }))
+    lu.assertFalse(self.mutation.affectsRunData({ affectsRunData = false }))
+    lu.assertFalse(self.mutation.affectsRunData({ dataMutation = true }))
+    lu.assertFalse(self.mutation.affectsRunData({}))
 end
 
-function TestDefinitionLifecycle:testCommitSessionCallsSettingsObserverAfterFlush()
+function TestMutation_DefinitionLifecycle:testCommitSessionCallsSettingsObserverAfterFlush()
     local calls = 0
     local observedValue = nil
     local config = {
         Enabled = true,
         Value = false,
     }
-    local definition = AdamantModpackLib_Internal.moduleHost.prepareDefinition({}, {
+    local definition = self.moduleHost.prepareDefinition({}, {
         id = "CommitSessionObserver",
         name = "Commit Session Observer",
         storage = {
@@ -276,14 +292,14 @@ function TestDefinitionLifecycle:testCommitSessionCallsSettingsObserverAfterFlus
             },
         },
     })
-    local store, session = CreateModuleState(config, definition)
+    local store, session = createModuleState(self.harness, config, definition)
     local settingsObserver = function(_, activeStore)
         calls = calls + 1
         observedValue = activeStore.read("Value")
     end
 
     session.write("Value", true)
-    local ok, err = HostLifecycle.commitSession(definition, nil, settingsObserver, nil, store, session)
+    local ok, err = self.hostLifecycle.commitSession(definition, nil, settingsObserver, nil, store, session)
 
     lu.assertTrue(ok)
     lu.assertNil(err)
@@ -291,25 +307,25 @@ function TestDefinitionLifecycle:testCommitSessionCallsSettingsObserverAfterFlus
     lu.assertTrue(observedValue)
     lu.assertTrue(config.Value)
 
-    ok, err = HostLifecycle.commitSession(definition, nil, settingsObserver, nil, store, session)
+    ok, err = self.hostLifecycle.commitSession(definition, nil, settingsObserver, nil, store, session)
     lu.assertTrue(ok)
     lu.assertNil(err)
     lu.assertEquals(calls, 1)
 end
 
-function TestDefinitionLifecycle:testCommitSessionCallsSettingsObserverForActions()
+function TestMutation_DefinitionLifecycle:testCommitSessionCallsSettingsObserverForActions()
     local calls = 0
     local observedAction = nil
     local observedConfigChange = nil
     local config = {
         Enabled = true,
     }
-    local definition = AdamantModpackLib_Internal.moduleHost.prepareDefinition({}, {
+    local definition = self.moduleHost.prepareDefinition({}, {
         id = "CommitSessionActionObserver",
         name = "Commit Session Action Observer",
         storage = {},
     })
-    local store, session = CreateModuleState(config, definition)
+    local store, session = createModuleState(self.harness, config, definition)
     local settingsObserver = function(_, _, commit)
         calls = calls + 1
         observedAction = commit.readAction("recording")
@@ -317,7 +333,7 @@ function TestDefinitionLifecycle:testCommitSessionCallsSettingsObserverForAction
     end
 
     session.stageAction("recording", { kind = "start" })
-    local ok, err = HostLifecycle.commitSession(definition, nil, settingsObserver, nil, store, session)
+    local ok, err = self.hostLifecycle.commitSession(definition, nil, settingsObserver, nil, store, session)
 
     lu.assertTrue(ok)
     lu.assertNil(err)
@@ -327,15 +343,15 @@ function TestDefinitionLifecycle:testCommitSessionCallsSettingsObserverForAction
     lu.assertFalse(session.hasActions())
     lu.assertFalse(session.isDirty())
 
-    ok, err = HostLifecycle.commitSession(definition, nil, settingsObserver, nil, store, session)
+    ok, err = self.hostLifecycle.commitSession(definition, nil, settingsObserver, nil, store, session)
     lu.assertTrue(ok)
     lu.assertNil(err)
     lu.assertEquals(calls, 1)
 end
 
-function TestDefinitionLifecycle:testCommitSessionDoesNotReapplyMutationWhenPackDisabled()
+function TestMutation_DefinitionLifecycle:testCommitSessionDoesNotReapplyMutationWhenPackDisabled()
     local packId = "test-pack-disabled-commit"
-    lib.coordinator.register(packId, { ModEnabled = false })
+    self.coordinator.register(packId, { ModEnabled = false })
 
     local buildCalls = 0
     local target = { Value = "base" }
@@ -343,7 +359,7 @@ function TestDefinitionLifecycle:testCommitSessionDoesNotReapplyMutationWhenPack
         Enabled = true,
         Value = false,
     }
-    local definition = AdamantModpackLib_Internal.moduleHost.prepareDefinition({}, {
+    local definition = self.moduleHost.prepareDefinition({}, {
         modpack = packId,
         id = "CommitSessionPackDisabled",
         name = "Commit Session Pack Disabled",
@@ -355,17 +371,15 @@ function TestDefinitionLifecycle:testCommitSessionDoesNotReapplyMutationWhenPack
             },
         },
     })
-    local store, session = CreateModuleState(config, definition)
-    local mutation = PatchMutation(function(plan)
+    local store, session = createModuleState(self.harness, config, definition)
+    local mutation = patchMutation(function(plan)
         buildCalls = buildCalls + 1
         plan:set(target, "Value", "patched")
     end)
 
     session.write("Value", true)
-    local ok, err = HostLifecycle.commitSession(definition, mutation, nil, nil, store, session,
+    local ok, err = self.hostLifecycle.commitSession(definition, mutation, nil, nil, store, session,
         "test-pack-disabled-commit")
-
-    lib.coordinator.register(packId, nil)
 
     lu.assertTrue(ok)
     lu.assertNil(err)
@@ -374,70 +388,66 @@ function TestDefinitionLifecycle:testCommitSessionDoesNotReapplyMutationWhenPack
     lu.assertEquals(target.Value, "base")
 end
 
-function TestDefinitionLifecycle:testApplyDefinitionSupportsPatchOnly()
-    local store = makeStore(false)
+function TestMutation_DefinitionLifecycle:testApplyDefinitionSupportsPatchOnly()
+    local store = self:makeStore(false)
     local target = { Value = 1 }
     local def = { id = "PatchOnly" }
     local pluginGuid = "test-patch-only"
-    local mutation = PatchMutation(function(plan)
-            plan:set(target, "Value", 7)
-        end)
+    local mutation = patchMutation(function(plan)
+        plan:set(target, "Value", 7)
+    end)
 
-    local ok, err = AdamantModpackLib_Internal.mutation.applyForPlugin(pluginGuid, def, mutation, nil, store)
+    local ok, err = self.mutation.applyForPlugin(pluginGuid, def, mutation, nil, store)
     lu.assertTrue(ok)
     lu.assertNil(err)
     lu.assertEquals(target.Value, 7)
 
-    ok, err = AdamantModpackLib_Internal.mutation.revertForPlugin(pluginGuid, def, mutation, nil, store)
+    ok, err = self.mutation.revertForPlugin(pluginGuid, def, mutation, nil, store)
     lu.assertTrue(ok)
     lu.assertNil(err)
     lu.assertEquals(target.Value, 1)
 end
 
-function TestDefinitionLifecycle:testPatchRuntimeSurvivesRecreatedStoreByPluginGuid()
+function TestMutation_DefinitionLifecycle:testPatchRuntimeSurvivesRecreatedStoreByPluginGuid()
     local target = { Value = 1 }
-    local storeA = makeStore(true)
+    local storeA = self:makeStore(true)
     local defA = {
         modpack = "test-pack",
         id = "StablePatchRuntimeA",
     }
-    local mutationA = PatchMutation(function(plan)
-            plan:set(target, "Value", 7)
-        end)
+    local mutationA = patchMutation(function(plan)
+        plan:set(target, "Value", 7)
+    end)
 
-    local ok, err = AdamantModpackLib_Internal.mutation.applyForPlugin("test-stable-patch-runtime", defA, mutationA, nil,
-        storeA)
+    local ok, err = self.mutation.applyForPlugin("test-stable-patch-runtime", defA, mutationA, nil, storeA)
     lu.assertTrue(ok)
     lu.assertNil(err)
     lu.assertEquals(target.Value, 7)
 
-    local storeB = makeStore(true)
+    local storeB = self:makeStore(true)
     local defB = {
         modpack = "other-pack",
         id = "StablePatchRuntimeB",
     }
-    local mutationB = PatchMutation(function(plan)
-            plan:set(target, "Value", 9)
-        end)
+    local mutationB = patchMutation(function(plan)
+        plan:set(target, "Value", 9)
+    end)
 
-    ok, err = AdamantModpackLib_Internal.mutation.applyForPlugin("test-stable-patch-runtime", defB, mutationB, nil,
-        storeB)
+    ok, err = self.mutation.applyForPlugin("test-stable-patch-runtime", defB, mutationB, nil, storeB)
     lu.assertTrue(ok)
     lu.assertNil(err)
     lu.assertEquals(target.Value, 9)
 
-    ok, err = AdamantModpackLib_Internal.mutation.revertForPlugin("test-stable-patch-runtime", defB, mutationB, nil,
-        storeB)
+    ok, err = self.mutation.revertForPlugin("test-stable-patch-runtime", defB, mutationB, nil, storeB)
     lu.assertTrue(ok)
     lu.assertNil(err)
     lu.assertEquals(target.Value, 1)
 end
 
-function TestDefinitionLifecycle:testActivationSyncRevertsStablePatchWhenReloadedDisabled()
+function TestMutation_DefinitionLifecycle:testActivationSyncRevertsStablePatchWhenReloadedDisabled()
     local target = { Value = 1 }
     local pluginGuid = "test-disabled-reload-patch-runtime"
-    local previousLiveHost = AdamantModpackLib_Internal.liveModuleHosts[pluginGuid]
-    local def = AdamantModpackLib_Internal.moduleHost.prepareDefinition({}, {
+    local def = self.moduleHost.prepareDefinition({}, {
         id = "DisabledReloadPatchRuntime",
         name = "Disabled Reload Patch Runtime",
         storage = {},
@@ -446,150 +456,143 @@ function TestDefinitionLifecycle:testActivationSyncRevertsStablePatchWhenReloade
         plan:set(target, "Value", 7)
     end
 
-    local ok, err = activateMutationHost(pluginGuid, def, {
+    local ok, err = self:activateMutationHost(pluginGuid, def, {
         Enabled = true,
         DebugMode = false,
     }, patch)
     lu.assertTrue(ok, tostring(err))
     lu.assertEquals(target.Value, 7)
 
-    ok, err = activateMutationHost(pluginGuid, def, {
+    ok, err = self:activateMutationHost(pluginGuid, def, {
         Enabled = false,
         DebugMode = false,
     }, patch)
-
-    AdamantModpackLib_Internal.liveModuleHosts[pluginGuid] = previousLiveHost
-    AdamantModpackLib_Internal.mutation.revertActiveForPlugin(pluginGuid)
 
     lu.assertTrue(ok, tostring(err))
     lu.assertEquals(target.Value, 1)
 end
 
-function TestDefinitionLifecycle:testApplyDefinitionNoOpsWhenLifecycleMissingAndRunDataUnaffected()
-    local store = makeStore(false)
+function TestMutation_DefinitionLifecycle:testApplyDefinitionNoOpsWhenLifecycleMissingAndRunDataUnaffected()
+    local store = self:makeStore(false)
     local def = { id = "NoLifecycle" }
     local pluginGuid = "test-no-lifecycle"
 
-    local ok, err = AdamantModpackLib_Internal.mutation.applyForPlugin(pluginGuid, def, nil, nil, store)
+    local ok, err = self.mutation.applyForPlugin(pluginGuid, def, nil, nil, store)
     lu.assertTrue(ok)
     lu.assertNil(err)
 
-    ok, err = AdamantModpackLib_Internal.mutation.revertForPlugin(pluginGuid, def, nil, nil, store)
+    ok, err = self.mutation.revertForPlugin(pluginGuid, def, nil, nil, store)
     lu.assertTrue(ok)
     lu.assertNil(err)
 end
 
-function TestDefinitionLifecycle:testApplyDefinitionFailsWhenAffectedPatchLifecycleMissing()
-    local store = makeStore(false)
+function TestMutation_DefinitionLifecycle:testApplyDefinitionFailsWhenAffectedPatchLifecycleMissing()
+    local store = self:makeStore(false)
     local def = { id = "MissingPatchLifecycle" }
 
-    local ok, err = AdamantModpackLib_Internal.mutation.applyForPlugin("test-missing-patch-lifecycle", def,
+    local ok, err = self.mutation.applyForPlugin("test-missing-patch-lifecycle", def,
         { affectsRunData = true }, nil, store)
 
     lu.assertFalse(ok)
     lu.assertStrContains(tostring(err), "no supported mutation lifecycle found")
 end
 
-function TestDefinitionLifecycle:testApplyFailureRestoresPreviousPatchRuntime()
+function TestMutation_DefinitionLifecycle:testApplyFailureRestoresPreviousPatchRuntime()
     local target = { Value = "base" }
-    local storeA = makeStore(true)
+    local storeA = self:makeStore(true)
     local pluginGuid = "test-restore-patch-runtime-on-apply-failure"
     local def = {
         modpack = "test-pack",
         id = "RestorePatchRuntimeOnApplyFailure",
     }
-    local mutationA = PatchMutation(function(plan)
+    local mutationA = patchMutation(function(plan)
         plan:set(target, "Value", "first")
     end)
 
-    local ok, err = AdamantModpackLib_Internal.mutation.applyForPlugin(pluginGuid, def, mutationA, nil, storeA)
+    local ok, err = self.mutation.applyForPlugin(pluginGuid, def, mutationA, nil, storeA)
     lu.assertTrue(ok)
     lu.assertNil(err)
     lu.assertEquals(target.Value, "first")
 
-    local storeB = makeStore(true)
-    local mutationB = PatchMutation(function()
+    local storeB = self:makeStore(true)
+    local mutationB = patchMutation(function()
         error("replacement patch boom")
     end)
 
-    ok, err = AdamantModpackLib_Internal.mutation.applyForPlugin(pluginGuid, def, mutationB, nil, storeB)
+    ok, err = self.mutation.applyForPlugin(pluginGuid, def, mutationB, nil, storeB)
 
     lu.assertFalse(ok)
     lu.assertStrContains(tostring(err), "replacement patch boom")
     lu.assertEquals(target.Value, "first")
 
-    ok, err = AdamantModpackLib_Internal.mutation.revertForPlugin(pluginGuid, def, mutationA, nil, storeB)
+    ok, err = self.mutation.revertForPlugin(pluginGuid, def, mutationA, nil, storeB)
     lu.assertTrue(ok)
     lu.assertNil(err)
     lu.assertEquals(target.Value, "base")
 end
 
-function TestDefinitionLifecycle:testReapplyFailureRestoresPreviousPatchRuntime()
+function TestMutation_DefinitionLifecycle:testReapplyFailureRestoresPreviousPatchRuntime()
     local target = { Value = "base" }
-    local store = makeStore(true)
+    local store = self:makeStore(true)
     local pluginGuid = "test-restore-patch-runtime-on-reapply-failure"
     local def = {
         modpack = "test-pack",
         id = "RestorePatchRuntimeOnReapplyFailure",
     }
-    local mutationA = PatchMutation(function(plan)
+    local mutationA = patchMutation(function(plan)
         plan:set(target, "Value", "first")
     end)
 
-    local ok, err = AdamantModpackLib_Internal.mutation.applyForPlugin(pluginGuid, def, mutationA, nil, store)
+    local ok, err = self.mutation.applyForPlugin(pluginGuid, def, mutationA, nil, store)
     lu.assertTrue(ok)
     lu.assertNil(err)
     lu.assertEquals(target.Value, "first")
 
-    local mutationB = PatchMutation(function()
+    local mutationB = patchMutation(function()
         error("reapply patch boom")
     end)
 
-    ok, err = AdamantModpackLib_Internal.mutation.reapplyForPlugin(pluginGuid, def, mutationB, nil, store)
+    ok, err = self.mutation.reapplyForPlugin(pluginGuid, def, mutationB, nil, store)
 
     lu.assertFalse(ok)
     lu.assertStrContains(tostring(err), "reapply patch boom")
     lu.assertEquals(target.Value, "first")
 
-    ok, err = AdamantModpackLib_Internal.mutation.revertForPlugin(pluginGuid, def, mutationA, nil, store)
+    ok, err = self.mutation.revertForPlugin(pluginGuid, def, mutationA, nil, store)
     lu.assertTrue(ok)
     lu.assertNil(err)
     lu.assertEquals(target.Value, "base")
 end
 
-function TestDefinitionLifecycle:testActivationSyncDisabledDoesNotBuildInactivePatch()
+function TestMutation_DefinitionLifecycle:testActivationSyncDisabledDoesNotBuildInactivePatch()
     local buildCalls = 0
     local pluginGuid = "test-inactive-patch-revert"
-    local previousLiveHost = AdamantModpackLib_Internal.liveModuleHosts[pluginGuid]
-    local def = AdamantModpackLib_Internal.moduleHost.prepareDefinition({}, {
+    local def = self.moduleHost.prepareDefinition({}, {
         id = "InactivePatchRevert",
         name = "Inactive Patch Revert",
         storage = {},
     })
 
-    local ok, err = activateMutationHost(pluginGuid, def, {
+    local ok, err = self:activateMutationHost(pluginGuid, def, {
         Enabled = false,
         DebugMode = false,
     }, function()
         buildCalls = buildCalls + 1
     end)
 
-    AdamantModpackLib_Internal.liveModuleHosts[pluginGuid] = previousLiveHost
-    AdamantModpackLib_Internal.mutation.revertActiveForPlugin(pluginGuid)
-
     lu.assertTrue(ok, tostring(err))
     lu.assertEquals(buildCalls, 0)
 end
 
-function TestDefinitionLifecycle:testSetDefinitionEnabledCommitsOnlyAfterSuccessfulEnable()
-    local store = makeStore(false)
+function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledCommitsOnlyAfterSuccessfulEnable()
+    local store = self:makeStore(false)
     local target = { Value = false }
     local def = { id = "SuccessfulEnable" }
-    local mutation = PatchMutation(function(plan)
+    local mutation = patchMutation(function(plan)
         plan:set(target, "Value", true)
     end)
 
-    local ok, err = HostLifecycle.setEnabled(def, mutation, nil, store, true, "test-successful-enable")
+    local ok, err = self.hostLifecycle.setEnabled(def, mutation, nil, store, true, "test-successful-enable")
 
     lu.assertTrue(ok)
     lu.assertNil(err)
@@ -597,37 +600,37 @@ function TestDefinitionLifecycle:testSetDefinitionEnabledCommitsOnlyAfterSuccess
     lu.assertTrue(store.read("Enabled"))
 end
 
-function TestDefinitionLifecycle:testSetDefinitionEnabledDoesNotCommitFailedEnable()
-    local store = makeStore(false)
+function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledDoesNotCommitFailedEnable()
+    local store = self:makeStore(false)
     local def = { id = "FailedEnable" }
-    local mutation = PatchMutation(function()
+    local mutation = patchMutation(function()
         error("enable boom")
     end)
 
-    local ok, err = HostLifecycle.setEnabled(def, mutation, nil, store, true, "test-failed-enable")
+    local ok, err = self.hostLifecycle.setEnabled(def, mutation, nil, store, true, "test-failed-enable")
 
     lu.assertFalse(ok)
     lu.assertStrContains(tostring(err), "enable boom")
     lu.assertFalse(store.read("Enabled"))
 end
 
-function TestDefinitionLifecycle:testSetDefinitionEnabledReappliesWhenAlreadyEnabled()
-    local store = makeStore(true)
+function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledReappliesWhenAlreadyEnabled()
+    local store = self:makeStore(true)
     local target = { Value = 0 }
     local buildCalls = 0
     local def = { id = "ReapplyEnabled" }
     local pluginGuid = "test-reapply-enabled"
-    local mutation = PatchMutation(function(plan)
+    local mutation = patchMutation(function(plan)
         buildCalls = buildCalls + 1
         plan:set(target, "Value", buildCalls)
     end)
 
-    local ok, err = AdamantModpackLib_Internal.mutation.applyForPlugin(pluginGuid, def, mutation, nil, store)
+    local ok, err = self.mutation.applyForPlugin(pluginGuid, def, mutation, nil, store)
     lu.assertTrue(ok)
     lu.assertNil(err)
     lu.assertEquals(target.Value, 1)
 
-    ok, err = HostLifecycle.setEnabled(def, mutation, nil, store, true, pluginGuid)
+    ok, err = self.hostLifecycle.setEnabled(def, mutation, nil, store, true, pluginGuid)
 
     lu.assertTrue(ok)
     lu.assertNil(err)
@@ -636,21 +639,21 @@ function TestDefinitionLifecycle:testSetDefinitionEnabledReappliesWhenAlreadyEna
     lu.assertTrue(store.read("Enabled"))
 end
 
-function TestDefinitionLifecycle:testSetDefinitionEnabledDisablesActivePatch()
-    local store = makeStore(true)
+function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledDisablesActivePatch()
+    local store = self:makeStore(true)
     local target = { Value = "base" }
     local def = { id = "DisableActivePatch" }
     local pluginGuid = "test-disable-active-patch"
-    local mutation = PatchMutation(function(plan)
+    local mutation = patchMutation(function(plan)
         plan:set(target, "Value", "patched")
     end)
 
-    local ok, err = AdamantModpackLib_Internal.mutation.applyForPlugin(pluginGuid, def, mutation, nil, store)
+    local ok, err = self.mutation.applyForPlugin(pluginGuid, def, mutation, nil, store)
     lu.assertTrue(ok)
     lu.assertNil(err)
     lu.assertEquals(target.Value, "patched")
 
-    ok, err = HostLifecycle.setEnabled(def, mutation, nil, store, false, pluginGuid)
+    ok, err = self.hostLifecycle.setEnabled(def, mutation, nil, store, false, pluginGuid)
 
     lu.assertTrue(ok)
     lu.assertNil(err)
@@ -658,15 +661,15 @@ function TestDefinitionLifecycle:testSetDefinitionEnabledDisablesActivePatch()
     lu.assertFalse(store.read("Enabled"))
 end
 
-function TestDefinitionLifecycle:testSetDefinitionEnabledNoOpsWhenAlreadyDisabled()
-    local store = makeStore(false)
+function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledNoOpsWhenAlreadyDisabled()
+    local store = self:makeStore(false)
     local buildCalls = 0
     local def = { id = "AlreadyDisabled" }
-    local mutation = PatchMutation(function()
+    local mutation = patchMutation(function()
         buildCalls = buildCalls + 1
     end)
 
-    local ok, err = HostLifecycle.setEnabled(def, mutation, nil, store, false, "test-already-disabled")
+    local ok, err = self.hostLifecycle.setEnabled(def, mutation, nil, store, false, "test-already-disabled")
 
     lu.assertTrue(ok)
     lu.assertNil(err)
@@ -674,26 +677,24 @@ function TestDefinitionLifecycle:testSetDefinitionEnabledNoOpsWhenAlreadyDisable
     lu.assertFalse(store.read("Enabled"))
 end
 
-function TestDefinitionLifecycle:testSetDefinitionEnabledPersistsWithoutApplyingWhenPackDisabled()
+function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledPersistsWithoutApplyingWhenPackDisabled()
     local packId = "test-pack-disabled-enable"
-    lib.coordinator.register(packId, { ModEnabled = false })
+    self.coordinator.register(packId, { ModEnabled = false })
 
-    local store = makeStore(false)
+    local store = self:makeStore(false)
     local target = { Value = "base" }
     local buildCalls = 0
     local def = {
         modpack = packId,
         id = "PackDisabledEnable",
     }
-    local mutation = PatchMutation(function(plan)
+    local mutation = patchMutation(function(plan)
         buildCalls = buildCalls + 1
         plan:set(target, "Value", "patched")
     end)
 
-    local ok, err = HostLifecycle.setEnabled(def, mutation, nil, store, true,
+    local ok, err = self.hostLifecycle.setEnabled(def, mutation, nil, store, true,
         "test-pack-disabled-enable")
-
-    lib.coordinator.register(packId, nil)
 
     lu.assertTrue(ok)
     lu.assertNil(err)

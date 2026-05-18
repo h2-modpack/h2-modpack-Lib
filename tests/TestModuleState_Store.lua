@@ -1,0 +1,191 @@
+local lu = require('luaunit')
+local helpers = require('tests/harness/module_state_helpers')
+
+local createLibHarness = helpers.createLibHarness
+local createModuleState = helpers.createModuleState
+local withLoggingPolicy = helpers.withLoggingPolicy
+local withCapturedPrint = helpers.withCapturedPrint
+local makeScalarDefinition = helpers.makeScalarDefinition
+local makePackedDefinition = helpers.makePackedDefinition
+local makeTransientDefinition = helpers.makeTransientDefinition
+local makeRuntimeDefinition = helpers.makeRuntimeDefinition
+local makeTableDefinition = helpers.makeTableDefinition
+
+TestModuleState_Store = {}
+
+function TestModuleState_Store:setUp()
+    self.harness = createLibHarness()
+end
+
+function TestModuleState_Store:tearDown()
+    self.harness = nil
+end
+
+function TestModuleState_Store:testCreateStoreReadsAndWritesScalarAliases()
+    local config = { Enabled = false, MaxGods = 4 }
+    local store, session = createModuleState(self.harness, config, makeScalarDefinition(self.harness))
+
+    lu.assertFalse(store.read("Enabled"))
+    lu.assertEquals(store.read("MaxGods"), 4)
+    lu.assertErrorMsgContains("store.unknown_read_alias", function()
+        store.read("MaxGodsPerRun")
+    end)
+
+    session.write("Enabled", true)
+    session.write("MaxGods", 12)
+    session._flushToConfig()
+
+    lu.assertTrue(config.Enabled)
+    lu.assertEquals(config.MaxGods, 9)
+    lu.assertEquals(store.read("MaxGods"), 9)
+end
+
+function TestModuleState_Store:testPackedAliasReadWriteUpdatesOwningRoot()
+    local config = { Packed = 0 }
+    local store, session = createModuleState(self.harness, config, makePackedDefinition(self.harness))
+
+    lu.assertFalse(store.read("EnabledBit"))
+    lu.assertEquals(store.read("ModeBits"), 0)
+    lu.assertEquals(store.read("Packed"), 0)
+
+    session.write("EnabledBit", true)
+    session._flushToConfig()
+    lu.assertEquals(config.Packed, 1)
+    lu.assertTrue(store.read("EnabledBit"))
+
+    session.write("ModeBits", 3)
+    session._flushToConfig()
+    lu.assertEquals(config.Packed, 7)
+    lu.assertEquals(store.read("ModeBits"), 3)
+end
+
+function TestModuleState_Store:testTransientAliasesAreNotReadableThroughStore()
+    local config = { Enabled = false }
+    local store, session = createModuleState(self.harness, config, makeTransientDefinition(self.harness))
+
+    lu.assertErrorMsgContains("store.invalid_read_surface", function()
+        store.read("FilterText")
+    end)
+    lu.assertEquals(session.view.FilterText, "")
+end
+
+function TestModuleState_Store:testRuntimeAliasesUseNarrowStoreAccessor()
+    local config = { Enabled = true, RecordingArmed = false, RunMarker = 2 }
+    local store, session = createModuleState(self.harness, config, makeRuntimeDefinition(self.harness))
+
+    lu.assertTrue(store.read("Enabled"))
+    lu.assertFalse(store.read("RecordingArmed"))
+    lu.assertEquals(store.read("RunMarker"), 2)
+    lu.assertErrorMsgContains("session.invalid_read_surface", function()
+        session.read("RecordingArmed")
+    end)
+
+    store.writeUnstaged("RecordingArmed", true)
+    store.writeUnstaged("RunMarker", 120)
+
+    lu.assertTrue(config.RecordingArmed)
+    lu.assertEquals(config.RunMarker, 99)
+    lu.assertFalse(session.isDirty())
+
+    local ok, err = pcall(function()
+        store.writeUnstaged("Enabled", false)
+    end)
+
+    lu.assertFalse(ok)
+    lu.assertStrContains(err, "stage = false")
+end
+
+function TestModuleState_Store.testDowngradedUnstagedWriteRejectionDoesNotWrite()
+    withLoggingPolicy({
+        ["store.invalid_unstaged_write"] = {
+            severity = "warn",
+            description = "Test downgraded unstaged write policy.",
+        },
+    }, function(harness)
+        withCapturedPrint(harness, function(lines)
+            local config = { Enabled = true, RecordingArmed = false }
+            local store = createModuleState(harness, config, makeRuntimeDefinition(harness))
+
+            lu.assertFalse(store.writeUnstaged("Enabled", false))
+
+            lu.assertTrue(config.Enabled)
+            lu.assertEquals(#lines, 1)
+        end)
+    end)
+end
+
+function TestModuleState_Store:testSessionRejectsRuntimeWrites()
+    local config = { Enabled = true, RecordingArmed = false }
+    local _, session = createModuleState(self.harness, config, makeRuntimeDefinition(self.harness))
+
+    local ok, err = pcall(function()
+        session.write("RecordingArmed", true)
+    end)
+
+    lu.assertFalse(ok)
+    lu.assertStrContains(err, "not staged")
+    lu.assertFalse(config.RecordingArmed)
+end
+
+function TestModuleState_Store.testDowngradedSessionRuntimeWriteStillDoesNotStage()
+    withLoggingPolicy({
+        ["session.invalid_write_surface"] = {
+            severity = "warn",
+            description = "Test downgraded session runtime write policy.",
+        },
+    }, function(harness)
+        withCapturedPrint(harness, function(lines)
+            local config = { Enabled = true, RecordingArmed = false }
+            local _, session = createModuleState(harness, config, makeRuntimeDefinition(harness))
+
+            session.write("RecordingArmed", true)
+
+            lu.assertFalse(config.RecordingArmed)
+            lu.assertFalse(session.isDirty())
+            lu.assertEquals(#lines, 1)
+        end)
+    end)
+end
+
+function TestModuleState_Store:testTableReadOnlyHandleClampsRawPersistedRows()
+    local config = {
+        Tiers = {
+            { Limit = 1 },
+            { Limit = 2 },
+            { Limit = 3 },
+            { Limit = 4 },
+        },
+    }
+    local store = createModuleState(self.harness, config, makeTableDefinition(self.harness))
+    local tiers = store.table("Tiers")
+
+    lu.assertEquals(#config.Tiers, 3)
+    lu.assertNil(config.Tiers[4])
+    lu.assertEquals(tiers:count(), 3)
+    lu.assertEquals(tiers:rowHandle(3).read("Limit"), 3)
+    lu.assertNil(tiers:rowHandle(4).read("Limit"))
+end
+
+function TestModuleState_Store.testDowngradedTableErrorsReturnNilSafely()
+    withLoggingPolicy({
+        ["store.unknown_table_alias"] = {
+            severity = "warn",
+            description = "Test downgraded unknown store table policy.",
+        },
+        ["store.invalid_table_alias"] = {
+            severity = "warn",
+            description = "Test downgraded invalid store table policy.",
+        },
+    }, function(harness)
+        withCapturedPrint(harness, function(lines)
+            local store = createModuleState(harness, { Enabled = true, MaxGods = 5 }, makeScalarDefinition(harness))
+            local missing = store.table("Missing")
+            local wrongType = store.table("MaxGods")
+
+            lu.assertNil(missing)
+            lu.assertNil(wrongType)
+            lu.assertEquals(#lines, 2)
+        end)
+    end)
+end
+

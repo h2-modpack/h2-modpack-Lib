@@ -1,5 +1,5 @@
 local helpers = ...
-local imguiHelpers = public.imguiHelpers
+local imguiHelpers = helpers.imguiHelpers
 ---@class DropdownOpts
 ---@field id string|number|nil
 ---@field label string|nil

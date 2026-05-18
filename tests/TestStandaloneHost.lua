@@ -1,10 +1,9 @@
-local lu = require('luaunit')
+local lu = require("luaunit")
+local createStandaloneHarness = require("tests/harness/create_standalone_harness")
 
 TestStandaloneHost = {}
 
 local PLUGIN_GUID = "test-standalone-module"
-local FALLBACK_OWNER = "adamant-lib.fallback-hud"
-local FALLBACK_ROW_KEY = "middleRightStack\0" .. FALLBACK_OWNER .. ":marker"
 
 local function makeHost(opts)
     opts = opts or {}
@@ -42,7 +41,7 @@ local function makeHost(opts)
             return nil
         end,
         setEnabled = function(value)
-            table.insert(calls.setEnabled, value)
+            calls.setEnabled[#calls.setEnabled + 1] = value
             if opts.setEnabledFails then
                 return false, "enable boom"
             end
@@ -50,7 +49,7 @@ local function makeHost(opts)
             return true, nil
         end,
         setDebugMode = function(value)
-            table.insert(calls.setDebugMode, value)
+            calls.setDebugMode[#calls.setDebugMode + 1] = value
             debugMode = value == true
         end,
         resync = function()
@@ -65,44 +64,6 @@ local function makeHost(opts)
         end,
     }
     return host
-end
-
-local function installHost(host, pluginGuid)
-    pluginGuid = pluginGuid or PLUGIN_GUID
-    local previousHost = AdamantModpackLib_Internal.liveModuleHosts[pluginGuid]
-    AdamantModpackLib_Internal.liveModuleHosts[pluginGuid] = host
-    return function()
-        AdamantModpackLib_Internal.liveModuleHosts[pluginGuid] = previousHost
-    end
-end
-
-local function createActivatedLibHost(pluginGuid, opts)
-    opts = opts or {}
-    local definition = AdamantModpackLib_Internal.moduleHost.prepareDefinition({}, {
-        modpack = opts.modpack or "standalone-pack",
-        id = opts.id or "StandaloneTest",
-        name = opts.name or "Standalone Test",
-        storage = {},
-    })
-    local store, session = CreateModuleState({
-        Enabled = opts.enabled ~= false,
-        DebugMode = opts.debugMode == true,
-    }, definition)
-    local host, authorHost = AdamantModpackLib_Internal.moduleHost.create({
-        pluginGuid = pluginGuid,
-        definition = definition,
-        store = store,
-        session = session,
-        drawTab = function() end,
-    })
-    local ok, err = authorHost.tryActivate()
-    lu.assertTrue(ok, tostring(err))
-    return host, authorHost
-end
-
-local function getFallbackMarkerRow()
-    AdamantModpackLib_Internal.fallbackHud.createMarker()
-    return AdamantModpackLib_OverlayState.renderer.stackRows[FALLBACK_ROW_KEY]
 end
 
 local function makeImgui(opts)
@@ -136,7 +97,7 @@ local function makeImgui(opts)
             calls.endWindow = calls.endWindow + 1
         end,
         Checkbox = function(label, current)
-            table.insert(calls.checkboxLabels, label)
+            calls.checkboxLabels[#calls.checkboxLabels + 1] = label
             local nextValue = checkboxValues[label]
             if nextValue == nil then
                 return current, false
@@ -144,7 +105,7 @@ local function makeImgui(opts)
             return nextValue, true
         end,
         Button = function(label)
-            table.insert(calls.buttons, label)
+            calls.buttons[#calls.buttons + 1] = label
             return buttonClicks[label] == true
         end,
         Separator = function()
@@ -170,109 +131,36 @@ local function makeImgui(opts)
 end
 
 function TestStandaloneHost:setUp()
-    CaptureWarnings()
-    self.previousImGui = rom.ImGui
-    self.previousImGuiCond = rom.ImGuiCond
-    self.previousSetupRunData = rom.game.SetupRunData
-    self.previousSuppressForUi = lib.overlays.suppressForUi
-    self.previousCoordinator = AdamantModpackLib_Internal.coordinators["standalone-pack"]
-    self.previousOtherCoordinator = AdamantModpackLib_Internal.coordinators["other-pack"]
-    self.previousStandaloneRuntimes = AdamantModpackLib_Internal.standaloneRuntimes
-    self.previousFallbackInitialized = AdamantModpackLib_Internal.fallbackHud._initialized
-    self.previousScreenData = ScreenData
-    self.previousHudScreen = HUDScreen
-    self.previousModifyTextBox = ModifyTextBox
-    self.previousSetAlpha = SetAlpha
-    self.previousCreateComponentFromData = CreateComponentFromData
-    self.previousDestroy = Destroy
-    self.previousShowingCombatUI = ShowingCombatUI
-    self.overlayState = AdamantModpackLib_OverlayState
-    self.rendererState = self.overlayState.renderer
-    self.retainedState = self.overlayState.retained
-    self.previousRendererTextElements = self.rendererState.textElements
-    self.previousRendererStackRows = self.rendererState.stackRows
-    self.previousRetainedTableRegistries = self.retainedState.tableRegistries
-    self.previousRetainedExplicitRegistries = self.retainedState.explicitRegistries
-    self.previousRetainedNextOwnerId = self.retainedState.nextOwnerId
-    self.previousRetainedIntervalDriverRegistered = self.retainedState.intervalDriverRegistered
-
-    rom.ImGuiCond = { FirstUseEver = 1 }
-    AdamantModpackLib_Internal.standaloneRuntimes = {}
-    AdamantModpackLib_Internal.fallbackHud._initialized = nil
-    self.rendererState.textElements = {}
-    self.rendererState.stackRows = {}
-    self.retainedState.tableRegistries = setmetatable({}, { __mode = "k" })
-    self.retainedState.explicitRegistries = {}
-    self.retainedState.nextOwnerId = 0
-    self.retainedState.intervalDriverRegistered = true
-    ShowingCombatUI = true
-    ScreenData = {
-        HUD = {
-            ComponentData = {},
-        },
-    }
-    HUDScreen = {
-        Components = {},
-    }
-    ModifyTextBox = function() end
-    SetAlpha = function() end
-    CreateComponentFromData = function(_, data)
-        return {
-            Id = data.Name,
-        }
-    end
-    Destroy = function() end
+    self.h = createStandaloneHarness()
+    self.h:captureWarnings()
 end
 
 function TestStandaloneHost:tearDown()
-    rom.ImGui = self.previousImGui
-    rom.ImGuiCond = self.previousImGuiCond
-    rom.game.SetupRunData = self.previousSetupRunData
-    lib.overlays.suppressForUi = self.previousSuppressForUi
-    lib.coordinator.register("standalone-pack", self.previousCoordinator)
-    lib.coordinator.register("other-pack", self.previousOtherCoordinator)
-    AdamantModpackLib_Internal.standaloneRuntimes = self.previousStandaloneRuntimes
-    AdamantModpackLib_Internal.fallbackHud._initialized = self.previousFallbackInitialized
-    ScreenData = self.previousScreenData
-    HUDScreen = self.previousHudScreen
-    ModifyTextBox = self.previousModifyTextBox
-    SetAlpha = self.previousSetAlpha
-    CreateComponentFromData = self.previousCreateComponentFromData
-    Destroy = self.previousDestroy
-    ShowingCombatUI = self.previousShowingCombatUI
-    self.rendererState.textElements = self.previousRendererTextElements
-    self.rendererState.stackRows = self.previousRendererStackRows
-    self.retainedState.tableRegistries = self.previousRetainedTableRegistries
-    self.retainedState.explicitRegistries = self.previousRetainedExplicitRegistries
-    self.retainedState.nextOwnerId = self.previousRetainedNextOwnerId
-    self.retainedState.intervalDriverRegistered = self.previousRetainedIntervalDriverRegistered
-    RestoreWarnings()
+    self.h:restoreWarnings()
 end
 
 function TestStandaloneHost:testErrorsWhenPluginGuidMissing()
     lu.assertErrorMsgContains("pluginGuid is required", function()
-        lib.standaloneHost()
+        self.h.public.standaloneHost()
     end)
 end
 
 function TestStandaloneHost:testBridgeErrorsWhenPluginGuidMissing()
     lu.assertErrorMsgContains("pluginGuid is required", function()
-        lib.standaloneUiBridge()
+        self.h.public.standaloneUiBridge()
     end)
 end
 
 function TestStandaloneHost:testErrorsWhenModuleHasNoLiveHost()
-    local restoreHost = installHost(nil)
+    self.h:installHost(nil)
 
     lu.assertErrorMsgContains("no live module host is registered", function()
-        lib.standaloneHost(PLUGIN_GUID)
+        self.h.public.standaloneHost(PLUGIN_GUID)
     end)
-
-    restoreHost()
 end
 
 function TestStandaloneHost:testBridgeCallbacksNoOpBeforeRuntimeExists()
-    local bridge = lib.standaloneUiBridge(PLUGIN_GUID)
+    local bridge = self.h.public.standaloneUiBridge(PLUGIN_GUID)
 
     local okMenu, errMenu = pcall(bridge.addMenuBar)
     local okRender, errRender = pcall(bridge.renderWindow)
@@ -285,180 +173,159 @@ end
 
 function TestStandaloneHost:testCreatesRuntimeWhenModuleIsNotCoordinated()
     local host = makeHost({ modpack = "standalone-pack" })
-    local restoreHost = installHost(host)
-    lib.coordinator.register("standalone-pack", nil)
+    self.h:installHost(host)
+    self.h.public.coordinator.register("standalone-pack", nil)
 
-    local runtime = lib.standaloneHost(PLUGIN_GUID)
+    local runtime = self.h.public.standaloneHost(PLUGIN_GUID)
 
-    restoreHost()
     lu.assertEquals(type(runtime.renderWindow), "function")
     lu.assertEquals(type(runtime.addMenuBar), "function")
     lu.assertEquals(type(runtime.handleHostGuiClosed), "function")
 end
 
 function TestStandaloneHost:testBridgeDispatchesInstalledRuntime()
-    local bridge = lib.standaloneUiBridge(PLUGIN_GUID)
+    local bridge = self.h.public.standaloneUiBridge(PLUGIN_GUID)
     local host = makeHost({ modpack = "standalone-pack" })
-    local restoreHost = installHost(host)
-    lib.coordinator.register("standalone-pack", nil)
+    self.h:installHost(host)
+    self.h.public.coordinator.register("standalone-pack", nil)
     local imgui = makeImgui({ menuClicked = true })
-    rom.ImGui = imgui
+    self.h.rom.ImGui = imgui
 
-    lib.standaloneHost(PLUGIN_GUID)
+    self.h.public.standaloneHost(PLUGIN_GUID)
     bridge.addMenuBar()
     bridge.renderWindow()
 
-    restoreHost()
     lu.assertEquals(host.calls.drawTab, 1)
 end
 
 function TestStandaloneHost:testBridgeDispatchesReplacementRuntime()
-    local bridge = lib.standaloneUiBridge(PLUGIN_GUID)
+    local bridge = self.h.public.standaloneUiBridge(PLUGIN_GUID)
     local firstHost = makeHost({ modpack = "standalone-pack", name = "First Standalone" })
-    local restoreFirstHost = installHost(firstHost)
-    lib.coordinator.register("standalone-pack", nil)
-    rom.ImGui = makeImgui({ menuClicked = true })
-    lib.standaloneHost(PLUGIN_GUID)
+    self.h:installHost(firstHost)
+    self.h.public.coordinator.register("standalone-pack", nil)
+    self.h.rom.ImGui = makeImgui({ menuClicked = true })
+    self.h.public.standaloneHost(PLUGIN_GUID)
     bridge.addMenuBar()
     bridge.renderWindow()
 
     local secondHost = makeHost({ modpack = "standalone-pack", name = "Second Standalone" })
-    local restoreSecondHost = installHost(secondHost)
-    rom.ImGui = makeImgui({ menuClicked = true })
-    lib.standaloneHost(PLUGIN_GUID)
+    self.h:installHost(secondHost)
+    self.h.rom.ImGui = makeImgui({ menuClicked = true })
+    self.h.public.standaloneHost(PLUGIN_GUID)
     bridge.addMenuBar()
     bridge.renderWindow()
 
-    restoreSecondHost()
-    restoreFirstHost()
     lu.assertEquals(firstHost.calls.drawTab, 1)
     lu.assertEquals(secondHost.calls.drawTab, 1)
 end
 
 function TestStandaloneHost:testStandaloneRuntimeReplacementClosesPreviousRuntime()
-    local releaseCalls = 0
-    lib.overlays.suppressForUi = function()
-        return {
-            release = function()
-                releaseCalls = releaseCalls + 1
-            end,
-        }
-    end
-
     local firstHost = makeHost({ modpack = "standalone-pack", name = "First Standalone" })
-    local restoreFirstHost = installHost(firstHost)
-    lib.coordinator.register("standalone-pack", nil)
-    rom.ImGui = makeImgui({ menuClicked = true })
-    local firstRuntime = lib.standaloneHost(PLUGIN_GUID)
+    self.h:installHost(firstHost)
+    self.h.public.coordinator.register("standalone-pack", nil)
+    self.h.rom.ImGui = makeImgui({ menuClicked = true })
+    local firstRuntime = self.h.public.standaloneHost(PLUGIN_GUID)
     firstRuntime.addMenuBar()
 
-    local secondHost = makeHost({ modpack = "standalone-pack", name = "Second Standalone" })
-    local restoreSecondHost = installHost(secondHost)
-    lib.standaloneHost(PLUGIN_GUID)
+    lu.assertEquals(self.h:countUiSuppressors(), 1)
 
-    restoreSecondHost()
-    restoreFirstHost()
-    lu.assertEquals(releaseCalls, 1)
+    local secondHost = makeHost({ modpack = "standalone-pack", name = "Second Standalone" })
+    self.h:installHost(secondHost)
+    self.h.public.standaloneHost(PLUGIN_GUID)
+
+    lu.assertEquals(self.h:countUiSuppressors(), 0)
 end
 
 function TestStandaloneHost:testStandaloneRuntimeIsRetiredWithOwningHost()
     local pluginGuid = "test-standalone-retired-with-host"
-    local previousLiveHost = AdamantModpackLib_Internal.liveModuleHosts[pluginGuid]
-    lib.coordinator.register("standalone-pack", nil)
+    self.h.public.coordinator.register("standalone-pack", nil)
 
-    local firstHost = createActivatedLibHost(pluginGuid, {
+    local firstHost = self.h:createActivatedLibHost(pluginGuid, {
         id = "StandaloneRuntimeRetire",
         name = "Standalone Runtime Retire",
     })
-    local firstRuntime = lib.standaloneHost(pluginGuid)
-    local secondHost = createActivatedLibHost(pluginGuid, {
+    local firstRuntime = self.h.public.standaloneHost(pluginGuid)
+    local secondHost = self.h:createActivatedLibHost(pluginGuid, {
         id = "StandaloneRuntimeRetire",
         name = "Standalone Runtime Retire",
     })
 
-    AdamantModpackLib_Internal.liveModuleHosts[pluginGuid] = previousLiveHost
     lu.assertNotEquals(firstHost, secondHost)
-    lu.assertNil(AdamantModpackLib_Internal.standaloneRuntimes[pluginGuid])
-    lu.assertNotEquals(AdamantModpackLib_Internal.standaloneRuntimes[pluginGuid], firstRuntime)
+    lu.assertNil(self.h:getStandaloneRuntime(pluginGuid))
+    lu.assertNotEquals(self.h:getStandaloneRuntime(pluginGuid), firstRuntime)
 end
 
 function TestStandaloneHost:testSkipsStandaloneLifecycleAndUiWhenCoordinated()
     local host = makeHost({ modpack = "standalone-pack" })
-    local restoreHost = installHost(host)
-    lib.coordinator.register("standalone-pack", { ModEnabled = true })
+    self.h:installHost(host)
+    self.h.public.coordinator.register("standalone-pack", { ModEnabled = true })
     local imgui, calls = makeImgui({ menuClicked = true })
-    rom.ImGui = imgui
+    self.h.rom.ImGui = imgui
 
-    local runtime = lib.standaloneHost(PLUGIN_GUID)
+    local runtime = self.h.public.standaloneHost(PLUGIN_GUID)
     runtime.addMenuBar()
     runtime.renderWindow()
 
-    restoreHost()
     lu.assertEquals(calls.beginMenu, 0)
     lu.assertEquals(calls.begin, 0)
 end
 
 function TestStandaloneHost:testFallbackMarkerHidesWhenOnlyStandaloneRuntimeIsCoordinated()
     local host = makeHost({ modpack = "standalone-pack" })
-    local restoreHost = installHost(host)
-    lib.coordinator.register("standalone-pack", { ModEnabled = true })
+    self.h:installHost(host)
+    self.h.public.coordinator.register("standalone-pack", { ModEnabled = true })
 
-    lib.standaloneHost(PLUGIN_GUID)
-    local row = getFallbackMarkerRow()
+    self.h.public.standaloneHost(PLUGIN_GUID)
+    local row = self.h:getFallbackMarkerRow()
 
     lu.assertNotNil(row)
     lu.assertFalse(row.visible())
-    restoreHost()
 end
 
 function TestStandaloneHost:testFallbackMarkerShowsWhenStandaloneRuntimeIsUncoordinated()
     local host = makeHost({ modpack = "standalone-pack" })
-    local restoreHost = installHost(host)
-    lib.coordinator.register("standalone-pack", nil)
+    self.h:installHost(host)
+    self.h.public.coordinator.register("standalone-pack", nil)
 
-    lib.standaloneHost(PLUGIN_GUID)
-    local row = getFallbackMarkerRow()
+    self.h.public.standaloneHost(PLUGIN_GUID)
+    local row = self.h:getFallbackMarkerRow()
 
     lu.assertNotNil(row)
     lu.assertTrue(row.visible())
-    restoreHost()
 end
 
 function TestStandaloneHost:testFallbackMarkerShowsWhenAnyStandaloneRuntimeIsUncoordinated()
     local coordinatedHost = makeHost({ modpack = "standalone-pack" })
     local uncoordinatedHost = makeHost({ modpack = "other-pack" })
-    local restoreCoordinatedHost = installHost(coordinatedHost)
-    local restoreUncoordinatedHost = installHost(uncoordinatedHost, "other-plugin")
-    lib.coordinator.register("standalone-pack", { ModEnabled = true })
-    lib.coordinator.register("other-pack", nil)
+    self.h:installHost(coordinatedHost)
+    self.h:installHost(uncoordinatedHost, "other-plugin")
+    self.h.public.coordinator.register("standalone-pack", { ModEnabled = true })
+    self.h.public.coordinator.register("other-pack", nil)
 
-    lib.standaloneHost(PLUGIN_GUID)
-    lib.standaloneHost("other-plugin")
-    local row = getFallbackMarkerRow()
+    self.h.public.standaloneHost(PLUGIN_GUID)
+    self.h.public.standaloneHost("other-plugin")
+    local row = self.h:getFallbackMarkerRow()
 
     lu.assertNotNil(row)
     lu.assertTrue(row.visible())
-    restoreUncoordinatedHost()
-    restoreCoordinatedHost()
 end
 
 function TestStandaloneHost:testMenuTogglesWindowAndRenderDrawsControls()
     local host = makeHost({ modpack = "standalone-pack" })
-    local restoreHost = installHost(host)
-    lib.coordinator.register("standalone-pack", nil)
+    self.h:installHost(host)
+    self.h.public.coordinator.register("standalone-pack", nil)
     local imgui, calls = makeImgui({
         menuClicked = true,
         buttonClicks = {
             ["Resync Session"] = true,
         },
     })
-    rom.ImGui = imgui
+    self.h.rom.ImGui = imgui
 
-    local runtime = lib.standaloneHost(PLUGIN_GUID)
+    local runtime = self.h.public.standaloneHost(PLUGIN_GUID)
     runtime.addMenuBar()
     runtime.renderWindow()
 
-    restoreHost()
     lu.assertEquals(calls.beginMenu, 1)
     lu.assertEquals(calls.menuLabel, "Standalone Test")
     lu.assertEquals(calls.menuItem, "Standalone Test")
@@ -472,15 +339,15 @@ end
 
 function TestStandaloneHost:testCloseFlushesRunDataAfterAffectingEnabledToggle()
     local setupCalls = 0
-    rom.game.SetupRunData = function()
+    self.h.game.setupRunData = function()
         setupCalls = setupCalls + 1
     end
     local host = makeHost({
         modpack = "standalone-pack",
         affectsRunData = true,
     })
-    local restoreHost = installHost(host)
-    lib.coordinator.register("standalone-pack", nil)
+    self.h:installHost(host)
+    self.h.public.coordinator.register("standalone-pack", nil)
     local imgui = makeImgui({
         menuClicked = true,
         open = false,
@@ -488,29 +355,28 @@ function TestStandaloneHost:testCloseFlushesRunDataAfterAffectingEnabledToggle()
             Enabled = false,
         },
     })
-    rom.ImGui = imgui
+    self.h.rom.ImGui = imgui
 
-    local runtime = lib.standaloneHost(PLUGIN_GUID)
+    local runtime = self.h.public.standaloneHost(PLUGIN_GUID)
     runtime.addMenuBar()
     runtime.renderWindow()
     runtime.renderWindow()
 
-    restoreHost()
     lu.assertEquals(host.calls.setEnabled, { false })
     lu.assertEquals(setupCalls, 1)
 end
 
 function TestStandaloneHost:testDebugToggleDoesNotMarkRunDataDirty()
     local setupCalls = 0
-    rom.game.SetupRunData = function()
+    self.h.game.setupRunData = function()
         setupCalls = setupCalls + 1
     end
     local host = makeHost({
         modpack = "standalone-pack",
         affectsRunData = true,
     })
-    local restoreHost = installHost(host)
-    lib.coordinator.register("standalone-pack", nil)
+    self.h:installHost(host)
+    self.h.public.coordinator.register("standalone-pack", nil)
     local imgui = makeImgui({
         menuClicked = true,
         open = false,
@@ -518,72 +384,52 @@ function TestStandaloneHost:testDebugToggleDoesNotMarkRunDataDirty()
             ["Debug Mode"] = true,
         },
     })
-    rom.ImGui = imgui
+    self.h.rom.ImGui = imgui
 
-    local runtime = lib.standaloneHost(PLUGIN_GUID)
+    local runtime = self.h.public.standaloneHost(PLUGIN_GUID)
     runtime.addMenuBar()
     runtime.renderWindow()
 
-    restoreHost()
     lu.assertEquals(host.calls.setDebugMode, { true })
     lu.assertEquals(setupCalls, 0)
 end
 
 function TestStandaloneHost:testStandaloneWindowSuppressesOverlaysUntilClose()
-    local suppressCalls = 0
-    local releaseCalls = 0
-    lib.overlays.suppressForUi = function()
-        suppressCalls = suppressCalls + 1
-        return {
-            release = function()
-                releaseCalls = releaseCalls + 1
-            end,
-        }
-    end
-
     local host = makeHost({ modpack = "standalone-pack" })
-    local restoreHost = installHost(host)
-    lib.coordinator.register("standalone-pack", nil)
+    self.h:installHost(host)
+    self.h.public.coordinator.register("standalone-pack", nil)
     local imgui = makeImgui({
         menuClicked = true,
         open = false,
     })
-    rom.ImGui = imgui
+    self.h.rom.ImGui = imgui
 
-    local runtime = lib.standaloneHost(PLUGIN_GUID)
+    local runtime = self.h.public.standaloneHost(PLUGIN_GUID)
     runtime.addMenuBar()
+
+    lu.assertEquals(self.h:countUiSuppressors(), 1)
+
     runtime.renderWindow()
 
-    restoreHost()
-    lu.assertEquals(suppressCalls, 1)
-    lu.assertEquals(releaseCalls, 1)
+    lu.assertEquals(self.h:countUiSuppressors(), 0)
 end
 
 function TestStandaloneHost:testHostGuiClosedReleasesSuppressionWithoutClosingWindow()
-    local suppressCalls = 0
-    local releaseCalls = 0
-    lib.overlays.suppressForUi = function()
-        suppressCalls = suppressCalls + 1
-        return {
-            release = function()
-                releaseCalls = releaseCalls + 1
-            end,
-        }
-    end
-
     local host = makeHost({ modpack = "standalone-pack" })
-    local restoreHost = installHost(host)
-    lib.coordinator.register("standalone-pack", nil)
+    self.h:installHost(host)
+    self.h.public.coordinator.register("standalone-pack", nil)
     local imgui = makeImgui({ menuClicked = true })
-    rom.ImGui = imgui
+    self.h.rom.ImGui = imgui
 
-    local runtime = lib.standaloneHost(PLUGIN_GUID)
+    local runtime = self.h.public.standaloneHost(PLUGIN_GUID)
     runtime.addMenuBar()
+    lu.assertEquals(self.h:countUiSuppressors(), 1)
+
     runtime.handleHostGuiClosed()
+    lu.assertEquals(self.h:countUiSuppressors(), 0)
+
     runtime.renderWindow()
 
-    restoreHost()
-    lu.assertEquals(suppressCalls, 2)
-    lu.assertEquals(releaseCalls, 1)
+    lu.assertEquals(self.h:countUiSuppressors(), 1)
     lu.assertEquals(host.calls.drawTab, 1)
 end

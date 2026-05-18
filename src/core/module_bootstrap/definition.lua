@@ -1,8 +1,13 @@
-local internal = AdamantModpackLib_Internal
-internal.moduleHost = internal.moduleHost or {}
+local deps = ...
 
-local storageInternal = internal.storage
-local values = internal.values
+local logging = deps.logging
+local storage = deps.storage
+local values = deps.values
+local coordinator = deps.coordinator
+local hostState = deps.hostState
+local plugin = deps.plugin
+
+local definitionService = {}
 
 local KnownDefinitionKeys = {
     modpack = true,
@@ -46,7 +51,7 @@ local function ValidateListShape(value, prefix, path)
     local maxIndex = 0
     for key in pairs(value) do
         if type(key) ~= "number" or key < 1 or math.floor(key) ~= key then
-            internal.violate("definition.invalid_field_type", "%s: %s must be a list", prefix, path)
+            logging.violate("definition.invalid_field_type", "%s: %s must be a list", prefix, path)
         end
         count = count + 1
         if key > maxIndex then
@@ -54,7 +59,7 @@ local function ValidateListShape(value, prefix, path)
         end
     end
     if count ~= maxIndex then
-        internal.violate("definition.invalid_field_type", "%s: %s must be a contiguous list", prefix, path)
+        logging.violate("definition.invalid_field_type", "%s: %s must be a contiguous list", prefix, path)
     end
 end
 
@@ -63,7 +68,7 @@ local function NormalizeStructuralSurface(surface)
         return nil
     end
     if type(surface) ~= "table" then
-        internal.violate(
+        logging.violate(
             "definition.invalid_args",
             "prepareDefinition: pass storage defaults on definition.storage nodes, not as a separate argument"
         )
@@ -77,7 +82,7 @@ local function NormalizeStructuralSurface(surface)
     end
 
     if not hasKnownKey and next(surface) ~= nil then
-        internal.violate(
+        logging.violate(
             "definition.invalid_args",
             "prepareDefinition: pass storage defaults on definition.storage nodes, not as a separate argument"
         )
@@ -85,12 +90,12 @@ local function NormalizeStructuralSurface(surface)
 
     for key in pairs(surface) do
         if not KnownStructuralSurfaceKeys[key] then
-            internal.violate("definition.invalid_args", "prepareDefinition: unknown option '%s'", tostring(key))
+            logging.violate("definition.invalid_args", "prepareDefinition: unknown option '%s'", tostring(key))
         end
     end
 
     if surface.hasQuickContent ~= nil and type(surface.hasQuickContent) ~= "boolean" then
-        internal.violate("definition.invalid_args", "prepareDefinition: hasQuickContent must be boolean when provided")
+        logging.violate("definition.invalid_args", "prepareDefinition: hasQuickContent must be boolean when provided")
     end
 
     return {
@@ -112,7 +117,7 @@ local function ValidateHashGroupPlan(definition, prefix)
 
     for groupIndex, group in ipairs(hashGroupPlan) do
         if type(group) ~= "table" then
-            internal.violate(
+            logging.violate(
                 "definition.invalid_field_type",
                 "%s: hashGroupPlan[%d] must be table",
                 prefix,
@@ -122,7 +127,7 @@ local function ValidateHashGroupPlan(definition, prefix)
 
         for key in pairs(group) do
             if not KnownHashGroupKeys[key] then
-                internal.violate(
+                logging.violate(
                     "definition.unknown_key",
                     "%s: unknown hashGroupPlan[%d] field '%s'",
                     prefix,
@@ -134,14 +139,14 @@ local function ValidateHashGroupPlan(definition, prefix)
 
         local keyPrefix = group.keyPrefix
         if type(keyPrefix) ~= "string" or keyPrefix == "" then
-            internal.violate(
+            logging.violate(
                 "definition.invalid_field_type",
                 "%s: hashGroupPlan[%d].keyPrefix is required",
                 prefix,
                 groupIndex
             )
         elseif not IsStableIdentifier(keyPrefix) then
-            internal.violate(
+            logging.violate(
                 "definition.invalid_field_type",
                 "%s: hashGroupPlan[%d].keyPrefix '%s' %s",
                 prefix,
@@ -152,7 +157,7 @@ local function ValidateHashGroupPlan(definition, prefix)
         end
 
         if seenPrefixes[keyPrefix] then
-            internal.violate(
+            logging.violate(
                 "definition.invalid_field_type",
                 "%s: duplicate hashGroupPlan keyPrefix '%s'",
                 prefix,
@@ -162,7 +167,7 @@ local function ValidateHashGroupPlan(definition, prefix)
         seenPrefixes[keyPrefix] = true
 
         if type(group.items) ~= "table" then
-            internal.violate(
+            logging.violate(
                 "definition.invalid_field_type",
                 "%s: hashGroupPlan[%d].items is required",
                 prefix,
@@ -171,7 +176,7 @@ local function ValidateHashGroupPlan(definition, prefix)
         end
         ValidateListShape(group.items, prefix, string.format("hashGroupPlan[%d].items", groupIndex))
         if #group.items == 0 then
-            internal.violate(
+            logging.violate(
                 "definition.invalid_field_type",
                 "%s: hashGroupPlan[%d].items must contain at least one item",
                 prefix,
@@ -182,7 +187,7 @@ local function ValidateHashGroupPlan(definition, prefix)
         for itemIndex, item in ipairs(group.items) do
             if type(item) == "string" then
                 if item == "" then
-                    internal.violate(
+                    logging.violate(
                         "definition.invalid_field_type",
                         "%s: hashGroupPlan[%d].items[%d] must be a non-empty alias string",
                         prefix,
@@ -194,7 +199,7 @@ local function ValidateHashGroupPlan(definition, prefix)
                 local itemPath = string.format("hashGroupPlan[%d].items[%d]", groupIndex, itemIndex)
                 ValidateListShape(item, prefix, itemPath)
                 if #item == 0 then
-                    internal.violate(
+                    logging.violate(
                         "definition.invalid_field_type",
                         "%s: %s must contain at least one alias",
                         prefix,
@@ -203,7 +208,7 @@ local function ValidateHashGroupPlan(definition, prefix)
                 end
                 for aliasIndex, alias in ipairs(item) do
                     if type(alias) ~= "string" or alias == "" then
-                        internal.violate(
+                        logging.violate(
                             "definition.invalid_field_type",
                             "%s: %s[%d] must be a non-empty alias string",
                             prefix,
@@ -213,7 +218,7 @@ local function ValidateHashGroupPlan(definition, prefix)
                     end
                 end
             else
-                internal.violate(
+                logging.violate(
                     "definition.invalid_field_type",
                     "%s: hashGroupPlan[%d].items[%d] must be an alias string or alias list",
                     prefix,
@@ -226,7 +231,7 @@ local function ValidateHashGroupPlan(definition, prefix)
 end
 
 local function GetHashGroupPackWidth(node)
-    local storageType = node and node.type and storageInternal.types[node.type] or nil
+    local storageType = node and node.type and storage.types[node.type] or nil
     if storageType and storageType.packWidth ~= nil then
         return storageType.packWidth(node)
     end
@@ -235,7 +240,7 @@ end
 
 local function ValidateHashGroupAlias(aliasNodes, alias, prefix, path)
     if alias == "Enabled" then
-        internal.violate(
+        logging.violate(
             "definition.invalid_field_type",
             "%s: %s alias '%s' is encoded as module enable state; storage groups cannot include it",
             prefix,
@@ -246,7 +251,7 @@ local function ValidateHashGroupAlias(aliasNodes, alias, prefix, path)
 
     local node = aliasNodes[alias]
     if not node then
-        internal.violate(
+        logging.violate(
             "definition.invalid_field_type",
             "%s: %s references unknown storage alias '%s'",
             prefix,
@@ -255,7 +260,7 @@ local function ValidateHashGroupAlias(aliasNodes, alias, prefix, path)
         )
     end
     if node._isBitAlias then
-        internal.violate(
+        logging.violate(
             "definition.invalid_field_type",
             "%s: %s alias '%s' is a packed child alias; only root storage aliases are supported",
             prefix,
@@ -264,7 +269,7 @@ local function ValidateHashGroupAlias(aliasNodes, alias, prefix, path)
         )
     end
     if node._hash ~= true then
-        internal.violate(
+        logging.violate(
             "definition.invalid_field_type",
             "%s: %s alias '%s' is excluded from hashes; only hash root aliases are supported",
             prefix,
@@ -275,7 +280,7 @@ local function ValidateHashGroupAlias(aliasNodes, alias, prefix, path)
 
     local width = GetHashGroupPackWidth(node)
     if not width then
-        internal.violate(
+        logging.violate(
             "definition.invalid_field_type",
             "%s: %s alias '%s' cannot be packed",
             prefix,
@@ -289,7 +294,7 @@ end
 local function RecordHashGroupAlias(seenAliases, alias, prefix, path)
     local existingPath = seenAliases[alias]
     if existingPath then
-        internal.violate(
+        logging.violate(
             "definition.invalid_field_type",
             "%s: duplicate hashGroupPlan alias '%s' at %s; first used at %s",
             prefix,
@@ -307,7 +312,7 @@ local function ValidatePreparedHashGroupPlan(definition, prefix)
         return
     end
 
-    local aliasNodes = storageInternal.getAliases(definition.storage)
+    local aliasNodes = storage.getAliases(definition.storage)
     local seenAliases = {}
     for groupIndex, group in ipairs(hashGroupPlan) do
         for itemIndex, item in ipairs(group.items) do
@@ -335,7 +340,7 @@ local function ValidatePreparedHashGroupPlan(definition, prefix)
             end
 
             if itemWidth > 32 then
-                internal.violate(
+                logging.violate(
                     "definition.invalid_field_type",
                     "%s: hashGroupPlan[%d].items[%d] exceeds 32 packed bits",
                     prefix,
@@ -414,7 +419,7 @@ local function GetLabel(definition, fallback)
             return label
         end
     end
-    return tostring(_PLUGIN.guid or "module")
+    return tostring(plugin and plugin.guid or "module")
 end
 
 local function IsLikelyDefinitionTable(definition)
@@ -438,31 +443,31 @@ local function ValidateDefinition(definition, label)
 
     for key in pairs(definition) do
         if type(key) == "string" and not KnownDefinitionKeys[key] then
-            internal.violate("definition.unknown_key", "%s: unknown definition key '%s'", prefix, tostring(key))
+            logging.violate("definition.unknown_key", "%s: unknown definition key '%s'", prefix, tostring(key))
         end
     end
 
     local function checkType(key, expected)
         if definition[key] ~= nil and type(definition[key]) ~= expected then
-            internal.violate("definition.invalid_field_type", "%s: definition.%s should be %s, got %s",
+            logging.violate("definition.invalid_field_type", "%s: definition.%s should be %s, got %s",
                 prefix, key, expected, type(definition[key]))
         end
     end
 
     if definition.id == nil or definition.id == "" then
-        internal.violate("definition.missing_id", "%s: definition.id is required", prefix)
+        logging.violate("definition.missing_id", "%s: definition.id is required", prefix)
     elseif type(definition.id) ~= "string" then
-        internal.violate("definition.invalid_field_type", "%s: definition.id should be string, got %s",
+        logging.violate("definition.invalid_field_type", "%s: definition.id should be string, got %s",
             prefix, type(definition.id))
     elseif not IsStableIdentifier(definition.id) then
-        internal.violate("definition.invalid_field_type", "%s: definition.id '%s' %s",
+        logging.violate("definition.invalid_field_type", "%s: definition.id '%s' %s",
             prefix, definition.id, StableIdentifierDescription)
     end
 
     if definition.name == nil or definition.name == "" then
-        internal.violate("definition.missing_name", "%s: definition.name is required", prefix)
+        logging.violate("definition.missing_name", "%s: definition.name is required", prefix)
     elseif type(definition.name) ~= "string" then
-        internal.violate("definition.invalid_field_type", "%s: definition.name should be string, got %s",
+        logging.violate("definition.invalid_field_type", "%s: definition.name should be string, got %s",
             prefix, type(definition.name))
     end
 
@@ -493,12 +498,12 @@ local function InjectBuiltInStorage(definition, label)
         definition.storage = {}
     end
     if type(definition.storage) ~= "table" then
-        internal.violate("definition.invalid_args", "%s: definition.storage must be a table", label)
+        logging.violate("definition.invalid_args", "%s: definition.storage must be a table", label)
     end
 
     for _, node in ipairs(definition.storage) do
         if type(node) == "table" and BuiltInStorageAliases[node.alias] then
-            internal.violate(
+            logging.violate(
                 "definition.reserved_storage_alias",
                 "%s: storage alias '%s' is reserved by Lib",
                 label,
@@ -512,19 +517,19 @@ local function InjectBuiltInStorage(definition, label)
     end
 end
 
-function internal.moduleHost.prepareDefinition(structuralState, definition, structuralSurface, ...)
+function definitionService.prepareDefinition(structuralState, definition, structuralSurface, ...)
     if select("#", ...) ~= 0 then
-        internal.violate(
+        logging.violate(
             "definition.invalid_args",
             "prepareDefinition: pass storage defaults on definition.storage nodes, not as a separate argument"
         )
     end
     structuralSurface = NormalizeStructuralSurface(structuralSurface)
     if structuralState ~= nil and type(structuralState) ~= "table" then
-        internal.violate("definition.invalid_args", "prepareDefinition: structuralState must be a table when provided")
+        logging.violate("definition.invalid_args", "prepareDefinition: structuralState must be a table when provided")
     end
     if type(definition) ~= "table" then
-        internal.violate("definition.invalid_args", "prepareDefinition: definition must be a table")
+        logging.violate("definition.invalid_args", "prepareDefinition: definition must be a table")
     end
 
     local prepared = values.deepCopy(definition)
@@ -532,7 +537,7 @@ function internal.moduleHost.prepareDefinition(structuralState, definition, stru
     InjectBuiltInStorage(prepared, label)
 
     ValidateDefinition(prepared, label)
-    storageInternal.validate(prepared.storage, label)
+    storage.validate(prepared.storage, label)
     ValidatePreparedHashGroupPlan(prepared, label)
 
     local fingerprint = GetStructuralFingerprint(prepared, structuralSurface)
@@ -543,15 +548,15 @@ function internal.moduleHost.prepareDefinition(structuralState, definition, stru
         local previousFingerprint = rawget(structuralState, "_definitionStructuralFingerprint")
         if previousFingerprint ~= nil and previousFingerprint ~= fingerprint then
             structuralState.requiresFullReload = true
-            if type(prepared.modpack) == "string" and public.coordinator.isRegistered(prepared.modpack) then
-                internal.pendingCoordinatorRebuilds[prepared] = {
+            if type(prepared.modpack) == "string" and coordinator.isRegistered(prepared.modpack) then
+                hostState.setPendingCoordinatorRebuild(prepared, {
                     kind = "structural_definition_changed",
                     moduleId = prepared.id,
                     displayName = prepared.name,
                     modpack = prepared.modpack,
-                }
+                })
             else
-                internal.violate("definition.structural_reload_required", "%s: %s", label,
+                logging.violate("definition.structural_reload_required", "%s: %s", label,
                     "structural definition changed during hot reload; full reload required")
             end
         end
@@ -560,3 +565,5 @@ function internal.moduleHost.prepareDefinition(structuralState, definition, stru
 
     return prepared
 end
+
+return definitionService

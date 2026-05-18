@@ -1,17 +1,25 @@
-local internal = AdamantModpackLib_Internal
+local deps = ...
 
-public.overlays = public.overlays or {}
+local logging = deps.logging
+local overlayGameDeps = deps.gameDeps.overlays
+local hooks = deps.hooks
+local hostState = deps.hostState
+local runtime = deps.runtime
+local values = deps.values
+local overlays = {}
+local overlaysPublic = public.overlays or {}
 
 -- Public API: shared overlay order bands used by module and system retained overlays.
-public.overlays.order = public.overlays.order or {
+overlaysPublic.order = overlaysPublic.order or {
     framework = 0,
     module = 1000,
     debug = 2000,
 }
+public.overlays = overlaysPublic
 
-internal.overlays = internal.overlays or {}
-
-local overlayState = import('core/overlays/private_state.lua')
+local overlayState = import('core/overlays/private_state.lua', nil, {
+    runtime = runtime,
+})
 
 -- Shared overlay visibility gate. UI suppression is global because foreground
 -- configuration UI and gameplay overlays should not compete for screen space.
@@ -20,13 +28,24 @@ local function isUiSuppressed()
 end
 
 local renderer = import('core/overlays/private_renderer.lua', nil, {
+    gameDeps = overlayGameDeps,
     state = overlayState.renderer,
     isUiSuppressed = isUiSuppressed,
+    logging = logging,
+    hooks = hooks,
+    values = values,
+    order = overlaysPublic.order,
+    physicalHookOwner = overlayState.physicalHookOwner,
 })
 
 local retained = import('core/overlays/private_retained.lua', nil, {
     state = overlayState.retained,
     renderer = renderer,
+    logging = logging,
+    order = overlaysPublic.order,
+    dispatchIntervals = function(now)
+        return overlays.dispatchIntervals(now)
+    end,
 })
 
 -- Module overlay declarations are public by callback surface, not by global
@@ -35,7 +54,7 @@ local retained = import('core/overlays/private_retained.lua', nil, {
 
 -- Public API: acquire a token that hides all Lib-managed gameplay overlays while
 -- foreground configuration UI is open.
-function public.overlays.suppressForUi()
+function overlays.suppressForUi()
     overlayState.nextUiSuppressorId = overlayState.nextUiSuppressorId + 1
     local id = overlayState.nextUiSuppressorId
     local wasSuppressed = isUiSuppressed()
@@ -59,9 +78,17 @@ function public.overlays.suppressForUi()
     }
 end
 
+function overlaysPublic.suppressForUi()
+    return overlays.suppressForUi()
+end
+
 -- Public API: read whether any UI suppression token is currently active.
-function public.overlays.isUiSuppressed()
+function overlays.isUiSuppressed()
     return isUiSuppressed()
+end
+
+function overlaysPublic.isUiSuppressed()
+    return overlays.isUiSuppressed()
 end
 
 local function createAfterHookReceipt(host, paths)
@@ -69,13 +96,13 @@ local function createAfterHookReceipt(host, paths)
         return nil
     end
 
-    return internal.hooks.installForHost(host, function()
+    return hooks.installForHost(host, function()
         for _, path in ipairs(paths) do
             local hookPath = path
-            public.hooks.Wrap(hookPath, "overlay.after:" .. hookPath, function(base, ...)
+            hooks.declareWrap(hookPath, "overlay.after:" .. hookPath, function(base, ...)
                 local args = { ... }
                 local results = { base(...) }
-                internal.overlays.dispatchAfterHook(host, hookPath, args, results)
+                overlays.dispatchAfterHook(host, hookPath, args, results)
                 return table.unpack(results)
             end)
         end
@@ -89,15 +116,15 @@ local function disposeReceipt(receipt)
     return receipt.dispose()
 end
 
-function internal.overlays.installForHost(host, register, authorHost, store)
+function overlays.installForHost(host, register, authorHost, store)
     if type(host) ~= "table" then
-        internal.violate("overlays.invalid_registration", "internal.overlays.installForHost: host is required")
+        logging.violate("overlays.invalid_registration", "overlays.installForHost: host is required")
     end
 
-    local state = internal.moduleHost and internal.moduleHost.getState and internal.moduleHost.getState(host) or nil
+    local state = hostState.get(host)
     local pluginGuid = state and state.pluginGuid or nil
     if type(pluginGuid) ~= "string" or pluginGuid == "" then
-        internal.violate("overlays.invalid_registration", "internal.overlays.installForHost: host pluginGuid is required")
+        logging.violate("overlays.invalid_registration", "overlays.installForHost: host pluginGuid is required")
     end
 
     local stagingOwner = {}
@@ -110,9 +137,9 @@ function internal.overlays.installForHost(host, register, authorHost, store)
     local disposed = false
 
     local ok, err = pcall(function()
-        retained.refresh(stagingOwner, pendingOwnerId, authorHost, store, function(overlays)
+        retained.refresh(stagingOwner, pendingOwnerId, authorHost, store, function(registrar)
             if register then
-                return register(overlays, authorHost, store)
+                return register(registrar, authorHost, store)
             end
         end, { hidden = true })
         afterHookReceipt = createAfterHookReceipt(host, retained.getAfterHookPaths(stagingOwner))
@@ -185,28 +212,34 @@ function internal.overlays.installForHost(host, register, authorHost, store)
 end
 
 -- Internal API: dispatch overlay projections after settings commit.
-function internal.overlays.dispatchCommit(owner, commit)
+function overlays.dispatchCommit(owner, commit)
     return retained.dispatchCommit(owner, commit)
 end
 
 -- Internal API: dispatch retained interval projections from the ImGui tick driver.
-function internal.overlays.dispatchIntervals(now)
+function overlays.dispatchIntervals(now)
     return retained.dispatchIntervals(now)
 end
 
 -- Internal API: dispatch an overlay after-hook projection registered by a retained owner.
-function internal.overlays.dispatchAfterHook(owner, path, args, results)
+function overlays.dispatchAfterHook(owner, path, args, results)
     return retained.dispatchAfterHook(owner, path, args, results)
 end
 
 -- Public API: declare narrow retained HUD lines for Lib/Framework systems that
 -- are not owned by a module host.
-function public.overlays.defineSystem(ownerId, register)
+function overlays.defineSystem(ownerId, register)
     if type(ownerId) ~= "string" or ownerId == "" then
-        internal.violate("overlays.invalid_registration", "lib.overlays.defineSystem: ownerId must be a non-empty string")
+        logging.violate("overlays.invalid_registration", "lib.overlays.defineSystem: ownerId must be a non-empty string")
     end
 
     retained.refresh(ownerId, ownerId, nil, nil, register, { system = true })
-    internal.overlays.dispatchCommit(ownerId, {})
+    overlays.dispatchCommit(ownerId, {})
     return true
 end
+
+function overlaysPublic.defineSystem(ownerId, register)
+    return overlays.defineSystem(ownerId, register)
+end
+
+return overlays

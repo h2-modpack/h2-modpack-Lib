@@ -10,20 +10,17 @@ mods['SGG_Modding-ENVY'].auto()
 rom = rom
 _PLUGIN = _PLUGIN
 
-modutil = mods['SGG_Modding-ModUtil']
+local modutil = mods['SGG_Modding-ModUtil']
 local chalk = mods['SGG_Modding-Chalk']
 local libConfig = chalk.auto('config.lua')
 public.config = libConfig
 
-local _liveModuleHosts = {}
-AdamantModpackLib_Internal = AdamantModpackLib_Internal or {}
-local internal = AdamantModpackLib_Internal
-internal.libConfig = libConfig
-internal.coordinators = internal.coordinators or {}
-internal.coordinatorRebuilds = internal.coordinatorRebuilds or {}
-internal.liveModuleHosts = internal.liveModuleHosts or _liveModuleHosts
-internal.pendingCoordinatorRebuilds = internal.pendingCoordinatorRebuilds
-    or setmetatable({}, { __mode = "k" })
+local externals = {
+    rom = rom,
+    chalk = chalk,
+    plugin = _PLUGIN,
+    modutil = modutil,
+}
 
 ---@class AdamantModpackLib
 ---@field config table
@@ -42,11 +39,14 @@ internal.pendingCoordinatorRebuilds = internal.pendingCoordinatorRebuilds
 ---@field widgets table
 ---@field nav table
 
-import 'core/init.lua'
+local core = import('core/init.lua', nil, {
+    config = libConfig,
+    externals = externals,
+})
 
 -- Standalone framework debug toggle - hidden when Core/Framework registers coordinators.
 rom.gui.add_to_menu_bar(function()
-    if next(internal.coordinators) ~= nil then return end
+    if core.coordinator.hasRegistrations() then return end
     if rom.ImGui.BeginMenu("adamant-lib") then
         local val, chg = rom.ImGui.Checkbox("Lib Debug", libConfig.DebugMode == true)
         if chg then libConfig.DebugMode = val end
@@ -56,18 +56,3 @@ rom.gui.add_to_menu_bar(function()
         rom.ImGui.EndMenu()
     end
 end)
-
-if type(rom.gui.add_always_draw_imgui) == "function" and type(rom.gui.is_open) == "function" then
-    local wasGuiOpen = rom.gui.is_open() == true
-    rom.gui.add_always_draw_imgui(function()
-        local isGuiOpen = rom.gui.is_open() == true
-        if wasGuiOpen and not isGuiOpen then
-            for _, runtime in pairs(internal.standaloneRuntimes or {}) do
-                if runtime.handleHostGuiClosed then
-                    runtime.handleHostGuiClosed()
-                end
-            end
-        end
-        wasGuiOpen = isGuiOpen
-    end)
-end
